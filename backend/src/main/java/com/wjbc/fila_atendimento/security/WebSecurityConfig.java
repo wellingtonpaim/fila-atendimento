@@ -1,6 +1,6 @@
 package com.wjbc.fila_atendimento.security;
 
-import br.univesp.pi.security.service.CustomUserDetailsService;
+import com.wjbc.fila_atendimento.security.service.CustomUserDetailsService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;

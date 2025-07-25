@@ -1,6 +1,6 @@
 package com.wjbc.fila_atendimento.security.model;
 
-import br.univesp.pi.domain.model.Usuario;
+import com.wjbc.fila_atendimento.domain.model.Usuario;
 import jakarta.persistence.*;
 import lombok.Data;
 

@@ -1,10 +1,10 @@
 package com.wjbc.fila_atendimento.security;
 
-import br.univesp.pi.security.enums.SECURITY_CONSTANTS;
-import br.univesp.pi.security.service.CustomUserDetailsService;
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.algorithms.Algorithm;
 import com.auth0.jwt.exceptions.JWTVerificationException;
+import com.wjbc.fila_atendimento.security.enums.SECURITY_CONSTANTS;
+import com.wjbc.fila_atendimento.security.service.CustomUserDetailsService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;

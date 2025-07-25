@@ -1,10 +1,10 @@
 package com.wjbc.fila_atendimento.security.service;
 
-import br.univesp.pi.domain.model.Usuario;
-import br.univesp.pi.repository.UsuarioRepository;
-import br.univesp.pi.security.enums.SECURITY_CONSTANTS;
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.algorithms.Algorithm;
+import com.wjbc.fila_atendimento.domain.model.Usuario;
+import com.wjbc.fila_atendimento.repository.UsuarioRepository;
+import com.wjbc.fila_atendimento.security.enums.SECURITY_CONSTANTS;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 

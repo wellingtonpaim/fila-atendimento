@@ -1,7 +1,7 @@
 package com.wjbc.fila_atendimento.security.repository;
 
-import br.univesp.pi.domain.model.Usuario;
-import br.univesp.pi.security.model.ConfirmationToken;
+import com.wjbc.fila_atendimento.domain.model.Usuario;
+import com.wjbc.fila_atendimento.security.model.ConfirmationToken;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
