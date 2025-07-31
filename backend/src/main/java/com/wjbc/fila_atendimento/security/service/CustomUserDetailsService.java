@@ -1,8 +1,8 @@
 package com.wjbc.fila_atendimento.security.service;
 
-import br.univesp.pi.domain.model.Usuario;
-import br.univesp.pi.service.UsuarioService;
-import br.univesp.pi.service.impl.UserDetailsImpl;
+import com.wjbc.fila_atendimento.domain.model.Usuario;
+import com.wjbc.fila_atendimento.service.UsuarioService;
+import com.wjbc.fila_atendimento.service.impl.UserDetailsImpl;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;

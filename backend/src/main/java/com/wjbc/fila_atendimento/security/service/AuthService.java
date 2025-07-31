@@ -1,13 +1,13 @@
 package com.wjbc.fila_atendimento.security.service;
 
-import br.univesp.pi.domain.dto.EmailRequestDTO;
-import br.univesp.pi.domain.dto.UsuarioRegisterDTO;
-import br.univesp.pi.domain.model.Usuario;
-import br.univesp.pi.enumeration.CategoriaUsuario;
-import br.univesp.pi.security.model.ConfirmationToken;
-import br.univesp.pi.security.repository.ConfirmationTokenRepository;
-import br.univesp.pi.service.EmailSenderService;
-import br.univesp.pi.service.UsuarioService;
+import com.wjbc.fila_atendimento.domain.dto.EmailRequestDTO;
+import com.wjbc.fila_atendimento.domain.dto.UsuarioRegisterDTO;
+import com.wjbc.fila_atendimento.domain.model.Usuario;
+import com.wjbc.fila_atendimento.enumeration.CategoriaUsuario;
+import com.wjbc.fila_atendimento.security.model.ConfirmationToken;
+import com.wjbc.fila_atendimento.security.repository.ConfirmationTokenRepository;
+import com.wjbc.fila_atendimento.service.EmailSenderService;
+import com.wjbc.fila_atendimento.service.UsuarioService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

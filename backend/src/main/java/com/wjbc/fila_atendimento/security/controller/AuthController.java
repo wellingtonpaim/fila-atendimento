@@ -1,8 +1,8 @@
 package com.wjbc.fila_atendimento.security.controller;
 
-import br.univesp.pi.domain.dto.UsuarioRegisterDTO;
-import br.univesp.pi.security.service.AuthService;
-import br.univesp.pi.security.service.JWTTokenService;
+import com.wjbc.fila_atendimento.domain.dto.UsuarioRegisterDTO;
+import com.wjbc.fila_atendimento.security.service.AuthService;
+import com.wjbc.fila_atendimento.security.service.JWTTokenService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
