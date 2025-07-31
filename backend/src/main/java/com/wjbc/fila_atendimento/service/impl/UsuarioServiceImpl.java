@@ -42,6 +42,7 @@ public class UsuarioServiceImpl implements UsuarioService {
     @Transactional
     @Override
     public void deletarUsuario(UUID id) {
+
         Usuario usuario = usuarioRepository.findById(id)
                 .orElseThrow(() -> new ApiIllegalArgumentException(
                         "Usuário não encontrado para exclusão",
