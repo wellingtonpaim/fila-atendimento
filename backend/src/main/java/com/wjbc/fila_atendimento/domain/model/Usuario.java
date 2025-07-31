@@ -3,6 +3,9 @@ package com.wjbc.fila_atendimento.domain.model;
 import com.wjbc.fila_atendimento.enumeration.CategoriaUsuario;
 import jakarta.persistence.*;
 import lombok.Data;
+import org.hibernate.annotations.GenericGenerator;
+
+import java.util.UUID;
 
 @Data
 @Entity
@@ -10,9 +13,10 @@ import lombok.Data;
 public class Usuario {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "usuario_id")
-    private Long id;
+    @GeneratedValue(generator = "UUID")
+    @GenericGenerator(name = "UUID", strategy = "org.hibernate.id.UUIDGenerator")
+    @Column(name = "usuario_id", updatable = false, nullable = false)
+    private UUID id;
 
     @Column(name = "nome_usuario")
     private String nomeUsuario;

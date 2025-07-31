@@ -13,6 +13,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.UUID;
+
 @Service
 public class UsuarioServiceImpl implements UsuarioService {
 
@@ -39,7 +41,8 @@ public class UsuarioServiceImpl implements UsuarioService {
 
     @Transactional
     @Override
-    public void deletarUsuario(Long id) {
+    public void deletarUsuario(UUID id) {
+
         Usuario usuario = usuarioRepository.findById(id)
                 .orElseThrow(() -> new ApiIllegalArgumentException(
                         "Usuário não encontrado para exclusão",
