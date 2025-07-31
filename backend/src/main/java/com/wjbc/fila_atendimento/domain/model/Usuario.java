@@ -5,6 +5,7 @@ import jakarta.persistence.*;
 import lombok.Data;
 import org.hibernate.annotations.GenericGenerator;
 
+import java.util.List;
 import java.util.UUID;
 
 @Data
@@ -31,5 +32,13 @@ public class Usuario {
 
     @Column(columnDefinition = "boolean default false")
     private boolean ativo;
+
+    @ManyToMany
+    @JoinTable(
+            name = "usuario_unidade",
+            joinColumns = @JoinColumn(name = "usuario_id"),
+            inverseJoinColumns = @JoinColumn(name = "unidade_atendimento_id")
+    )
+    private List<UnidadeAtendimento> unidades;
 
 }

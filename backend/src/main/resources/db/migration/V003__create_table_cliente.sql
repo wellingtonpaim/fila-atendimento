@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS fila_atendimento.cliente (
     email VARCHAR(255) UNIQUE,
     cep VARCHAR(20),
     logradouro VARCHAR(255),
-    numero VARCHAR(20),
+    numero VARCHAR(50),
     complemento VARCHAR(255),
     bairro VARCHAR(100),
     cidade VARCHAR(100),

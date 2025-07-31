@@ -85,6 +85,10 @@ public class AuthService {
         });
     }
 
+    public Usuario findByEmail(String email) {
+        return usuarioService.findByEmail(email);
+    }
+
     public void confirmEmail(String token) {
         ConfirmationToken confirmationToken = confirmationTokenRepository.findByToken(token)
                 .orElseThrow(() -> new IllegalArgumentException("Email confirmado com sucesso!"));
