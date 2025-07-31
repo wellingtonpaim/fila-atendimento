@@ -4,26 +4,20 @@ import jakarta.persistence.*;
 import lombok.Data;
 import org.hibernate.annotations.GenericGenerator;
 
-import java.util.List;
 import java.util.UUID;
 
 @Data
 @Entity
-@Table(name = "unidade_atendimento")
-public class UnidadeAtendimento {
+@Table(name = "setor")
+public class Setor {
 
     @Id
     @GeneratedValue(generator = "UUID")
     @GenericGenerator(name = "UUID", strategy = "org.hibernate.id.UUIDGenerator")
-    @Column(name = "unidade_atendimento_id", updatable = false, nullable = false)
+    @Column(name = "setor_id", updatable = false, nullable = false)
     private UUID id;
 
-    @Column(name = "nome")
+    @Column(name = "nome", nullable = false)
     private String nome;
 
-    @Embedded
-    private Endereco endereco;
-
-    @ElementCollection
-    private List<Telefone> telefones;
 }

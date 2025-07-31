@@ -1,6 +1,8 @@
 package com.wjbc.fila_atendimento.security.controller;
 
 import com.wjbc.fila_atendimento.domain.dto.UsuarioRegisterDTO;
+import com.wjbc.fila_atendimento.domain.model.Usuario;
+import com.wjbc.fila_atendimento.repository.UsuarioRepository;
 import com.wjbc.fila_atendimento.security.service.AuthService;
 import com.wjbc.fila_atendimento.security.service.JWTTokenService;
 import jakarta.validation.Valid;
@@ -12,6 +14,8 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.UUID;
+
 @RestController
 @RequestMapping("/auth")
 @RequiredArgsConstructor
@@ -21,14 +25,29 @@ public class AuthController {
     private final AuthenticationManager authenticationManager;
     private final JWTTokenService jwtTokenService;
     private final AuthService authService;
+    private final UsuarioRepository usuarioRepository;
 
     @PostMapping("/login")
-    public ResponseEntity<String> login(@RequestParam String username, @RequestParam String password) {
+    public ResponseEntity<String> login(
+            @RequestParam String username,
+            @RequestParam String password,
+            @RequestParam UUID unidadeAtendimentoId
+    ) {
         try {
             authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(username, password)
             );
-            String token = jwtTokenService.generateToken(username);
+
+            Usuario usuario = authService.findByEmail(username);
+            boolean temAcesso = usuario.getUnidades().stream()
+                    .anyMatch(u -> u.getId().equals(unidadeAtendimentoId));
+
+            if (!temAcesso) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body("Usuário não tem acesso a esta unidade");
+            }
+
+            String token = jwtTokenService.generateToken(username, unidadeAtendimentoId);
             return ResponseEntity.ok(token);
         } catch (AuthenticationException e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Credenciais inválidas");

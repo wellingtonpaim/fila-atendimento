@@ -1,2 +1,0 @@
-CREATE SCHEMA IF NOT EXISTS fila_atendimento;
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
