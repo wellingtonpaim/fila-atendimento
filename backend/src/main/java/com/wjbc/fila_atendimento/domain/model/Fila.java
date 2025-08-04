@@ -8,8 +8,8 @@ import java.util.UUID;
 
 @Data
 @Entity
-@Table(name = "fila_atendimento")
-public class FilaAtendimento {
+@Table(name = "fila")
+public class Fila {
 
     @Id
     @GeneratedValue(generator = "UUID")
