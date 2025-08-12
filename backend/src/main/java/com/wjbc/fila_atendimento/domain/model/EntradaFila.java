@@ -23,11 +23,9 @@ public class EntradaFila {
     @JoinColumn(name = "fila_id", nullable = false)
     private Fila fila;
 
-    @Column(name = "codigo_paciente", nullable = false)
-    private String codigoPaciente; // ex: CL5161
-
-    @Column(name = "nome_paciente")
-    private String nomePaciente; // Pode ser nulo para chamada anônima
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "cliente_cpf", nullable = false)
+    private Cliente cliente;
 
     @Column(name = "prioridade")
     private Boolean prioridade;
@@ -40,4 +38,18 @@ public class EntradaFila {
 
     @Column(name = "data_hora_chamada")
     private LocalDateTime dataHoraChamada;
+
+    @Column(name = "data_hora_saida")
+    private LocalDateTime dataHoraSaida;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "usuario_responsavel_id")
+    private Usuario usuarioResponsavel;
+
+    @Column(name = "guiche_ou_sala_atendimento")
+    private String guicheOuSalaAtendimento;
+
+    @Column(name = "retorno", columnDefinition = "boolean default false")
+    private boolean isRetorno = false;
+
 }

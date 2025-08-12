@@ -41,4 +41,8 @@ public class Usuario {
     )
     private List<UnidadeAtendimento> unidades;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "setor_id")
+    private Setor setor;
+
 }
