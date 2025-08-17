@@ -13,7 +13,9 @@ import java.util.UUID;
 public interface UsuarioRepository extends JpaRepository<Usuario, UUID> {
 
     Optional<Usuario> findByEmail(@NotBlank(message = "E-mail é obrigatório") @Email(message = "E-mail inválido") String email);
+
     Optional<Usuario> findById(UUID id);
+
     void deleteById(UUID id);
 
 }

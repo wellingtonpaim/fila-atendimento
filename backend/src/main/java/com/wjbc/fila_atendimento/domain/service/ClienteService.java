@@ -8,7 +8,6 @@ import java.util.List;
 import java.util.UUID;
 
 public interface ClienteService {
-
     ClienteResponseDTO criar(ClienteCreateDTO clienteDTO);
     ClienteResponseDTO substituir(UUID id, ClienteCreateDTO clienteDTO);
     ClienteResponseDTO atualizarParcialmente(UUID id, ClienteUpdateDTO clienteDTO);
