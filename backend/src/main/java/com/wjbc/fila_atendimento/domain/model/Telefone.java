@@ -1,6 +1,6 @@
 package com.wjbc.fila_atendimento.domain.model;
 
-import com.wjbc.fila_atendimento.enumeration.TipoTelefone;
+import com.wjbc.fila_atendimento.domain.enumeration.TipoTelefone;
 import jakarta.persistence.Embeddable;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;

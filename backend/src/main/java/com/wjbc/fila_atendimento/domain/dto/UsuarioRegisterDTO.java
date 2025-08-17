@@ -1,6 +1,6 @@
 package com.wjbc.fila_atendimento.domain.dto;
 
-import com.wjbc.fila_atendimento.validation.SenhaValida;
+import com.wjbc.fila_atendimento.domain.validation.SenhaValida;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;

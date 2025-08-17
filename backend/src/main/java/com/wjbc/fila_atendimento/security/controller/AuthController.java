@@ -2,7 +2,7 @@ package com.wjbc.fila_atendimento.security.controller;
 
 import com.wjbc.fila_atendimento.domain.dto.UsuarioRegisterDTO;
 import com.wjbc.fila_atendimento.domain.model.Usuario;
-import com.wjbc.fila_atendimento.repository.UsuarioRepository;
+import com.wjbc.fila_atendimento.domain.repository.UsuarioRepository;
 import com.wjbc.fila_atendimento.security.service.AuthService;
 import com.wjbc.fila_atendimento.security.service.JWTTokenService;
 import jakarta.validation.Valid;

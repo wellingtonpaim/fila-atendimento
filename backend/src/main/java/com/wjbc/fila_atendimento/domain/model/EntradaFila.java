@@ -1,6 +1,6 @@
 package com.wjbc.fila_atendimento.domain.model;
 
-import com.wjbc.fila_atendimento.enumeration.StatusFila;
+import com.wjbc.fila_atendimento.domain.enumeration.StatusFila;
 import jakarta.persistence.*;
 import lombok.Data;
 import org.hibernate.annotations.GenericGenerator;
