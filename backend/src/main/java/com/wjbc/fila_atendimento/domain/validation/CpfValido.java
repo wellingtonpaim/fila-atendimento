@@ -2,16 +2,15 @@ package com.wjbc.fila_atendimento.domain.validation;
 
 import jakarta.validation.Constraint;
 import jakarta.validation.Payload;
-
 import java.lang.annotation.*;
 
 @Documented
-@Constraint(validatedBy = CpfCnpjValidator.class)
+@Constraint(validatedBy = CpfValidator.class)
 @Target({ ElementType.FIELD, ElementType.METHOD, ElementType.PARAMETER })
 @Retention(RetentionPolicy.RUNTIME)
-public @interface CpfCnpj {
+public @interface CpfValido {
 
-    String message() default "CPF ou CNPJ inválido";
+    String message() default "CPF inválido";
 
     Class<?>[] groups() default {};
 

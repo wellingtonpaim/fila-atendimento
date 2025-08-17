@@ -12,6 +12,7 @@ import lombok.Data;
 public class Telefone {
 
     @Enumerated(EnumType.STRING)
+    @NotNull
     private TipoTelefone tipo;
 
     @NotNull

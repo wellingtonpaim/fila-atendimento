@@ -1,7 +1,7 @@
 package com.wjbc.fila_atendimento.domain.exception.handler;
 
 import com.fasterxml.jackson.databind.exc.InvalidFormatException;
-import com.wjbc.fila_atendimento.domain.dto.response.ApiResponse;
+import com.wjbc.fila_atendimento.domain.dto.ApiResponse;
 import com.wjbc.fila_atendimento.domain.exception.ApiIllegalArgumentException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

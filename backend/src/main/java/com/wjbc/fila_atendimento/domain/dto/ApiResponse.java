@@ -1,4 +1,4 @@
-package com.wjbc.fila_atendimento.domain.dto.response;
+package com.wjbc.fila_atendimento.domain.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;

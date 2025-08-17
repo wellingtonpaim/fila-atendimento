@@ -2,14 +2,20 @@ package com.wjbc.fila_atendimento.domain.model;
 
 import jakarta.persistence.*;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import org.hibernate.annotations.GenericGenerator;
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.Where;
 
 import java.util.List;
 import java.util.UUID;
 
 @Data
+@EqualsAndHashCode(of = "id")
 @Entity
 @Table(name = "cliente")
+@SQLDelete(sql = "UPDATE cliente SET ativo = false WHERE id = ?")
+@Where(clause = "ativo = true")
 public class Cliente {
 
     @Id
@@ -31,4 +37,8 @@ public class Cliente {
 
     @Embedded
     private Endereco endereco;
+
+    @Column(nullable = false)
+    private boolean ativo = true;
+
 }
