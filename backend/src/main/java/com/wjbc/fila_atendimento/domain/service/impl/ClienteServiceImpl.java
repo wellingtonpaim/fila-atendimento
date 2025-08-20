@@ -71,7 +71,15 @@ public class ClienteServiceImpl implements ClienteService {
     @Override
     @Transactional(readOnly = true)
     public ClienteResponseDTO buscarPorId(UUID id) {
-        return clienteMapper.toResponseDTO(findClienteById(id));
+        Cliente cliente = findClienteById(id);
+        return clienteMapper.toResponseDTO(cliente);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Cliente findClienteById(UUID id) {
+        return clienteRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Cliente não encontrado com o ID: " + id));
     }
 
     @Override
@@ -121,10 +129,5 @@ public class ClienteServiceImpl implements ClienteService {
                 throw new BusinessException("Email " + email + " já cadastrado no sistema.");
             }
         });
-    }
-
-    private Cliente findClienteById(UUID id) {
-        return clienteRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Cliente não encontrado com o ID: " + id));
     }
 }

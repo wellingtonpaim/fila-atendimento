@@ -1,18 +1,21 @@
 package com.wjbc.fila_atendimento.domain.service;
 
+import com.wjbc.fila_atendimento.domain.dto.UsuarioCreateDTO;
+import com.wjbc.fila_atendimento.domain.dto.UsuarioResponseDTO;
+import com.wjbc.fila_atendimento.domain.dto.UsuarioUpdateDTO;
 import com.wjbc.fila_atendimento.domain.model.Usuario;
-import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.NotBlank;
 
-
+import java.util.List;
 import java.util.UUID;
 
 public interface UsuarioService {
-
-    Usuario salvarUsuario(Usuario usuario);
-
-    Usuario findByEmail(@NotBlank(message = "E-mail é obrigatório") @Email(message = "E-mail inválido") String email);
-
-    void deletarUsuario(UUID id);
-
+    UsuarioResponseDTO criar(UsuarioCreateDTO usuarioDTO);
+    UsuarioResponseDTO atualizarParcialmente(UUID id, UsuarioUpdateDTO usuarioDTO);
+    UsuarioResponseDTO substituir(UUID id, UsuarioCreateDTO usuarioDTO);
+    UsuarioResponseDTO buscarPorId(UUID id);
+    List<UsuarioResponseDTO> listarTodos();
+    void desativar(UUID id);
+    Usuario findUsuarioById(UUID id);
+    UsuarioResponseDTO buscarPorEmail(String email);
+    Usuario findUsuarioByEmail(String email);
 }

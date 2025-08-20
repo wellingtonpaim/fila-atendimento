@@ -3,35 +3,43 @@ package com.wjbc.fila_atendimento.domain.model;
 import com.wjbc.fila_atendimento.domain.enumeration.StatusFila;
 import jakarta.persistence.*;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import org.hibernate.annotations.GenericGenerator;
+import org.hibernate.annotations.SQLDelete;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Data
+@EqualsAndHashCode(of = "id")
 @Entity
 @Table(name = "entrada_fila")
+@SQLDelete(sql = "UPDATE entrada_fila SET status = 'CANCELADO', data_hora_saida = CURRENT_TIMESTAMP WHERE id = ?")
 public class EntradaFila {
 
     @Id
     @GeneratedValue(generator = "UUID")
     @GenericGenerator(name = "UUID", strategy = "org.hibernate.id.UUIDGenerator")
-    @Column(name = "entrada_fila_id", updatable = false, nullable = false)
+    @Column(name = "id", updatable = false, nullable = false) // Nome da coluna padronizado
     private UUID id;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "fila_id", nullable = false)
     private Fila fila;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "cliente_cpf", nullable = false)
+    @JoinColumn(name = "cliente_id", nullable = false) // Corrigido de 'cliente_cpf' para 'cliente_id'
     private Cliente cliente;
 
-    @Column(name = "prioridade")
-    private Boolean prioridade;
+    @Column(nullable = false)
+    private Boolean prioridade = false;
 
     @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     private StatusFila status;
+
+    @Column(name = "retorno", nullable = false)
+    private boolean isRetorno = false;
 
     @Column(name = "data_hora_entrada", nullable = false)
     private LocalDateTime dataHoraEntrada;
@@ -48,8 +56,4 @@ public class EntradaFila {
 
     @Column(name = "guiche_ou_sala_atendimento")
     private String guicheOuSalaAtendimento;
-
-    @Column(name = "retorno", columnDefinition = "boolean default false")
-    private boolean isRetorno = false;
-
 }

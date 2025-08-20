@@ -77,7 +77,15 @@ public class FilaServiceImpl implements FilaService {
     @Override
     @Transactional(readOnly = true)
     public FilaResponseDTO buscarPorId(UUID id) {
-        return filaMapper.toResponseDTO(findFilaById(id));
+        Fila fila = findFilaById(id);
+        return filaMapper.toResponseDTO(fila);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Fila findFilaById(UUID id) {
+        return filaRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Fila não encontrada com o ID: " + id));
     }
 
     @Override
@@ -88,11 +96,6 @@ public class FilaServiceImpl implements FilaService {
         return filaRepository.findByUnidadeAtendimento(unidade).stream()
                 .map(filaMapper::toResponseDTO)
                 .collect(Collectors.toList());
-    }
-
-    private Fila findFilaById(UUID id) {
-        return filaRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Fila não encontrada com o ID: " + id));
     }
 
     private void validarNomeUnico(String nome, UnidadeAtendimento unidade, UUID idExcluido) {

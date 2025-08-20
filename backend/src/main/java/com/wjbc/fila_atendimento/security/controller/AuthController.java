@@ -1,8 +1,7 @@
 package com.wjbc.fila_atendimento.security.controller;
 
-import com.wjbc.fila_atendimento.domain.dto.UsuarioRegisterDTO;
+import com.wjbc.fila_atendimento.domain.dto.UsuarioCreateDTO;
 import com.wjbc.fila_atendimento.domain.model.Usuario;
-import com.wjbc.fila_atendimento.domain.repository.UsuarioRepository;
 import com.wjbc.fila_atendimento.security.service.AuthService;
 import com.wjbc.fila_atendimento.security.service.JWTTokenService;
 import jakarta.validation.Valid;
@@ -25,7 +24,6 @@ public class AuthController {
     private final AuthenticationManager authenticationManager;
     private final JWTTokenService jwtTokenService;
     private final AuthService authService;
-    private final UsuarioRepository usuarioRepository;
 
     @PostMapping("/login")
     public ResponseEntity<String> login(
@@ -39,7 +37,10 @@ public class AuthController {
             );
 
             Usuario usuario = authService.findByEmail(username);
-            boolean temAcesso = usuario.getUnidades().stream()
+            if (usuario == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Usuário não encontrado");
+            }
+            boolean temAcesso = usuario.getUnidades() != null && usuario.getUnidades().stream()
                     .anyMatch(u -> u.getId().equals(unidadeAtendimentoId));
 
             if (!temAcesso) {
@@ -55,7 +56,7 @@ public class AuthController {
     }
 
     @PostMapping("/register")
-    public ResponseEntity<?> register(@Valid @RequestBody UsuarioRegisterDTO dto) {
+    public ResponseEntity<?> register(@Valid @RequestBody UsuarioCreateDTO dto) {
         try {
             authService.register(dto);
             return ResponseEntity.ok("E-mail de confirmação enviado com sucesso!");
@@ -78,8 +79,12 @@ public class AuthController {
 
     @DeleteMapping("/delete/{email}")
     public ResponseEntity<String> deleteUserByEmail(@PathVariable String email) {
-        authService.deleteUserByEmail(email);
-        return ResponseEntity.ok("Usuário com e-mail \"" + email + "\" excluído com sucesso!");
+        try {
+            authService.deleteUserByEmail(email);
+            return ResponseEntity.ok("Usuário com e-mail \"" + email + "\" excluído com sucesso!");
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
     }
 
 }
