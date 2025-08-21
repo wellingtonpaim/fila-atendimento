@@ -1,10 +1,11 @@
 package com.wjbc.fila_atendimento.domain.model;
 
 
-import com.wjbc.fila_atendimento.enumeration.UF;
+import com.wjbc.fila_atendimento.domain.enumeration.UF;
 import jakarta.persistence.Embeddable;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
 @Data
@@ -12,8 +13,13 @@ import lombok.Data;
 public class Endereco {
 
     private String cep;
+
+    @NotBlank
     private String logradouro;
+
+    @NotBlank
     private String numero;
+
     private String complemento;
     private String bairro;
     private String cidade;

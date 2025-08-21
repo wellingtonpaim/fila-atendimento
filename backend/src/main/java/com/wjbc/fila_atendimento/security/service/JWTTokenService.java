@@ -3,7 +3,7 @@ package com.wjbc.fila_atendimento.security.service;
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.algorithms.Algorithm;
 import com.wjbc.fila_atendimento.domain.model.Usuario;
-import com.wjbc.fila_atendimento.repository.UsuarioRepository;
+import com.wjbc.fila_atendimento.domain.repository.UsuarioRepository;
 import com.wjbc.fila_atendimento.security.enums.SECURITY_CONSTANTS;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;

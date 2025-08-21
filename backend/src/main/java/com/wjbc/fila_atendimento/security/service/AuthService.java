@@ -1,20 +1,19 @@
 package com.wjbc.fila_atendimento.security.service;
 
 import com.wjbc.fila_atendimento.domain.dto.EmailRequestDTO;
-import com.wjbc.fila_atendimento.domain.dto.UsuarioRegisterDTO;
+import com.wjbc.fila_atendimento.domain.dto.UsuarioCreateDTO;
+import com.wjbc.fila_atendimento.domain.dto.UsuarioResponseDTO;
 import com.wjbc.fila_atendimento.domain.model.Usuario;
-import com.wjbc.fila_atendimento.enumeration.CategoriaUsuario;
+import com.wjbc.fila_atendimento.domain.service.EmailSenderService;
+import com.wjbc.fila_atendimento.domain.service.UsuarioService;
 import com.wjbc.fila_atendimento.security.model.ConfirmationToken;
 import com.wjbc.fila_atendimento.security.repository.ConfirmationTokenRepository;
-import com.wjbc.fila_atendimento.service.EmailSenderService;
-import com.wjbc.fila_atendimento.service.UsuarioService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 @Service
@@ -42,28 +41,20 @@ public class AuthService {
     private String emailFrom;
 
     @Transactional
-    public void register(UsuarioRegisterDTO dto) {
-
-        if (usuarioService.findByEmail(dto.getEmail()) != null) {
-            throw new IllegalArgumentException("Email já cadastrado!");
-        }
-
-        String categoriaUsuario = dto.getCategoria().toUpperCase();
-
-        Usuario usuario = new Usuario();
-        usuario.setNomeUsuario(dto.getNomeUsuario());
-        usuario.setEmail(dto.getEmail());
-        usuario.setSenha(dto.getSenha());
-        usuario.setCategoria(categoriaUsuario.equals("ADMINISTRADOR")
-                ? CategoriaUsuario.ADMINISTRADOR : CategoriaUsuario.USUARIO);
-        usuario.setAtivo(false);
-
-        Usuario usuarioSalvo = usuarioService.salvarUsuario(usuario);
-
-        String token = UUID.randomUUID().toString();
+    public void register(UsuarioCreateDTO dto) {
+        // Força categoria como USUARIO e unidadesIds como null para registro público
+        UsuarioCreateDTO usuarioCreateDTO = new UsuarioCreateDTO(
+                dto.nomeUsuario(),
+                dto.email(),
+                dto.senha(),
+                com.wjbc.fila_atendimento.domain.enumeration.CategoriaUsuario.USUARIO,
+                null
+        );
+        UsuarioResponseDTO usuarioResponseDTO = usuarioService.criar(usuarioCreateDTO);
+        Usuario usuarioSalvo = usuarioService.findUsuarioById(usuarioResponseDTO.id());
+        String token = java.util.UUID.randomUUID().toString();
         ConfirmationToken confirmationToken = new ConfirmationToken(token, usuarioSalvo);
         confirmationTokenRepository.save(confirmationToken);
-
         sendConfirmationEmailAsync(usuarioSalvo, token);
     }
 
@@ -74,24 +65,24 @@ public class AuthService {
                     + "<p>Por favor, confirme seu cadastro clicando no link abaixo:</p>"
                     + "<a href=\"" + confirmationUrl + "\">Confirmar Cadastro</a>";
 
-            EmailRequestDTO emailRequest = EmailRequestDTO.builder()
-                    .subject("Confirmação de Cadastro")
-                    .body(htmlBody)
-                    .to(usuario.getEmail())
-                    .from(emailFrom)
-                    .build();
+            EmailRequestDTO emailRequest = new EmailRequestDTO(
+                    "Confirmação de Cadastro",
+                    htmlBody,
+                    usuario.getEmail(),
+                    emailFrom
+            );
 
             emailSenderService.sendEmail(emailRequest);
         });
     }
 
     public Usuario findByEmail(String email) {
-        return usuarioService.findByEmail(email);
+        return usuarioService.findUsuarioByEmail(email);
     }
 
     public void confirmEmail(String token) {
         ConfirmationToken confirmationToken = confirmationTokenRepository.findByToken(token)
-                .orElseThrow(() -> new IllegalArgumentException("Email confirmado com sucesso!"));
+                .orElseThrow(() -> new IllegalArgumentException("Token de confirmação inválido!"));
 
         if (confirmationToken.getExpiryDate().isBefore(LocalDateTime.now())) {
             throw new IllegalStateException("Token expirado");
@@ -99,16 +90,21 @@ public class AuthService {
 
         Usuario usuario = confirmationToken.getUsuario();
         usuario.setAtivo(true);
-        usuarioService.salvarUsuario(usuario);
+        usuarioService.criar(new UsuarioCreateDTO(
+                usuario.getNomeUsuario(),
+                usuario.getEmail(),
+                usuario.getSenha(),
+                usuario.getCategoria(),
+                usuario.getUnidades() != null ? usuario.getUnidades().stream().map(u -> u.getId()).toList() : null
+        ));
         confirmationTokenRepository.delete(confirmationToken);
     }
 
     public void deleteUserByEmail(String email) {
-        Usuario usuario = usuarioService.findByEmail(email);
+        Usuario usuario = findByEmail(email);
         if (usuario == null) {
             throw new IllegalArgumentException("Usuário não encontrado");
         }
-        usuarioService.deletarUsuario(usuario.getId());
+        usuarioService.desativar(usuario.getId());
     }
 }
-
