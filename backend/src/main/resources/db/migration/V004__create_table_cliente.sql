@@ -1,5 +1,5 @@
 CREATE TABLE IF NOT EXISTS fila_atendimento.cliente (
-    id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     cpf VARCHAR(14) UNIQUE,
     nome VARCHAR(255),
     email VARCHAR(255) UNIQUE,
