@@ -1,4 +1,5 @@
 CREATE TABLE IF NOT EXISTS fila_atendimento.setor (
-        setor_id UUID PRIMARY KEY,
-        nome VARCHAR(255) NOT NULL
-    );
+    id UUID PRIMARY KEY,
+    nome VARCHAR(255) NOT NULL UNIQUE,
+    ativo BOOLEAN DEFAULT TRUE NOT NULL
+);

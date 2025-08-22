@@ -1,12 +1,19 @@
 CREATE TABLE IF NOT EXISTS fila_atendimento.entrada_fila (
-    entrada_fila_id UUID PRIMARY KEY,
-    data_hora_entrada TIMESTAMP NOT NULL,
+    id UUID PRIMARY KEY,
+    fila_id UUID NOT NULL,
+    cliente_id UUID NOT NULL,
+    prioridade BOOLEAN DEFAULT FALSE NOT NULL,
     status VARCHAR(20) NOT NULL,
-    cliente_cpf VARCHAR(14) NOT NULL,
-    fila_atendimento_id UUID NOT NULL,
-
-    CONSTRAINT fk_entrada_cliente FOREIGN KEY (cliente_cpf)
-    REFERENCES fila_atendimento.cliente (cpf),
-    CONSTRAINT fk_entrada_fila FOREIGN KEY (fila_atendimento_id)
-    REFERENCES fila_atendimento.fila_atendimento (fila_atendimento_id)
-    );
+    retorno BOOLEAN DEFAULT FALSE NOT NULL,
+    data_hora_entrada TIMESTAMP NOT NULL,
+    data_hora_chamada TIMESTAMP,
+    data_hora_saida TIMESTAMP,
+    usuario_responsavel_id UUID,
+    guiche_ou_sala_atendimento VARCHAR(100),
+    CONSTRAINT fk_entrada_fila FOREIGN KEY (fila_id)
+        REFERENCES fila_atendimento.fila (id),
+    CONSTRAINT fk_entrada_cliente FOREIGN KEY (cliente_id)
+        REFERENCES fila_atendimento.cliente (id),
+    CONSTRAINT fk_entrada_usuario FOREIGN KEY (usuario_responsavel_id)
+        REFERENCES fila_atendimento.usuario (id)
+);

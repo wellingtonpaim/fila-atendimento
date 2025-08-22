@@ -9,14 +9,14 @@ CREATE TABLE IF NOT EXISTS fila_atendimento.chamada_painel (
     unidade_id UUID NOT NULL,
 
     CONSTRAINT fk_chamada_fila FOREIGN KEY (fila_id)
-    REFERENCES fila_atendimento.fila (fila_id),
+        REFERENCES fila_atendimento.fila (id),
 
     CONSTRAINT fk_chamada_painel FOREIGN KEY (painel_id)
-    REFERENCES fila_atendimento.painel (painel_id),
+        REFERENCES fila_atendimento.painel (id),
 
     CONSTRAINT fk_chamada_setor FOREIGN KEY (setor_id)
-    REFERENCES fila_atendimento.setor (setor_id),
+        REFERENCES fila_atendimento.setor (id),
 
     CONSTRAINT fk_chamada_unidade FOREIGN KEY (unidade_id)
-    REFERENCES fila_atendimento.unidade_atendimento (unidade_atendimento_id)
-    );
+        REFERENCES fila_atendimento.unidade_atendimento (id)
+);

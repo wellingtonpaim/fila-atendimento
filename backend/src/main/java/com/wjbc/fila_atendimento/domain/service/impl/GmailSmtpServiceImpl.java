@@ -26,10 +26,10 @@ public class GmailSmtpServiceImpl implements EmailSenderService {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
-            helper.setFrom(emailRequest.getFrom());
-            helper.setTo(emailRequest.getTo());
-            helper.setSubject(emailRequest.getSubject());
-            helper.setText(emailRequest.getBody(), true); // true = HTML
+            helper.setFrom(emailRequest.from());
+            helper.setTo(emailRequest.to());
+            helper.setSubject(emailRequest.subject());
+            helper.setText(emailRequest.body(), true);
 
             mailSender.send(message);
         } catch (MessagingException e) {
@@ -37,4 +37,3 @@ public class GmailSmtpServiceImpl implements EmailSenderService {
         }
     }
 }
-
