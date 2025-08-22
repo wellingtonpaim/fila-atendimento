@@ -1,5 +1,5 @@
 CREATE TABLE IF NOT EXISTS fila_atendimento.unidade_atendimento (
-    id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     nome VARCHAR(255) NOT NULL UNIQUE,
     cep VARCHAR(20),
     logradouro VARCHAR(255),
@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS fila_atendimento.unidade_atendimento (
 );
 
 CREATE TABLE IF NOT EXISTS fila_atendimento.unidade_atendimento_telefones (
-    id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     unidade_atendimento_id UUID NOT NULL,
     tipo VARCHAR(20),
     ddd INTEGER NOT NULL,

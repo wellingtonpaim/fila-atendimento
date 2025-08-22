@@ -1,5 +1,5 @@
 CREATE TABLE IF NOT EXISTS fila_atendimento.fila (
-    id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     nome VARCHAR(255) NOT NULL,
     ativa BOOLEAN NOT NULL DEFAULT TRUE,
     setor_id UUID NOT NULL,

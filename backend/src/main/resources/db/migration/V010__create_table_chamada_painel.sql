@@ -1,5 +1,5 @@
 CREATE TABLE IF NOT EXISTS fila_atendimento.chamada_painel (
-    id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     data_hora_chamada TIMESTAMP NOT NULL,
     codigo_paciente VARCHAR(20) NOT NULL,
     guiche_ou_sala VARCHAR(100),
