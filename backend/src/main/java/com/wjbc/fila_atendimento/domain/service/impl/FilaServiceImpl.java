@@ -45,8 +45,7 @@ public class FilaServiceImpl implements FilaService {
         fila.setAtiva(true);
 
         Fila filaSalva = filaRepository.save(fila);
-        // O load das relações LAZY pode ser necessário para o mapper.
-        // Se ocorrer LazyInitializationException, buscaremos a fila novamente.
+
         return filaMapper.toResponseDTO(findFilaById(filaSalva.getId()));
     }
 
@@ -96,6 +95,13 @@ public class FilaServiceImpl implements FilaService {
         return filaRepository.findByUnidadeAtendimento(unidade).stream()
                 .map(filaMapper::toResponseDTO)
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Fila> findBySetorId(UUID setorId) {
+        Setor setor = setorService.findSetorById(setorId);
+        return filaRepository.findBySetor(setor);
     }
 
     private void validarNomeUnico(String nome, UnidadeAtendimento unidade, UUID idExcluido) {

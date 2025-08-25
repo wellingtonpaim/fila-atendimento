@@ -21,4 +21,5 @@ public interface FilaRepository extends JpaRepository<Fila, UUID> {
 
     boolean existsByUnidadeAtendimentoAndAtivaIsTrue(UnidadeAtendimento unidadeAtendimento);
 
+    List<Fila> findBySetor(Setor setor);
 }

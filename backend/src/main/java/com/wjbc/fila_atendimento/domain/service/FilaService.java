@@ -15,4 +15,5 @@ public interface FilaService {
     List<FilaResponseDTO> listarPorUnidade(UUID unidadeId);
     void desativar(UUID id);
     Fila findFilaById(UUID id);
+    List<Fila> findBySetorId(UUID setorId);
 }
