@@ -3,6 +3,7 @@ package com.wjbc.fila_atendimento.security.service;
 import com.wjbc.fila_atendimento.domain.dto.EmailRequestDTO;
 import com.wjbc.fila_atendimento.domain.dto.UsuarioCreateDTO;
 import com.wjbc.fila_atendimento.domain.dto.UsuarioResponseDTO;
+import com.wjbc.fila_atendimento.domain.enumeration.CategoriaUsuario;
 import com.wjbc.fila_atendimento.domain.model.Usuario;
 import com.wjbc.fila_atendimento.domain.service.EmailSenderService;
 import com.wjbc.fila_atendimento.domain.service.UsuarioService;
@@ -42,12 +43,13 @@ public class AuthService {
 
     @Transactional
     public void register(UsuarioCreateDTO dto) {
-        // Força categoria como USUARIO e unidadesIds como null para registro público
+        CategoriaUsuario categoria = dto.categoria() != null ? dto.categoria() : CategoriaUsuario.USUARIO;
+
         UsuarioCreateDTO usuarioCreateDTO = new UsuarioCreateDTO(
                 dto.nomeUsuario(),
                 dto.email(),
                 dto.senha(),
-                com.wjbc.fila_atendimento.domain.enumeration.CategoriaUsuario.USUARIO,
+                categoria,
                 null
         );
         UsuarioResponseDTO usuarioResponseDTO = usuarioService.criar(usuarioCreateDTO);

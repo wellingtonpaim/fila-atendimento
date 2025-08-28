@@ -51,7 +51,8 @@ public class AuthController {
             String token = jwtTokenService.generateToken(username, unidadeAtendimentoId);
             return ResponseEntity.ok(token);
         } catch (AuthenticationException e) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Credenciais inválidas");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body("Credenciais inválidas, verifique e tente novamente.");
         }
     }
 

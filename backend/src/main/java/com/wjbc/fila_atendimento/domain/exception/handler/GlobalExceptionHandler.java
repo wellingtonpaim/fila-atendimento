@@ -121,4 +121,20 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(resposta);
     }
 
+    @ExceptionHandler(java.util.NoSuchElementException.class)
+    public ResponseEntity<ApiResponse<Void>> handleNoSuchElement(java.util.NoSuchElementException ex) {
+        String mensagem = ex.getMessage() != null ? ex.getMessage() : "Recurso não encontrado";
+        List<String> erros = List.of("O recurso solicitado não foi encontrado no sistema");
+
+        ApiResponse<Void> resposta = new ApiResponse<>(
+                false,
+                mensagem,
+                null,
+                erros,
+                new Date()
+        );
+
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(resposta);
+    }
+
 }

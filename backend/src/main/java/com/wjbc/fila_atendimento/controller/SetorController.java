@@ -4,13 +4,16 @@ import com.wjbc.fila_atendimento.domain.dto.SetorCreateDTO;
 import com.wjbc.fila_atendimento.domain.dto.SetorUpdateDTO;
 import com.wjbc.fila_atendimento.domain.dto.SetorResponseDTO;
 import com.wjbc.fila_atendimento.domain.service.SetorService;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/setores")
+@Validated
 public class SetorController {
     private final SetorService setorService;
 
@@ -34,17 +37,17 @@ public class SetorController {
     }
 
     @PostMapping
-    public ResponseEntity<SetorResponseDTO> criar(@RequestBody SetorCreateDTO dto) {
+    public ResponseEntity<SetorResponseDTO> criar(@Valid @RequestBody SetorCreateDTO dto) {
         return ResponseEntity.ok(setorService.criar(dto));
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<SetorResponseDTO> substituir(@PathVariable UUID id, @RequestBody SetorCreateDTO dto) {
+    public ResponseEntity<SetorResponseDTO> substituir(@PathVariable UUID id, @Valid @RequestBody SetorCreateDTO dto) {
         return ResponseEntity.ok(setorService.substituir(id, dto));
     }
 
     @PatchMapping("/{id}")
-    public ResponseEntity<SetorResponseDTO> atualizarParcialmente(@PathVariable UUID id, @RequestBody SetorUpdateDTO dto) {
+    public ResponseEntity<SetorResponseDTO> atualizarParcialmente(@PathVariable UUID id, @Valid @RequestBody SetorUpdateDTO dto) {
         return ResponseEntity.ok(setorService.atualizarParcialmente(id, dto));
     }
 
