@@ -1,4 +1,4 @@
-package com.wjbc.fila_atendimento.domain.service;
+package com.wjbc.fila_atendimento.domain.service.impl;
 
 import com.wjbc.fila_atendimento.domain.dto.UsuarioCreateDTO;
 import com.wjbc.fila_atendimento.domain.dto.UsuarioResponseDTO;
@@ -8,7 +8,7 @@ import com.wjbc.fila_atendimento.domain.mapper.UsuarioMapper;
 import com.wjbc.fila_atendimento.domain.model.UnidadeAtendimento;
 import com.wjbc.fila_atendimento.domain.model.Usuario;
 import com.wjbc.fila_atendimento.domain.repository.UsuarioRepository;
-import com.wjbc.fila_atendimento.domain.service.impl.UsuarioServiceImpl;
+import com.wjbc.fila_atendimento.domain.service.UnidadeAtendimentoService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
@@ -27,7 +27,8 @@ class UsuarioServiceImplTest {
     @Mock UsuarioRepository usuarioRepository;
     @Mock UsuarioMapper usuarioMapper;
     @Mock PasswordEncoder passwordEncoder;
-    @Mock UnidadeAtendimentoService unidadeService;
+    @Mock
+    UnidadeAtendimentoService unidadeService;
     @InjectMocks UsuarioServiceImpl service;
 
     @BeforeEach

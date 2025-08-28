@@ -1,11 +1,10 @@
-package com.wjbc.fila_atendimento.domain.service;
+package com.wjbc.fila_atendimento.domain.service.impl;
 
 import com.wjbc.fila_atendimento.domain.dto.ClienteCreateDTO;
 import com.wjbc.fila_atendimento.domain.dto.ClienteResponseDTO;
 import com.wjbc.fila_atendimento.domain.dto.ClienteUpdateDTO;
 import com.wjbc.fila_atendimento.domain.model.Cliente;
 import com.wjbc.fila_atendimento.domain.repository.ClienteRepository;
-import com.wjbc.fila_atendimento.domain.service.impl.ClienteServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;

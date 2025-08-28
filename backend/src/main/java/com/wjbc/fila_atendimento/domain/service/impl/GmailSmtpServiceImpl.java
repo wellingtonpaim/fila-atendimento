@@ -32,7 +32,7 @@ public class GmailSmtpServiceImpl implements EmailSenderService {
             helper.setText(emailRequest.body(), true);
 
             mailSender.send(message);
-        } catch (MessagingException e) {
+        } catch (Exception e) {
             throw new RuntimeException("Erro ao enviar e-mail com Gmail SMTP", e);
         }
     }
