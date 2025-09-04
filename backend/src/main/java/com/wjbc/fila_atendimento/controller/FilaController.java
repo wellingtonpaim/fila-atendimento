@@ -1,5 +1,6 @@
 package com.wjbc.fila_atendimento.controller;
 
+import com.wjbc.fila_atendimento.domain.dto.ApiResponse;
 import com.wjbc.fila_atendimento.domain.dto.FilaCreateDTO;
 import com.wjbc.fila_atendimento.domain.dto.FilaUpdateDTO;
 import com.wjbc.fila_atendimento.domain.dto.FilaResponseDTO;
@@ -19,28 +20,32 @@ public class FilaController {
     }
 
     @GetMapping("/unidade/{unidadeId}")
-    public ResponseEntity<List<FilaResponseDTO>> listarPorUnidade(@PathVariable UUID unidadeId) {
-        return ResponseEntity.ok(filaService.listarPorUnidade(unidadeId));
+    public ResponseEntity<ApiResponse<List<FilaResponseDTO>>> listarPorUnidade(@PathVariable UUID unidadeId) {
+        List<FilaResponseDTO> filas = filaService.listarPorUnidade(unidadeId);
+        return ResponseEntity.ok(new ApiResponse<>(true, "Filas listadas por unidade", filas));
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<FilaResponseDTO> buscarPorId(@PathVariable UUID id) {
-        return ResponseEntity.ok(filaService.buscarPorId(id));
+    public ResponseEntity<ApiResponse<FilaResponseDTO>> buscarPorId(@PathVariable UUID id) {
+        FilaResponseDTO fila = filaService.buscarPorId(id);
+        return ResponseEntity.ok(new ApiResponse<>(true, "Fila encontrada", fila));
     }
 
     @PostMapping
-    public ResponseEntity<FilaResponseDTO> criar(@RequestBody FilaCreateDTO dto) {
-        return ResponseEntity.ok(filaService.criar(dto));
+    public ResponseEntity<ApiResponse<FilaResponseDTO>> criar(@RequestBody FilaCreateDTO dto) {
+        FilaResponseDTO fila = filaService.criar(dto);
+        return ResponseEntity.ok(new ApiResponse<>(true, "Fila criada com sucesso", fila));
     }
 
     @PatchMapping("/{id}")
-    public ResponseEntity<FilaResponseDTO> atualizarParcialmente(@PathVariable UUID id, @RequestBody FilaUpdateDTO dto) {
-        return ResponseEntity.ok(filaService.atualizarParcialmente(id, dto));
+    public ResponseEntity<ApiResponse<FilaResponseDTO>> atualizarParcialmente(@PathVariable UUID id, @RequestBody FilaUpdateDTO dto) {
+        FilaResponseDTO fila = filaService.atualizarParcialmente(id, dto);
+        return ResponseEntity.ok(new ApiResponse<>(true, "Fila atualizada com sucesso", fila));
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> desativar(@PathVariable UUID id) {
+    public ResponseEntity<ApiResponse<Void>> desativar(@PathVariable UUID id) {
         filaService.desativar(id);
-        return ResponseEntity.noContent().build();
+        return ResponseEntity.ok(new ApiResponse<>(true, "Fila desativada com sucesso", null));
     }
 }

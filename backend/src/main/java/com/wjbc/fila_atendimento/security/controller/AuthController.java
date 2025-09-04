@@ -1,5 +1,6 @@
 package com.wjbc.fila_atendimento.security.controller;
 
+import com.wjbc.fila_atendimento.domain.dto.ApiResponse;
 import com.wjbc.fila_atendimento.domain.dto.UsuarioCreateDTO;
 import com.wjbc.fila_atendimento.domain.model.Usuario;
 import com.wjbc.fila_atendimento.security.service.AuthService;
@@ -26,7 +27,7 @@ public class AuthController {
     private final AuthService authService;
 
     @PostMapping("/login")
-    public ResponseEntity<String> login(
+    public ResponseEntity<ApiResponse<String>> login(
             @RequestParam String username,
             @RequestParam String password,
             @RequestParam UUID unidadeAtendimentoId
@@ -38,53 +39,54 @@ public class AuthController {
 
             Usuario usuario = authService.findByEmail(username);
             if (usuario == null) {
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Usuário não encontrado");
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(new ApiResponse<>(false, "Usuário não encontrado", null));
             }
             boolean temAcesso = usuario.getUnidades() != null && usuario.getUnidades().stream()
                     .anyMatch(u -> u.getId().equals(unidadeAtendimentoId));
 
             if (!temAcesso) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                        .body("Usuário não tem acesso a esta unidade");
+                        .body(new ApiResponse<>(false, "Usuário não tem acesso a esta unidade", null));
             }
 
             String token = jwtTokenService.generateToken(username, unidadeAtendimentoId);
-            return ResponseEntity.ok(token);
+            return ResponseEntity.ok(new ApiResponse<>(true, "Login realizado com sucesso", token));
         } catch (AuthenticationException e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body("Credenciais inválidas, verifique e tente novamente.");
+                    .body(new ApiResponse<>(false, "Credenciais inválidas, verifique e tente novamente.", null));
         }
     }
 
     @PostMapping("/register")
-    public ResponseEntity<?> register(@Valid @RequestBody UsuarioCreateDTO dto) {
+    public ResponseEntity<ApiResponse<Void>> register(@Valid @RequestBody UsuarioCreateDTO dto) {
         try {
             authService.register(dto);
-            return ResponseEntity.ok("E-mail de confirmação enviado com sucesso!");
+            return ResponseEntity.ok(new ApiResponse<>(true, "E-mail de confirmação enviado com sucesso!", null));
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
+            return ResponseEntity.badRequest().body(new ApiResponse<>(false, e.getMessage(), null));
         } catch (Exception e) {
-            return ResponseEntity.internalServerError().body("Erro ao registrar usuário!");
+            return ResponseEntity.internalServerError().body(new ApiResponse<>(false, "Erro ao registrar usuário!", null));
         }
     }
 
     @GetMapping("/confirmar")
-    public ResponseEntity<?> confirmEmail(@RequestParam String token) {
+    public ResponseEntity<ApiResponse<Void>> confirmEmail(@RequestParam String token) {
         try {
             authService.confirmEmail(token);
-            return ResponseEntity.ok("E-mail confirmado com sucesso!");
+            return ResponseEntity.ok(new ApiResponse<>(true, "E-mail confirmado com sucesso!", null));
         } catch (IllegalArgumentException | IllegalStateException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
+            return ResponseEntity.badRequest().body(new ApiResponse<>(false, e.getMessage(), null));
         }
     }
 
     @DeleteMapping("/delete/{email}")
-    public ResponseEntity<String> deleteUserByEmail(@PathVariable String email) {
+    public ResponseEntity<ApiResponse<Void>> deleteUserByEmail(@PathVariable String email) {
         try {
             authService.deleteUserByEmail(email);
-            return ResponseEntity.ok("Usuário com e-mail \"" + email + "\" excluído com sucesso!");
+            return ResponseEntity.ok(new ApiResponse<>(true, "Usuário com e-mail '" + email + "' excluído com sucesso!", null));
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
+            return ResponseEntity.badRequest().body(new ApiResponse<>(false, e.getMessage(), null));
         }
     }
 

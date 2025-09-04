@@ -2,6 +2,7 @@ package com.wjbc.fila_atendimento.controller;
 
 import com.wjbc.fila_atendimento.domain.dashboard.dto.*;
 import com.wjbc.fila_atendimento.domain.dashboard.service.DashboardService;
+import com.wjbc.fila_atendimento.domain.dto.ApiResponse;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -20,35 +21,38 @@ public class DashboardController {
     }
 
     @GetMapping("/tempo-medio-espera")
-    public ResponseEntity<List<TempoEsperaDTO>> tempoMedioEspera(
+    public ResponseEntity<ApiResponse<List<TempoEsperaDTO>>> tempoMedioEspera(
             @RequestParam UUID unidadeId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime inicio,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fim) {
-        return ResponseEntity.ok(dashboardService.calcularTempoMedioEspera(unidadeId, inicio, fim));
+        List<TempoEsperaDTO> lista = dashboardService.calcularTempoMedioEspera(unidadeId, inicio, fim);
+        return ResponseEntity.ok(new ApiResponse<>(true, "Tempo médio de espera calculado com sucesso", lista));
     }
 
     @GetMapping("/produtividade")
-    public ResponseEntity<List<ProdutividadeDTO>> produtividade(
+    public ResponseEntity<ApiResponse<List<ProdutividadeDTO>>> produtividade(
             @RequestParam UUID unidadeId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime inicio,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fim) {
-        return ResponseEntity.ok(dashboardService.calcularProdutividadePorProfissional(unidadeId, inicio, fim));
+        List<ProdutividadeDTO> lista = dashboardService.calcularProdutividadePorProfissional(unidadeId, inicio, fim);
+        return ResponseEntity.ok(new ApiResponse<>(true, "Produtividade calculada com sucesso", lista));
     }
 
     @GetMapping("/horarios-pico")
-    public ResponseEntity<List<HorarioPicoDTO>> horariosPico(
+    public ResponseEntity<ApiResponse<List<HorarioPicoDTO>>> horariosPico(
             @RequestParam UUID unidadeId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime inicio,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fim) {
-        return ResponseEntity.ok(dashboardService.identificarHorariosPico(unidadeId, inicio, fim));
+        List<HorarioPicoDTO> lista = dashboardService.identificarHorariosPico(unidadeId, inicio, fim);
+        return ResponseEntity.ok(new ApiResponse<>(true, "Horários de pico identificados com sucesso", lista));
     }
 
     @GetMapping("/fluxo-pacientes")
-    public ResponseEntity<List<FluxoPacientesDTO>> fluxoPacientes(
+    public ResponseEntity<ApiResponse<List<FluxoPacientesDTO>>> fluxoPacientes(
             @RequestParam UUID unidadeId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime inicio,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fim) {
-        return ResponseEntity.ok(dashboardService.analisarFluxoPacientes(unidadeId, inicio, fim));
+        List<FluxoPacientesDTO> lista = dashboardService.analisarFluxoPacientes(unidadeId, inicio, fim);
+        return ResponseEntity.ok(new ApiResponse<>(true, "Fluxo de pacientes analisado com sucesso", lista));
     }
 }
-

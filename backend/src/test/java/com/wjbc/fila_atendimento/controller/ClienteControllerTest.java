@@ -120,4 +120,16 @@ class ClienteControllerTest {
         Exception exception = assertThrows(IllegalArgumentException.class, () -> clienteController.criar(createDTO));
         assertEquals("Dados inválidos", exception.getMessage());
     }
+
+    @Test
+    void criar_emailDuplicado() {
+        ClienteCreateDTO createDTO = new ClienteCreateDTO("12345678900", "Nome", "email@email.com", new ArrayList<Telefone>(), null);
+        when(clienteService.criar(createDTO)).thenThrow(new com.wjbc.fila_atendimento.exception.EmailDuplicadoException("Email email@email.com já cadastrado no sistema."));
+        try {
+            clienteController.criar(createDTO);
+            fail("Deveria lançar EmailDuplicadoException");
+        } catch (com.wjbc.fila_atendimento.exception.EmailDuplicadoException ex) {
+            assertEquals("Email email@email.com já cadastrado no sistema.", ex.getMessage());
+        }
+    }
 }

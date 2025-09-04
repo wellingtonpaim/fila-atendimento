@@ -59,6 +59,15 @@ public class ClienteServiceImpl implements ClienteService {
     public ClienteResponseDTO atualizarParcialmente(UUID id, ClienteUpdateDTO clienteDTO) {
         Cliente clienteExistente = findClienteById(id);
 
+        // Verifica se o e-mail está sendo alterado e se já existe para outro cliente
+        if (clienteDTO.email() != null && !clienteDTO.email().equals(clienteExistente.getEmail())) {
+            clienteRepository.findByEmail(clienteDTO.email()).ifPresent(cliente -> {
+                if (!cliente.getId().equals(id)) {
+                    throw new com.wjbc.fila_atendimento.exception.EmailDuplicadoException("E-mail '" + clienteDTO.email() + "' já está cadastrado para outro cliente.");
+                }
+            });
+        }
+
         clienteMapper.applyPatchToEntity(clienteDTO, clienteExistente);
 
         validarCpfEEmail(clienteExistente.getCpf(), clienteExistente.getEmail(), id);
@@ -126,7 +135,7 @@ public class ClienteServiceImpl implements ClienteService {
 
         clienteRepository.findByEmail(email).ifPresent(cliente -> {
             if (idExcluido == null || !cliente.getId().equals(idExcluido)) {
-                throw new BusinessException("Email " + email + " já cadastrado no sistema.");
+                throw new com.wjbc.fila_atendimento.exception.EmailDuplicadoException("Email " + email + " já cadastrado no sistema.");
             }
         });
     }
