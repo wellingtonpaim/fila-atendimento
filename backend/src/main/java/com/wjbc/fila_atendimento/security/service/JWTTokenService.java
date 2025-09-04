@@ -25,7 +25,7 @@ public class JWTTokenService {
         return JWT.create()
                 .withSubject(username)
                 .withClaim("roles", usuario.getCategoria().getRole())
-                .withClaim("unidadeId", Collections.singletonList(unidadeAtendimentoId))
+                .withClaim("unidadeId", Collections.singletonList(unidadeAtendimentoId.toString()))
                 .withExpiresAt(new Date(System.currentTimeMillis() + SECURITY_CONSTANTS.EXPIRATION_TIME))
                 .sign(Algorithm.HMAC512(SECURITY_CONSTANTS.SECRET.getBytes()));
     }

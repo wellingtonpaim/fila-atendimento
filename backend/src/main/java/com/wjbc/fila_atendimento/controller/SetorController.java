@@ -1,5 +1,6 @@
 package com.wjbc.fila_atendimento.controller;
 
+import com.wjbc.fila_atendimento.domain.dto.ApiResponse;
 import com.wjbc.fila_atendimento.domain.dto.SetorCreateDTO;
 import com.wjbc.fila_atendimento.domain.dto.SetorUpdateDTO;
 import com.wjbc.fila_atendimento.domain.dto.SetorResponseDTO;
@@ -22,38 +23,44 @@ public class SetorController {
     }
 
     @GetMapping
-    public ResponseEntity<List<SetorResponseDTO>> listarTodos() {
-        return ResponseEntity.ok(setorService.listarTodos());
+    public ResponseEntity<ApiResponse<List<SetorResponseDTO>>> listarTodos() {
+        List<SetorResponseDTO> setores = setorService.listarTodos();
+        return ResponseEntity.ok(new ApiResponse<>(true, "Setores listados com sucesso", setores));
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<SetorResponseDTO> buscarPorId(@PathVariable UUID id) {
-        return ResponseEntity.ok(setorService.buscarPorId(id));
+    public ResponseEntity<ApiResponse<SetorResponseDTO>> buscarPorId(@PathVariable UUID id) {
+        SetorResponseDTO setor = setorService.buscarPorId(id);
+        return ResponseEntity.ok(new ApiResponse<>(true, "Setor encontrado", setor));
     }
 
     @GetMapping("/nome/{nome}")
-    public ResponseEntity<List<SetorResponseDTO>> buscarPorNomeContendo(@PathVariable String nome) {
-        return ResponseEntity.ok(setorService.buscarPorNomeContendo(nome));
+    public ResponseEntity<ApiResponse<List<SetorResponseDTO>>> buscarPorNomeContendo(@PathVariable String nome) {
+        List<SetorResponseDTO> setores = setorService.buscarPorNomeContendo(nome);
+        return ResponseEntity.ok(new ApiResponse<>(true, "Setores encontrados por nome", setores));
     }
 
     @PostMapping
-    public ResponseEntity<SetorResponseDTO> criar(@Valid @RequestBody SetorCreateDTO dto) {
-        return ResponseEntity.ok(setorService.criar(dto));
+    public ResponseEntity<ApiResponse<SetorResponseDTO>> criar(@Valid @RequestBody SetorCreateDTO dto) {
+        SetorResponseDTO setor = setorService.criar(dto);
+        return ResponseEntity.ok(new ApiResponse<>(true, "Setor criado com sucesso", setor));
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<SetorResponseDTO> substituir(@PathVariable UUID id, @Valid @RequestBody SetorCreateDTO dto) {
-        return ResponseEntity.ok(setorService.substituir(id, dto));
+    public ResponseEntity<ApiResponse<SetorResponseDTO>> substituir(@PathVariable UUID id, @Valid @RequestBody SetorCreateDTO dto) {
+        SetorResponseDTO setor = setorService.substituir(id, dto);
+        return ResponseEntity.ok(new ApiResponse<>(true, "Setor atualizado com sucesso", setor));
     }
 
     @PatchMapping("/{id}")
-    public ResponseEntity<SetorResponseDTO> atualizarParcialmente(@PathVariable UUID id, @Valid @RequestBody SetorUpdateDTO dto) {
-        return ResponseEntity.ok(setorService.atualizarParcialmente(id, dto));
+    public ResponseEntity<ApiResponse<SetorResponseDTO>> atualizarParcialmente(@PathVariable UUID id, @Valid @RequestBody SetorUpdateDTO dto) {
+        SetorResponseDTO setor = setorService.atualizarParcialmente(id, dto);
+        return ResponseEntity.ok(new ApiResponse<>(true, "Setor atualizado parcialmente com sucesso", setor));
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> desativar(@PathVariable UUID id) {
+    public ResponseEntity<ApiResponse<Void>> desativar(@PathVariable UUID id) {
         setorService.desativar(id);
-        return ResponseEntity.noContent().build();
+        return ResponseEntity.ok(new ApiResponse<>(true, "Setor desativado com sucesso", null));
     }
 }

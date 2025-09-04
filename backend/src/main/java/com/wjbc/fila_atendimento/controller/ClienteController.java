@@ -1,5 +1,6 @@
 package com.wjbc.fila_atendimento.controller;
 
+import com.wjbc.fila_atendimento.domain.dto.ApiResponse;
 import com.wjbc.fila_atendimento.domain.dto.ClienteCreateDTO;
 import com.wjbc.fila_atendimento.domain.dto.ClienteUpdateDTO;
 import com.wjbc.fila_atendimento.domain.dto.ClienteResponseDTO;
@@ -19,43 +20,50 @@ public class ClienteController {
     }
 
     @GetMapping
-    public ResponseEntity<List<ClienteResponseDTO>> listarTodos() {
-        return ResponseEntity.ok(clienteService.listarTodos());
+    public ResponseEntity<ApiResponse<List<ClienteResponseDTO>>> listarTodos() {
+        List<ClienteResponseDTO> clientes = clienteService.listarTodos();
+        return ResponseEntity.ok(new ApiResponse<>(true, "Clientes listados com sucesso", clientes));
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<ClienteResponseDTO> buscarPorId(@PathVariable UUID id) {
-        return ResponseEntity.ok(clienteService.buscarPorId(id));
+    public ResponseEntity<ApiResponse<ClienteResponseDTO>> buscarPorId(@PathVariable UUID id) {
+        ClienteResponseDTO cliente = clienteService.buscarPorId(id);
+        return ResponseEntity.ok(new ApiResponse<>(true, "Cliente encontrado", cliente));
     }
 
     @GetMapping("/cpf/{cpf}")
-    public ResponseEntity<ClienteResponseDTO> buscarPorCpf(@PathVariable String cpf) {
-        return ResponseEntity.ok(clienteService.buscarPorCpf(cpf));
+    public ResponseEntity<ApiResponse<ClienteResponseDTO>> buscarPorCpf(@PathVariable String cpf) {
+        ClienteResponseDTO cliente = clienteService.buscarPorCpf(cpf);
+        return ResponseEntity.ok(new ApiResponse<>(true, "Cliente encontrado por CPF", cliente));
     }
 
     @GetMapping("/nome/{nome}")
-    public ResponseEntity<List<ClienteResponseDTO>> buscarPorNomeSemelhante(@PathVariable String nome) {
-        return ResponseEntity.ok(clienteService.buscarPorNomeSemelhante(nome));
+    public ResponseEntity<ApiResponse<List<ClienteResponseDTO>>> buscarPorNomeSemelhante(@PathVariable String nome) {
+        List<ClienteResponseDTO> clientes = clienteService.buscarPorNomeSemelhante(nome);
+        return ResponseEntity.ok(new ApiResponse<>(true, "Clientes encontrados por nome", clientes));
     }
 
     @PostMapping
-    public ResponseEntity<ClienteResponseDTO> criar(@RequestBody ClienteCreateDTO dto) {
-        return ResponseEntity.ok(clienteService.criar(dto));
+    public ResponseEntity<ApiResponse<ClienteResponseDTO>> criar(@RequestBody ClienteCreateDTO dto) {
+        ClienteResponseDTO cliente = clienteService.criar(dto);
+        return ResponseEntity.ok(new ApiResponse<>(true, "Cliente criado com sucesso", cliente));
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<ClienteResponseDTO> substituir(@PathVariable UUID id, @RequestBody ClienteCreateDTO dto) {
-        return ResponseEntity.ok(clienteService.substituir(id, dto));
+    public ResponseEntity<ApiResponse<ClienteResponseDTO>> substituir(@PathVariable UUID id, @RequestBody ClienteCreateDTO dto) {
+        ClienteResponseDTO cliente = clienteService.substituir(id, dto);
+        return ResponseEntity.ok(new ApiResponse<>(true, "Cliente atualizado com sucesso", cliente));
     }
 
     @PatchMapping("/{id}")
-    public ResponseEntity<ClienteResponseDTO> atualizarParcialmente(@PathVariable UUID id, @RequestBody ClienteUpdateDTO dto) {
-        return ResponseEntity.ok(clienteService.atualizarParcialmente(id, dto));
+    public ResponseEntity<ApiResponse<ClienteResponseDTO>> atualizarParcialmente(@PathVariable UUID id, @RequestBody ClienteUpdateDTO dto) {
+        ClienteResponseDTO cliente = clienteService.atualizarParcialmente(id, dto);
+        return ResponseEntity.ok(new ApiResponse<>(true, "Cliente atualizado parcialmente com sucesso", cliente));
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> desativar(@PathVariable UUID id) {
+    public ResponseEntity<ApiResponse<Void>> desativar(@PathVariable UUID id) {
         clienteService.desativar(id);
-        return ResponseEntity.noContent().build();
+        return ResponseEntity.ok(new ApiResponse<>(true, "Cliente desativado com sucesso", null));
     }
 }

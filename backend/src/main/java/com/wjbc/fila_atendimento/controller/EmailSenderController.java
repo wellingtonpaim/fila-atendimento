@@ -1,5 +1,6 @@
 package com.wjbc.fila_atendimento.controller;
 
+import com.wjbc.fila_atendimento.domain.dto.ApiResponse;
 import com.wjbc.fila_atendimento.domain.dto.EmailRequestDTO;
 import com.wjbc.fila_atendimento.domain.service.EmailSenderService;
 import org.springframework.http.ResponseEntity;
@@ -15,9 +16,8 @@ public class EmailSenderController {
     }
 
     @PostMapping("/send")
-    public ResponseEntity<Void> enviarEmail(@RequestBody EmailRequestDTO dto) {
+    public ResponseEntity<ApiResponse<Void>> enviarEmail(@RequestBody EmailRequestDTO dto) {
         emailSenderService.sendEmail(dto);
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok(new ApiResponse<>(true, "E-mail enviado com sucesso", null));
     }
 }
-

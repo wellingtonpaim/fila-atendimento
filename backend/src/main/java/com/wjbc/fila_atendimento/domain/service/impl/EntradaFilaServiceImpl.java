@@ -133,8 +133,8 @@ public class EntradaFilaServiceImpl implements EntradaFilaService {
         EntradaFilaResponseDTO response = entradaFilaMapper.toResponseDTO(entradaFilaRepository.save(entradaASerChamada));
         ChamadaDTO chamadaAtual = getChamadaAtual(fila);
         List<ChamadaDTO> ultimasChamadas = getUltimasChamadas(fila);
-        String mensagemVocalizacao = chamadaAtual != null && chamadaAtual.getNomePaciente() != null && chamadaAtual.getGuicheOuSala() != null
-            ? chamadaAtual.getNomePaciente() + ", compareça a " + chamadaAtual.getGuicheOuSala() + "!"
+        String mensagemVocalizacao = chamadaAtual != null && chamadaAtual.nomePaciente() != null && chamadaAtual.guicheOuSala() != null
+            ? chamadaAtual.nomePaciente() + ", compareça a " + chamadaAtual.guicheOuSala() + "!"
             : "";
         PainelPublicoDTO painelPublicoDTO = new PainelPublicoDTO(
             fila.getId(),

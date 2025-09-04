@@ -137,4 +137,17 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(resposta);
     }
 
+    @ExceptionHandler(com.wjbc.fila_atendimento.exception.EmailDuplicadoException.class)
+    public ResponseEntity<ApiResponse<Void>> handleEmailDuplicadoException(com.wjbc.fila_atendimento.exception.EmailDuplicadoException ex) {
+        List<String> erros = List.of(ex.getMessage());
+        ApiResponse<Void> resposta = new ApiResponse<>(
+                false,
+                "E-mail já cadastrado",
+                null,
+                erros,
+                new Date()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(resposta);
+    }
+
 }
