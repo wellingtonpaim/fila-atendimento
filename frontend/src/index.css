@@ -1,0 +1,173 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Q-Manager Design System - Tema médico com acessibilidade */
+
+@layer base {
+    :root {
+        /* Cores base com tema médico */
+        --background: 0 0% 100%;
+        --foreground: 213 27% 20%;
+
+        /* Cards e superfícies */
+        --card: 0 0% 100%;
+        --card-foreground: 213 27% 20%;
+
+        --popover: 0 0% 100%;
+        --popover-foreground: 213 27% 20%;
+
+        /* Cores primárias - Azul médico profissional */
+        --primary: 213 94% 68%;
+        --primary-foreground: 0 0% 98%;
+        --primary-muted: 213 94% 85%;
+
+        /* Cores secundárias - Verde saúde */
+        --secondary: 142 76% 36%;
+        --secondary-foreground: 0 0% 98%;
+        --secondary-muted: 142 76% 85%;
+
+        /* Tons neutros */
+        --muted: 210 40% 96%;
+        --muted-foreground: 215 16% 47%;
+
+        --accent: 213 94% 95%;
+        --accent-foreground: 213 94% 30%;
+
+        /* Estados de alerta - Cores médicas padrão */
+        --destructive: 0 84% 60%;
+        --destructive-foreground: 0 0% 98%;
+
+        --warning: 43 96% 56%;
+        --warning-foreground: 21 92% 14%;
+
+        --success: 142 76% 36%;
+        --success-foreground: 0 0% 98%;
+
+        /* Elementos de interface */
+        --border: 214 32% 91%;
+        --input: 214 32% 91%;
+        --ring: 213 94% 68%;
+
+        --radius: 0.75rem;
+
+        /* Cores específicas para filas/setores */
+        --emergency: 0 84% 60%;
+        --urgent: 25 95% 53%;
+        --normal: 213 94% 68%;
+        --low-priority: 142 76% 36%;
+
+        /* Sidebar médica */
+        --sidebar-background: 213 94% 95%;
+        --sidebar-foreground: 213 27% 20%;
+        --sidebar-primary: 213 94% 68%;
+        --sidebar-primary-foreground: 0 0% 98%;
+        --sidebar-accent: 213 94% 90%;
+        --sidebar-accent-foreground: 213 94% 30%;
+        --sidebar-border: 213 32% 85%;
+        --sidebar-ring: 213 94% 68%;
+    }
+
+    .dark {
+        --background: 213 27% 8%;
+        --foreground: 213 31% 91%;
+
+        --card: 213 27% 8%;
+        --card-foreground: 213 31% 91%;
+
+        --popover: 213 27% 8%;
+        --popover-foreground: 213 31% 91%;
+
+        --primary: 213 94% 68%;
+        --primary-foreground: 213 27% 8%;
+        --primary-muted: 213 94% 40%;
+
+        --secondary: 142 76% 36%;
+        --secondary-foreground: 213 31% 91%;
+        --secondary-muted: 142 76% 25%;
+
+        --muted: 213 27% 15%;
+        --muted-foreground: 213 15% 70%;
+
+        --accent: 213 27% 15%;
+        --accent-foreground: 213 94% 68%;
+
+        --destructive: 0 84% 60%;
+        --destructive-foreground: 213 31% 91%;
+
+        --warning: 43 96% 56%;
+        --warning-foreground: 21 92% 14%;
+
+        --success: 142 76% 36%;
+        --success-foreground: 213 31% 91%;
+
+        --border: 213 27% 20%;
+        --input: 213 27% 20%;
+        --ring: 213 94% 68%;
+
+        --emergency: 0 84% 60%;
+        --urgent: 25 95% 53%;
+        --normal: 213 94% 68%;
+        --low-priority: 142 76% 36%;
+
+        --sidebar-background: 213 27% 10%;
+        --sidebar-foreground: 213 31% 91%;
+        --sidebar-primary: 213 94% 68%;
+        --sidebar-primary-foreground: 213 27% 8%;
+        --sidebar-accent: 213 27% 15%;
+        --sidebar-accent-foreground: 213 94% 68%;
+        --sidebar-border: 213 27% 20%;
+        --sidebar-ring: 213 94% 68%;
+    }
+}
+
+@layer base {
+    * {
+        @apply border-border;
+    }
+
+    body {
+        @apply bg-background text-foreground antialiased;
+        font-feature-settings: "rlig" 1, "calt" 1;
+    }
+
+    /* Melhorias de acessibilidade */
+
+    /* Foco visível mais destacado para navegação por teclado */
+    *:focus-visible {
+        @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+    }
+
+    /* Textos com melhor contraste para leitores */
+    .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+    }
+
+    /* Animações reduzidas para usuários com preferência por movimento reduzido */
+    @media (prefers-reduced-motion: reduce) {
+        *,
+        ::before,
+        ::after {
+            animation-duration: 0.01ms !important;
+            animation-iteration-count: 1 !important;
+            transition-duration: 0.01ms !important;
+            scroll-behavior: auto !important;
+        }
+    }
+
+    /* Alto contraste para usuários com baixa visão */
+    @media (prefers-contrast: high) {
+        :root {
+            --border: 213 50% 50%;
+            --ring: 213 100% 60%;
+        }
+    }
+}

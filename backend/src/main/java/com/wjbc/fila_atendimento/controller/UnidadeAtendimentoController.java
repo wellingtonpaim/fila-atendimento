@@ -4,6 +4,7 @@ import com.wjbc.fila_atendimento.domain.dto.ApiResponse;
 import com.wjbc.fila_atendimento.domain.dto.UnidadeAtendimentoCreateDTO;
 import com.wjbc.fila_atendimento.domain.dto.UnidadeAtendimentoUpdateDTO;
 import com.wjbc.fila_atendimento.domain.dto.UnidadeAtendimentoResponseDTO;
+import com.wjbc.fila_atendimento.domain.dto.UnidadeAtendimentoPublicDTO;
 import com.wjbc.fila_atendimento.domain.service.UnidadeAtendimentoService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -59,5 +60,11 @@ public class UnidadeAtendimentoController {
     public ResponseEntity<ApiResponse<Void>> desativar(@PathVariable UUID id) {
         unidadeAtendimentoService.desativar(id);
         return ResponseEntity.ok(new ApiResponse<>(true, "Unidade de atendimento desativada com sucesso", null));
+    }
+
+    @GetMapping("/public/login")
+    public ResponseEntity<ApiResponse<List<UnidadeAtendimentoPublicDTO>>> listarUnidadesParaLogin() {
+        List<UnidadeAtendimentoPublicDTO> unidades = unidadeAtendimentoService.listarUnidadesParaLogin();
+        return ResponseEntity.ok(new ApiResponse<>(true, "Unidades disponíveis para login listadas com sucesso", unidades));
     }
 }

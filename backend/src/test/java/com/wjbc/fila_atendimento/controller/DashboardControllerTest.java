@@ -5,6 +5,7 @@ import com.wjbc.fila_atendimento.domain.dashboard.dto.HorarioPicoDTO;
 import com.wjbc.fila_atendimento.domain.dashboard.dto.ProdutividadeDTO;
 import com.wjbc.fila_atendimento.domain.dashboard.dto.TempoEsperaDTO;
 import com.wjbc.fila_atendimento.domain.dashboard.service.DashboardService;
+import com.wjbc.fila_atendimento.domain.dto.ApiResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
@@ -38,10 +39,10 @@ class DashboardControllerTest {
         LocalDateTime fim = LocalDateTime.now();
         TempoEsperaDTO dto = new TempoEsperaDTO("Fila", "Setor", "Unidade", 10.0, inicio, fim);
         when(dashboardService.calcularTempoMedioEspera(unidadeId, inicio, fim)).thenReturn(List.of(dto));
-        ResponseEntity<List<TempoEsperaDTO>> response = dashboardController.tempoMedioEspera(unidadeId, inicio, fim);
+        ResponseEntity<ApiResponse<List<TempoEsperaDTO>>> response = dashboardController.tempoMedioEspera(unidadeId, inicio, fim);
         assertEquals(HttpStatus.OK.value(), response.getStatusCode().value());
-        assertNotNull(response.getBody());
-        assertFalse(response.getBody().isEmpty());
+        assertNotNull(response.getBody().getData());
+        assertFalse(response.getBody().getData().isEmpty());
     }
 
     @Test
@@ -61,10 +62,10 @@ class DashboardControllerTest {
         LocalDateTime fim = LocalDateTime.now();
         ProdutividadeDTO dto = new ProdutividadeDTO("Profissional", "Setor", "Unidade", 5L, 10.0);
         when(dashboardService.calcularProdutividadePorProfissional(unidadeId, inicio, fim)).thenReturn(List.of(dto));
-        ResponseEntity<List<ProdutividadeDTO>> response = dashboardController.produtividade(unidadeId, inicio, fim);
+        ResponseEntity<ApiResponse<List<ProdutividadeDTO>>> response = dashboardController.produtividade(unidadeId, inicio, fim);
         assertEquals(HttpStatus.OK.value(), response.getStatusCode().value());
-        assertNotNull(response.getBody());
-        assertFalse(response.getBody().isEmpty());
+        assertNotNull(response.getBody().getData());
+        assertFalse(response.getBody().getData().isEmpty());
     }
 
     @Test
@@ -84,10 +85,10 @@ class DashboardControllerTest {
         LocalDateTime fim = LocalDateTime.now();
         HorarioPicoDTO dto = new HorarioPicoDTO("Unidade", "Setor", inicio, 20L);
         when(dashboardService.identificarHorariosPico(unidadeId, inicio, fim)).thenReturn(List.of(dto));
-        ResponseEntity<List<HorarioPicoDTO>> response = dashboardController.horariosPico(unidadeId, inicio, fim);
+        ResponseEntity<ApiResponse<List<HorarioPicoDTO>>> response = dashboardController.horariosPico(unidadeId, inicio, fim);
         assertEquals(HttpStatus.OK.value(), response.getStatusCode().value());
-        assertNotNull(response.getBody());
-        assertFalse(response.getBody().isEmpty());
+        assertNotNull(response.getBody().getData());
+        assertFalse(response.getBody().getData().isEmpty());
     }
 
     @Test
@@ -107,10 +108,10 @@ class DashboardControllerTest {
         LocalDateTime fim = LocalDateTime.now();
         FluxoPacientesDTO dto = new FluxoPacientesDTO("Unidade", "Origem", "Destino", 100L);
         when(dashboardService.analisarFluxoPacientes(unidadeId, inicio, fim)).thenReturn(List.of(dto));
-        ResponseEntity<List<FluxoPacientesDTO>> response = dashboardController.fluxoPacientes(unidadeId, inicio, fim);
+        ResponseEntity<ApiResponse<List<FluxoPacientesDTO>>> response = dashboardController.fluxoPacientes(unidadeId, inicio, fim);
         assertEquals(HttpStatus.OK.value(), response.getStatusCode().value());
-        assertNotNull(response.getBody());
-        assertFalse(response.getBody().isEmpty());
+        assertNotNull(response.getBody().getData());
+        assertFalse(response.getBody().getData().isEmpty());
     }
 
     @Test

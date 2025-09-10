@@ -40,11 +40,12 @@ public class WebSecurityConfig {
 
     @Bean
     public AuthenticationManager authenticationManager(HttpSecurity http) throws Exception {
-        return http.getSharedObject(AuthenticationManagerBuilder.class)
+        AuthenticationManagerBuilder authManagerBuilder =
+            http.getSharedObject(AuthenticationManagerBuilder.class);
+        authManagerBuilder
                 .userDetailsService(customUserDetailsService)
-                .passwordEncoder(passwordEncoder())
-                .and()
-                .build();
+                .passwordEncoder(passwordEncoder());
+        return authManagerBuilder.build();
     }
 
     @Bean
@@ -56,7 +57,7 @@ public class WebSecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/auth/login", "/auth/confirmar").permitAll()
                         .requestMatchers(HttpMethod.POST, "/auth/register").permitAll()
-//                        .hasRole("ADMINISTRADOR")
+                        .requestMatchers(HttpMethod.GET, "/api/unidades-atendimento/public/login").permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/**")
                         .hasAnyRole("USUARIO", "ADMINISTRADOR")
@@ -66,6 +67,7 @@ public class WebSecurityConfig {
                         .hasRole("ADMINISTRADOR")
                         .requestMatchers(HttpMethod.DELETE, "/**")
                         .hasRole("ADMINISTRADOR")
+                        .requestMatchers(HttpMethod.PATCH, "/api/usuarios/*/promover").hasRole("ADMINISTRADOR")
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(

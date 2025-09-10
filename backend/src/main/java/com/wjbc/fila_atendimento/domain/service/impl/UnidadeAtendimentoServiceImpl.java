@@ -3,6 +3,7 @@ package com.wjbc.fila_atendimento.domain.service.impl;
 import com.wjbc.fila_atendimento.domain.dto.UnidadeAtendimentoCreateDTO;
 import com.wjbc.fila_atendimento.domain.dto.UnidadeAtendimentoResponseDTO;
 import com.wjbc.fila_atendimento.domain.dto.UnidadeAtendimentoUpdateDTO;
+import com.wjbc.fila_atendimento.domain.dto.UnidadeAtendimentoPublicDTO;
 import com.wjbc.fila_atendimento.domain.exception.BusinessException;
 import com.wjbc.fila_atendimento.domain.exception.ResourceNotFoundException;
 import com.wjbc.fila_atendimento.domain.mapper.UnidadeAtendimentoMapper;
@@ -86,6 +87,14 @@ public class UnidadeAtendimentoServiceImpl implements UnidadeAtendimentoService 
     public List<UnidadeAtendimentoResponseDTO> buscarPorNomeContendo(String nome) {
         return unidadeRepository.findByNomeContainingIgnoreCase(nome).stream()
                 .map(unidadeMapper::toResponseDTO)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<UnidadeAtendimentoPublicDTO> listarUnidadesParaLogin() {
+        return unidadeRepository.findAll().stream()
+                .map(unidade -> new UnidadeAtendimentoPublicDTO(unidade.getId(), unidade.getNome()))
                 .collect(Collectors.toList());
     }
 
