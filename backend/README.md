@@ -85,20 +85,27 @@ Nesta interface, é possível visualizar todos os endpoints, seus DTOs (Data Tra
 
 ## 6. Principais Módulos e Endpoints
 
-### 🔐 **Módulo de Autenticação (`/auth`)**
-Responsável pela segurança e controle de acesso ao sistema.
+### 🔐 **Módulo de Autenticação (`/auth`) - ATUALIZADO**
+Responsável pela segurança e controle de acesso ao sistema com registro público.
+
+**⚠️ IMPORTANTE - Fluxo de Segurança:**
+- O registro de novos usuários (`POST /auth/register`) é **público** para permitir auto-cadastro
+- **TODOS os novos usuários são criados automaticamente como `USUARIO`** por segurança
+- Apenas **administradores** podem promover usuários através do endpoint de promoção
+- O login requer seleção de unidade de atendimento para validação de acesso
 
 **Endpoints principais:**
 - `POST /auth/login` - Autenticação de usuários com validação de acesso por unidade
-- `POST /auth/register` - Registro de novos usuários com confirmação por e-mail
+- `POST /auth/register` - **[PÚBLICO]** Registro de novos usuários com confirmação por e-mail
 - `GET /auth/confirmar` - Confirmação de e-mail para ativação de conta
 - `DELETE /auth/delete/{email}` - Exclusão de usuários por e-mail
 
-### 🏥 **Módulo de Unidades de Atendimento (`/api/unidades-atendimento`)**
-Gerencia as unidades físicas onde o atendimento acontece (hospitais, clínicas, etc.).
+### 🏥 **Módulo de Unidades de Atendimento (`/api/unidades-atendimento`) - ATUALIZADO**
+Gerencia as unidades físicas onde o atendimento acontece com endpoint público para login.
 
 **Endpoints principais:**
-- `GET /api/unidades-atendimento` - Listar todas as unidades
+- `GET /api/unidades-atendimento` - **[PROTEGIDO]** Listar todas as unidades (dados completos)
+- `GET /api/unidades-atendimento/public/login` - **[PÚBLICO]** Listar unidades para seleção no login (apenas ID e nome)
 - `GET /api/unidades-atendimento/{id}` - Buscar unidade específica
 - `GET /api/unidades-atendimento/nome/{nome}` - Buscar por nome
 - `POST /api/unidades-atendimento` - Criar nova unidade
@@ -141,8 +148,8 @@ Cadastro e gestão dos clientes/pacientes do sistema.
 - `PATCH /api/clientes/{id}` - Atualização parcial
 - `DELETE /api/clientes/{id}` - Desativar cliente
 
-### 👨‍⚕️ **Módulo de Usuários (`/api/usuarios`)**
-Gestão dos profissionais e administradores do sistema.
+### 👨‍⚕️ **Módulo de Usuários (`/api/usuarios`) - ATUALIZADO**
+Gestão dos profissionais e administradores do sistema com funcionalidade de promoção.
 
 **Endpoints principais:**
 - `GET /api/usuarios` - Listar todos os usuários
@@ -151,6 +158,7 @@ Gestão dos profissionais e administradores do sistema.
 - `POST /api/usuarios` - Criar novo usuário
 - `PUT /api/usuarios/{id}` - Atualizar usuário completo
 - `PATCH /api/usuarios/{id}` - Atualização parcial
+- `PATCH /api/usuarios/{id}/promover` - **[ADMIN ONLY]** Promover usuário para ADMINISTRADOR
 - `DELETE /api/usuarios/{id}` - Desativar usuário
 
 ### 🎯 **Módulo de Entrada em Fila (`/api/entrada-fila`) - CORAÇÃO DO SISTEMA**

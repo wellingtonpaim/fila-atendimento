@@ -1,5 +1,6 @@
 package com.wjbc.fila_atendimento.security.controller;
 
+import com.wjbc.fila_atendimento.domain.dto.ApiResponse;
 import com.wjbc.fila_atendimento.domain.dto.UsuarioCreateDTO;
 import com.wjbc.fila_atendimento.domain.model.Usuario;
 import com.wjbc.fila_atendimento.domain.model.UnidadeAtendimento;
@@ -49,9 +50,9 @@ class AuthControllerTest {
         when(authService.findByEmail(anyString())).thenReturn(usuario);
         when(jwtTokenService.generateToken(anyString(), any(UUID.class))).thenReturn("token");
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class))).thenReturn(null);
-        ResponseEntity<String> response = authController.login("test@test.com", "senha", unidadeId);
+        ResponseEntity<ApiResponse<String>> response = authController.login("test@test.com", "senha", unidadeId);
         assertEquals(200, response.getStatusCode().value());
-        assertEquals("token", response.getBody());
+        assertEquals("token", response.getBody().getData());
     }
 
     @Test
@@ -59,68 +60,68 @@ class AuthControllerTest {
         UUID unidadeId = UUID.randomUUID();
         when(authService.findByEmail(anyString())).thenReturn(null);
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class))).thenReturn(null);
-        ResponseEntity<String> response = authController.login("notfound@test.com", "senha", unidadeId);
+        ResponseEntity<ApiResponse<String>> response = authController.login("notfound@test.com", "senha", unidadeId);
         assertEquals(401, response.getStatusCode().value());
-        assertEquals("Usuário não encontrado", response.getBody());
+        assertEquals("Usuário não encontrado", response.getBody().getMessage());
     }
 
     @Test
     void testLoginAuthenticationException() {
         UUID unidadeId = UUID.randomUUID();
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class))).thenThrow(new BadCredentialsException("Credenciais inválidas"));
-        ResponseEntity<String> response = authController.login("test@test.com", "senha", unidadeId);
+        ResponseEntity<ApiResponse<String>> response = authController.login("test@test.com", "senha", unidadeId);
         assertEquals(401, response.getStatusCode().value());
-        assertEquals("Credenciais inválidas, verifique e tente novamente.", response.getBody());
+        assertEquals("Credenciais inválidas, verifique e tente novamente.", response.getBody().getMessage());
     }
 
     @Test
     void testRegisterSuccess() {
         UsuarioCreateDTO dto = new UsuarioCreateDTO("nome", "email@test.com", "senha", null, null);
         doNothing().when(authService).register(any(UsuarioCreateDTO.class));
-        ResponseEntity<?> response = authController.register(dto);
+        ResponseEntity<ApiResponse<Void>> response = authController.register(dto);
         assertEquals(200, response.getStatusCode().value());
-        assertEquals("E-mail de confirmação enviado com sucesso!", response.getBody());
+        assertEquals("E-mail de confirmação enviado com sucesso!", response.getBody().getMessage());
     }
 
     @Test
     void testRegisterIllegalArgumentException() {
         UsuarioCreateDTO dto = new UsuarioCreateDTO("nome", "email@test.com", "senha", null, null);
         doThrow(new IllegalArgumentException("Erro de validação")).when(authService).register(any(UsuarioCreateDTO.class));
-        ResponseEntity<?> response = authController.register(dto);
+        ResponseEntity<ApiResponse<Void>> response = authController.register(dto);
         assertEquals(400, response.getStatusCode().value());
-        assertEquals("Erro de validação", response.getBody());
+        assertEquals("Erro de validação", response.getBody().getMessage());
     }
 
     @Test
     void testConfirmEmailSuccess() {
         doNothing().when(authService).confirmEmail(anyString());
-        ResponseEntity<?> response = authController.confirmEmail("token");
+        ResponseEntity<ApiResponse<Void>> response = authController.confirmEmail("token");
         assertEquals(200, response.getStatusCode().value());
-        assertEquals("E-mail confirmado com sucesso!", response.getBody());
+        assertEquals("E-mail confirmado com sucesso!", response.getBody().getMessage());
     }
 
     @Test
     void testConfirmEmailIllegalArgumentException() {
         doThrow(new IllegalArgumentException("Token inválido")).when(authService).confirmEmail(anyString());
-        ResponseEntity<?> response = authController.confirmEmail("token");
+        ResponseEntity<ApiResponse<Void>> response = authController.confirmEmail("token");
         assertEquals(400, response.getStatusCode().value());
-        assertEquals("Token inválido", response.getBody());
+        assertEquals("Token inválido", response.getBody().getMessage());
     }
 
     @Test
     void testDeleteUserByEmailSuccess() {
         doNothing().when(authService).deleteUserByEmail(anyString());
-        ResponseEntity<String> response = authController.deleteUserByEmail("email@test.com");
+        ResponseEntity<ApiResponse<Void>> response = authController.deleteUserByEmail("email@test.com");
         assertEquals(200, response.getStatusCode().value());
         assertNotNull(response.getBody());
-        assertTrue(response.getBody().contains("excluído com sucesso"));
+        assertTrue(response.getBody().getMessage().contains("excluído com sucesso"));
     }
 
     @Test
     void testDeleteUserByEmailIllegalArgumentException() {
         doThrow(new IllegalArgumentException("Usuário não encontrado")).when(authService).deleteUserByEmail(anyString());
-        ResponseEntity<String> response = authController.deleteUserByEmail("email@test.com");
+        ResponseEntity<ApiResponse<Void>> response = authController.deleteUserByEmail("email@test.com");
         assertEquals(400, response.getStatusCode().value());
-        assertEquals("Usuário não encontrado", response.getBody());
+        assertEquals("Usuário não encontrado", response.getBody().getMessage());
     }
 }

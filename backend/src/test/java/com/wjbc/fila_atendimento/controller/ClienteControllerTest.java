@@ -1,5 +1,6 @@
 package com.wjbc.fila_atendimento.controller;
 
+import com.wjbc.fila_atendimento.domain.dto.ApiResponse;
 import com.wjbc.fila_atendimento.domain.dto.ClienteCreateDTO;
 import com.wjbc.fila_atendimento.domain.dto.ClienteResponseDTO;
 import com.wjbc.fila_atendimento.domain.service.ClienteService;
@@ -34,10 +35,10 @@ class ClienteControllerTest {
     void listarTodos_sucesso() {
         ClienteResponseDTO dto = new ClienteResponseDTO(UUID.randomUUID(), "12345678900", "Nome", "email@email.com", null, null);
         when(clienteService.listarTodos()).thenReturn(List.of(dto));
-        ResponseEntity<List<ClienteResponseDTO>> response = clienteController.listarTodos();
+        ResponseEntity<ApiResponse<List<ClienteResponseDTO>>> response = clienteController.listarTodos();
         assertEquals(HttpStatus.OK.value(), response.getStatusCode().value());
         assertNotNull(response.getBody());
-        assertFalse(response.getBody().isEmpty());
+        assertFalse(response.getBody().getData().isEmpty());
     }
 
     @Test
@@ -45,10 +46,10 @@ class ClienteControllerTest {
         UUID id = UUID.randomUUID();
         ClienteResponseDTO dto = new ClienteResponseDTO(id, "12345678900", "Nome", "email@email.com", null, null);
         when(clienteService.buscarPorId(id)).thenReturn(dto);
-        ResponseEntity<ClienteResponseDTO> response = clienteController.buscarPorId(id);
+        ResponseEntity<ApiResponse<ClienteResponseDTO>> response = clienteController.buscarPorId(id);
         assertEquals(HttpStatus.OK.value(), response.getStatusCode().value());
         assertNotNull(response.getBody());
-        assertEquals(id, response.getBody().id());
+        assertEquals(id, response.getBody().getData().id());
     }
 
     @Test
@@ -56,10 +57,10 @@ class ClienteControllerTest {
         String cpf = "12345678900";
         ClienteResponseDTO dto = new ClienteResponseDTO(UUID.randomUUID(), cpf, "Nome", "email@email.com", null, null);
         when(clienteService.buscarPorCpf(cpf)).thenReturn(dto);
-        ResponseEntity<ClienteResponseDTO> response = clienteController.buscarPorCpf(cpf);
+        ResponseEntity<ApiResponse<ClienteResponseDTO>> response = clienteController.buscarPorCpf(cpf);
         assertEquals(HttpStatus.OK.value(), response.getStatusCode().value());
         assertNotNull(response.getBody());
-        assertEquals(cpf, response.getBody().cpf());
+        assertEquals(cpf, response.getBody().getData().cpf());
     }
 
     @Test
@@ -67,11 +68,11 @@ class ClienteControllerTest {
         String nome = "Nome";
         ClienteResponseDTO dto = new ClienteResponseDTO(UUID.randomUUID(), "12345678900", nome, "email@email.com", null, null);
         when(clienteService.buscarPorNomeSemelhante(nome)).thenReturn(List.of(dto));
-        ResponseEntity<List<ClienteResponseDTO>> response = clienteController.buscarPorNomeSemelhante(nome);
+        ResponseEntity<ApiResponse<List<ClienteResponseDTO>>> response = clienteController.buscarPorNomeSemelhante(nome);
         assertEquals(HttpStatus.OK.value(), response.getStatusCode().value());
-        assertNotNull(response.getBody());
-        assertFalse(response.getBody().isEmpty());
-        assertEquals(nome, response.getBody().get(0).nome());
+        assertNotNull(response.getBody().getData());
+        assertFalse(response.getBody().getData().isEmpty());
+        assertEquals(nome, response.getBody().getData().get(0).nome());
     }
 
     @Test
@@ -79,10 +80,10 @@ class ClienteControllerTest {
         ClienteCreateDTO createDTO = new ClienteCreateDTO("12345678900", "Nome", "email@email.com", new ArrayList<Telefone>(), null);
         ClienteResponseDTO responseDTO = new ClienteResponseDTO(UUID.randomUUID(), "12345678900", "Nome", "email@email.com", null, null);
         when(clienteService.criar(createDTO)).thenReturn(responseDTO);
-        ResponseEntity<ClienteResponseDTO> response = clienteController.criar(createDTO);
+        ResponseEntity<ApiResponse<ClienteResponseDTO>> response = clienteController.criar(createDTO);
         assertEquals(HttpStatus.OK.value(), response.getStatusCode().value());
-        assertNotNull(response.getBody());
-        assertEquals("Nome", response.getBody().nome());
+        assertNotNull(response.getBody().getData());
+        assertEquals("Nome", response.getBody().getData().nome());
     }
 
     @Test
@@ -91,10 +92,10 @@ class ClienteControllerTest {
         ClienteCreateDTO createDTO = new ClienteCreateDTO("12345678900", "Nome", "email@email.com", new ArrayList<Telefone>(), null);
         ClienteResponseDTO responseDTO = new ClienteResponseDTO(id, "12345678900", "Nome", "email@email.com", null, null);
         when(clienteService.substituir(id, createDTO)).thenReturn(responseDTO);
-        ResponseEntity<ClienteResponseDTO> response = clienteController.substituir(id, createDTO);
+        ResponseEntity<ApiResponse<ClienteResponseDTO>> response = clienteController.substituir(id, createDTO);
         assertEquals(HttpStatus.OK.value(), response.getStatusCode().value());
-        assertNotNull(response.getBody());
-        assertEquals(id, response.getBody().id());
+        assertNotNull(response.getBody().getData());
+        assertEquals(id, response.getBody().getData().id());
     }
 
     @Test

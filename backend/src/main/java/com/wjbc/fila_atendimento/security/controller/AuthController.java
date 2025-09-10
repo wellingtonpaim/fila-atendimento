@@ -51,7 +51,8 @@ public class AuthController {
             }
 
             String token = jwtTokenService.generateToken(username, unidadeAtendimentoId);
-            return ResponseEntity.ok(new ApiResponse<>(true, "Login realizado com sucesso", token));
+            ResponseEntity<ApiResponse<String>> teste = ResponseEntity.ok(new ApiResponse<>(true, "Login realizado com sucesso", token));
+            return teste;
         } catch (AuthenticationException e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new ApiResponse<>(false, "Credenciais inválidas, verifique e tente novamente.", null));

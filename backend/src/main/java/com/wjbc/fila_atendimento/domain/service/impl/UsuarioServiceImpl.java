@@ -3,6 +3,7 @@ package com.wjbc.fila_atendimento.domain.service.impl;
 import com.wjbc.fila_atendimento.domain.dto.UsuarioCreateDTO;
 import com.wjbc.fila_atendimento.domain.dto.UsuarioResponseDTO;
 import com.wjbc.fila_atendimento.domain.dto.UsuarioUpdateDTO;
+import com.wjbc.fila_atendimento.domain.enumeration.CategoriaUsuario;
 import com.wjbc.fila_atendimento.domain.exception.BusinessException;
 import com.wjbc.fila_atendimento.domain.exception.ResourceNotFoundException;
 import com.wjbc.fila_atendimento.domain.mapper.UsuarioMapper;
@@ -137,5 +138,18 @@ public class UsuarioServiceImpl implements UsuarioService {
                 throw new BusinessException("Email " + email + " já cadastrado no sistema.");
             }
         });
+    }
+
+    @Override
+    @Transactional
+    public UsuarioResponseDTO promoverParaAdministrador(UUID id) {
+        Usuario usuario = findUsuarioById(id);
+
+        if (usuario.getCategoria() == CategoriaUsuario.ADMINISTRADOR) {
+            throw new BusinessException("Usuário já é administrador.");
+        }
+
+        usuario.setCategoria(CategoriaUsuario.ADMINISTRADOR);
+        return usuarioMapper.toResponseDTO(usuarioRepository.save(usuario));
     }
 }

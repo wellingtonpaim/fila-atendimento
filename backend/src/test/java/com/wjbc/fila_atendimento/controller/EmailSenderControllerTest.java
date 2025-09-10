@@ -1,5 +1,6 @@
 package com.wjbc.fila_atendimento.controller;
 
+import com.wjbc.fila_atendimento.domain.dto.ApiResponse;
 import com.wjbc.fila_atendimento.domain.dto.EmailRequestDTO;
 import com.wjbc.fila_atendimento.domain.service.EmailSenderService;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,9 +28,9 @@ class EmailSenderControllerTest {
     void enviarEmail_sucesso() {
         EmailRequestDTO dto = new EmailRequestDTO("destinatario@email.com", "Assunto", "Mensagem", null);
         doNothing().when(emailSenderService).sendEmail(dto);
-        ResponseEntity<Void> response = emailSenderController.enviarEmail(dto);
+        ResponseEntity<ApiResponse<Void>> response = emailSenderController.enviarEmail(dto);
         assertEquals(HttpStatus.OK.value(), response.getStatusCode().value());
-        assertNull(response.getBody());
+        assertNull(response.getBody().getData());
     }
 
     @Test

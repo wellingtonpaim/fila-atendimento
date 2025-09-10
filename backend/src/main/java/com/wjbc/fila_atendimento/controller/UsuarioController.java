@@ -60,4 +60,10 @@ public class UsuarioController {
         usuarioService.desativar(id);
         return ResponseEntity.ok(new ApiResponse<>(true, "Usuário desativado com sucesso", null));
     }
+
+    @PatchMapping("/{id}/promover")
+    public ResponseEntity<ApiResponse<UsuarioResponseDTO>> promoverParaAdministrador(@PathVariable UUID id) {
+        UsuarioResponseDTO usuario = usuarioService.promoverParaAdministrador(id);
+        return ResponseEntity.ok(new ApiResponse<>(true, "Usuário promovido para administrador com sucesso", usuario));
+    }
 }

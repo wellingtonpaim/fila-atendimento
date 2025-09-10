@@ -43,13 +43,11 @@ public class AuthService {
 
     @Transactional
     public void register(UsuarioCreateDTO dto) {
-        CategoriaUsuario categoria = dto.categoria() != null ? dto.categoria() : CategoriaUsuario.USUARIO;
-
         UsuarioCreateDTO usuarioCreateDTO = new UsuarioCreateDTO(
                 dto.nomeUsuario(),
                 dto.email(),
                 dto.senha(),
-                categoria,
+                CategoriaUsuario.USUARIO,
                 null
         );
         UsuarioResponseDTO usuarioResponseDTO = usuarioService.criar(usuarioCreateDTO);

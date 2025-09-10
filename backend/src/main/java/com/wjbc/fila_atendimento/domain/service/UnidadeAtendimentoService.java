@@ -3,6 +3,7 @@ package com.wjbc.fila_atendimento.domain.service;
 import com.wjbc.fila_atendimento.domain.dto.UnidadeAtendimentoCreateDTO;
 import com.wjbc.fila_atendimento.domain.dto.UnidadeAtendimentoResponseDTO;
 import com.wjbc.fila_atendimento.domain.dto.UnidadeAtendimentoUpdateDTO;
+import com.wjbc.fila_atendimento.domain.dto.UnidadeAtendimentoPublicDTO;
 import com.wjbc.fila_atendimento.domain.model.UnidadeAtendimento;
 
 import java.util.List;
@@ -17,4 +18,10 @@ public interface UnidadeAtendimentoService {
     List<UnidadeAtendimentoResponseDTO> buscarPorNomeContendo(String nome);
     void desativar(UUID id);
     UnidadeAtendimento findUnidadeById(UUID id);
+
+    /**
+     * Lista apenas ID e nome das unidades ativas para seleção no login.
+     * Este método é público e não requer autenticação.
+     */
+    List<UnidadeAtendimentoPublicDTO> listarUnidadesParaLogin();
 }

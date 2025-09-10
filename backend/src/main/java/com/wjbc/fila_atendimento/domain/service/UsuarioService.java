@@ -18,4 +18,5 @@ public interface UsuarioService {
     Usuario findUsuarioById(UUID id);
     UsuarioResponseDTO buscarPorEmail(String email);
     Usuario findUsuarioByEmail(String email);
+    UsuarioResponseDTO promoverParaAdministrador(UUID id);
 }
