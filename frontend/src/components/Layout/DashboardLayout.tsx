@@ -14,11 +14,11 @@ import {
 } from 'lucide-react';
 import { authService } from '@/services/authService';
 import { websocketService } from '@/services/websocketService';
-import { Usuario } from '@/types';
+import { UsuarioResponseDTO } from '@/types';
 import { cn } from '@/lib/utils';
 
 const DashboardLayout = () => {
-    const [usuario, setUsuario] = useState<Usuario | null>(null);
+    const [usuario, setUsuario] = useState<UsuarioResponseDTO | null>(null);
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const [notifications, setNotifications] = useState(0);
 
@@ -84,7 +84,7 @@ const DashboardLayout = () => {
 
     if (!usuario) {
         return (
-            <div className="min-h-screen flex items-center justify-center">
+            <div className="min-h-screen flex items-center justify-center" role="status" aria-label="Carregando">
                 <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
             </div>
         );
@@ -115,7 +115,7 @@ const DashboardLayout = () => {
                             <div>
                                 <h1 className="text-xl font-bold text-primary">Q-Manager</h1>
                                 <p className="text-xs text-muted-foreground">
-                                    {usuario.unidadesAtendimento[0]?.nome || 'Sistema de Filas'}
+                                    Sistema de Filas de Atendimento
                                 </p>
                             </div>
                         </div>
@@ -141,7 +141,7 @@ const DashboardLayout = () => {
 
                         <div className="flex items-center gap-2 text-sm">
                             <User className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                            <span className="font-medium">{usuario.nome}</span>
+                            <span className="font-medium">{usuario.nomeUsuario}</span>
                             <span className="text-muted-foreground">({usuario.categoria})</span>
                         </div>
 
@@ -216,3 +216,4 @@ const DashboardLayout = () => {
 };
 
 export default DashboardLayout;
+
