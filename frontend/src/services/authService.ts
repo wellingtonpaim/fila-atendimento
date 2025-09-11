@@ -1,181 +1,277 @@
-import { ApiResponse, LoginRequest, Usuario } from '@/types';
+import { ApiResponse, LoginRequest, UsuarioCreateDTO, UsuarioResponseDTO } from "@/types";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8899';
 
-// Log para debug das variáveis de ambiente
-console.log('🔍 AuthService - Variáveis de ambiente:');
-console.log('VITE_API_BASE_URL:', import.meta.env.VITE_API_BASE_URL);
-console.log('API_BASE_URL final:', API_BASE_URL);
-
 class AuthService {
-    private static instance: AuthService;
-    private token: string | null = null;
-    private usuario: Usuario | null = null;
+    private readonly TOKEN_KEY = 'qmanager_token';
+    private readonly USER_KEY = 'qmanager_user';
+    private readonly UNIT_KEY = 'qmanager_selected_unit';
 
-    private constructor() {
+    /**
+     * Realiza login do usuário
+     */
+    async login(credentials: LoginRequest): Promise<string> {
         try {
-            // Recuperar token do localStorage na inicialização
-            this.token = localStorage.getItem('qmanager_token');
-            const usuarioData = localStorage.getItem('qmanager_usuario');
-            if (usuarioData) {
-                this.usuario = JSON.parse(usuarioData);
-            }
-            console.log('✅ AuthService inicializado');
-        } catch (error) {
-            console.error('❌ Erro ao inicializar AuthService:', error);
-        }
-    }
-
-    public static getInstance(): AuthService {
-        try {
-            if (!AuthService.instance) {
-                AuthService.instance = new AuthService();
-            }
-            return AuthService.instance;
-        } catch (error) {
-            console.error('❌ Erro ao obter instância AuthService:', error);
-            throw error;
-        }
-    }
-
-    async login(loginData: LoginRequest): Promise<string> {
-        try {
-            console.log('🚀 AuthService.login iniciado');
-
-            // Criar URLSearchParams para enviar como form data (requestParams)
-            const formData = new URLSearchParams();
-            formData.append('username', loginData.email);
-            formData.append('password', loginData.senha);
-            formData.append('unidadeAtendimentoId', loginData.unidadeId);
-
-            console.log('📤 Enviando dados de login:', {
-                username: loginData.email,
-                unidadeId: loginData.unidadeId
-            });
-
             const response = await fetch(`${API_BASE_URL}/auth/login`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
                 },
-                body: formData,
+                body: new URLSearchParams({
+                    username: credentials.username,
+                    password: credentials.password,
+                    unidadeAtendimentoId: credentials.unidadeAtendimentoId
+                })
             });
 
-            console.log('📡 Resposta do servidor:', response.status, response.statusText);
-
             if (!response.ok) {
-                throw new Error(`Erro na autenticação: ${response.statusText}`);
+                const errorData = await response.text();
+                throw new Error(errorData || 'Erro na autenticação');
             }
 
             const result: ApiResponse<string> = await response.json();
-            console.log('📦 Dados recebidos:', result);
 
             if (!result.success) {
-                throw new Error(result.message);
+                throw new Error(result.message || 'Erro na autenticação');
             }
 
-            // O backend retorna apenas o token no campo data
-            this.token = result.data;
+            // Salvar token
+            const token = result.data;
+            localStorage.setItem(this.TOKEN_KEY, token);
+            localStorage.setItem(this.UNIT_KEY, credentials.unidadeAtendimentoId);
 
-            // Por enquanto, vamos criar um usuário mock até termos endpoint para buscar dados do usuário
-            this.usuario = {
-                id: 1,
-                nome: loginData.email.split('@')[0], // Usar parte do email como nome temporário
-                email: loginData.email,
-                categoria: 'USUARIO',
-                ativo: true,
-                unidadesAtendimento: []
-            };
+            // Buscar dados do usuário após login
+            await this.fetchUserData();
 
-            localStorage.setItem('qmanager_token', this.token);
-            localStorage.setItem('qmanager_usuario', JSON.stringify(this.usuario));
-
-            console.log('✅ Login realizado com sucesso, token armazenado');
-
-            return this.token;
-        } catch (error) {
+            return token;
+        } catch (error: any) {
             console.error('❌ Erro no login:', error);
-            throw new Error(`Falha no login: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+            throw new Error(error.message || 'Erro ao fazer login');
         }
     }
 
+    /**
+     * Registra novo usuário
+     */
+    async register(userData: UsuarioCreateDTO): Promise<void> {
+        try {
+            const response = await fetch(`${API_BASE_URL}/auth/register`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(userData)
+            });
+
+            if (!response.ok) {
+                const errorData = await response.text();
+                throw new Error(errorData || 'Erro no registro');
+            }
+
+            const result: ApiResponse<void> = await response.json();
+
+            if (!result.success) {
+                throw new Error(result.message || 'Erro no registro');
+            }
+        } catch (error: any) {
+            console.error('❌ Erro no registro:', error);
+            throw new Error(error.message || 'Erro ao registrar usuário');
+        }
+    }
+
+    /**
+     * Confirma email do usuário
+     */
+    async confirmEmail(token: string): Promise<void> {
+        try {
+            const response = await fetch(`${API_BASE_URL}/auth/confirmar?token=${encodeURIComponent(token)}`, {
+                method: 'GET'
+            });
+
+            if (!response.ok) {
+                const errorData = await response.text();
+                throw new Error(errorData || 'Erro na confirmação');
+            }
+
+            const result: ApiResponse<void> = await response.json();
+
+            if (!result.success) {
+                throw new Error(result.message || 'Erro na confirmação');
+            }
+        } catch (error: any) {
+            console.error('❌ Erro na confirmação:', error);
+            throw new Error(error.message || 'Erro ao confirmar email');
+        }
+    }
+
+    /**
+     * Busca dados do usuário logado
+     */
+    private async fetchUserData(): Promise<void> {
+        try {
+            const token = this.getToken();
+            if (!token) return;
+
+            // Decodificar JWT para obter email (simplificado)
+            const payload = this.decodeJWT(token);
+            const email = payload?.sub || payload?.email;
+
+            if (!email) return;
+
+            const response = await fetch(`${API_BASE_URL}/api/usuarios/email/${encodeURIComponent(email)}`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (response.ok) {
+                const result: ApiResponse<UsuarioResponseDTO> = await response.json();
+                if (result.success) {
+                    localStorage.setItem(this.USER_KEY, JSON.stringify(result.data));
+                }
+            }
+        } catch (error) {
+            console.error('❌ Erro ao buscar dados do usuário:', error);
+        }
+    }
+
+    /**
+     * Decodifica JWT (simplificado)
+     */
+    private decodeJWT(token: string): any {
+        try {
+            const base64Url = token.split('.')[1];
+            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+            const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+                return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+            }).join(''));
+            return JSON.parse(jsonPayload);
+        } catch (error) {
+            console.error('❌ Erro ao decodificar JWT:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Logout do usuário
+     */
     logout(): void {
+        localStorage.removeItem(this.TOKEN_KEY);
+        localStorage.removeItem(this.USER_KEY);
+        localStorage.removeItem(this.UNIT_KEY);
+
+        // NÃO fazer redirecionamento automático aqui
+        // O redirecionamento será feito pelo React Router
+    }
+
+    /**
+     * Obtém o token atual
+     */
+    getToken(): string | null {
+        return localStorage.getItem(this.TOKEN_KEY);
+    }
+
+    /**
+     * Obtém dados do usuário logado
+     */
+    getUsuario(): UsuarioResponseDTO | null {
+        const userData = localStorage.getItem(this.USER_KEY);
+        if (!userData) return null;
+
         try {
-            this.token = null;
-            this.usuario = null;
-            localStorage.removeItem('qmanager_token');
-            localStorage.removeItem('qmanager_usuario');
-            console.log('✅ Logout realizado');
+            return JSON.parse(userData);
         } catch (error) {
-            console.error('❌ Erro no logout:', error);
+            console.error('❌ Erro ao parsear dados do usuário:', error);
+            return null;
         }
     }
 
+    /**
+     * Obtém ID da unidade selecionada
+     */
+    getSelectedUnitId(): string | null {
+        return localStorage.getItem(this.UNIT_KEY);
+    }
+
+    /**
+     * Define unidade selecionada
+     */
+    setSelectedUnitId(unitId: string): void {
+        localStorage.setItem(this.UNIT_KEY, unitId);
+    }
+
+    /**
+     * Verifica se usuário está autenticado
+     */
     isAuthenticated(): boolean {
+        const token = this.getToken();
+        if (!token) return false;
+
+        // Verificar se token não expirou
         try {
-            const isAuth = !!this.token;
-            console.log('🔐 Verificação de autenticação:', isAuth);
-            return isAuth;
+            const payload = this.decodeJWT(token);
+            const currentTime = Date.now() / 1000;
+            return payload.exp > currentTime;
         } catch (error) {
-            console.error('❌ Erro ao verificar autenticação:', error);
             return false;
         }
     }
 
-    getToken(): string | null {
-        return this.token;
+    /**
+     * Verifica se usuário é administrador
+     */
+    isAdmin(): boolean {
+        const user = this.getUsuario();
+        return user?.categoria === 'ADMINISTRADOR';
     }
 
-    getUsuario(): Usuario | null {
-        return this.usuario;
-    }
+    /**
+     * Obtém headers de autorização
+     */
+    getAuthHeaders(): Record<string, string> {
+        const token = this.getToken();
+        const unitId = this.getSelectedUnitId();
 
-    getAuthHeaders(): HeadersInit {
-        return {
-            'Authorization': `Bearer ${this.token}`,
+        const headers: Record<string, string> = {
             'Content-Type': 'application/json',
         };
+
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+
+        if (unitId) {
+            headers['X-Unidade-Id'] = unitId;
+        }
+
+        return headers;
     }
 
-    async makeAuthenticatedRequest<T>(url: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
-        const response = await fetch(`${API_BASE_URL}${url}`, {
-            ...options,
-            headers: {
-                ...this.getAuthHeaders(),
-                ...options.headers,
-            },
-        });
+    /**
+     * Exclui usuário por email (admin only)
+     */
+    async deleteUserByEmail(email: string): Promise<void> {
+        try {
+            const response = await fetch(`${API_BASE_URL}/auth/delete/${encodeURIComponent(email)}`, {
+                method: 'DELETE',
+                headers: this.getAuthHeaders()
+            });
 
-        if (response.status === 401) {
-            this.logout();
-            throw new Error('Sessão expirada. Faça login novamente.');
+            if (!response.ok) {
+                const errorData = await response.text();
+                throw new Error(errorData || 'Erro ao excluir usuário');
+            }
+
+            const result: ApiResponse<void> = await response.json();
+
+            if (!result.success) {
+                throw new Error(result.message || 'Erro ao excluir usuário');
+            }
+        } catch (error: any) {
+            console.error('❌ Erro ao excluir usuário:', error);
+            throw new Error(error.message || 'Erro ao excluir usuário');
         }
-
-        if (!response.ok) {
-            throw new Error(`Erro na requisição: ${response.statusText}`);
-        }
-
-        return response.json();
     }
 }
 
-// Exportar a instância de forma segura
-let authServiceInstance: AuthService;
-try {
-    authServiceInstance = AuthService.getInstance();
-    console.log('✅ AuthService exportado com sucesso');
-} catch (error) {
-    console.error('❌ Erro ao exportar AuthService:', error);
-    // Criar um mock em caso de erro
-    authServiceInstance = {
-        login: async () => { throw new Error('AuthService não disponível'); },
-        logout: () => {},
-        isAuthenticated: () => false,
-        getToken: () => null,
-        getUsuario: () => null,
-        getAuthHeaders: () => ({}),
-        makeAuthenticatedRequest: async () => { throw new Error('AuthService não disponível'); }
-    } as any;
-}
-
-export const authService = authServiceInstance;
+export const authService = new AuthService();
