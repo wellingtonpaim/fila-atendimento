@@ -8,229 +8,150 @@ export interface ApiResponse<T> {
 }
 
 // Enums
-export type CategoriaUsuario = 'ADMINISTRADOR' | 'USUARIO';
-
-// ====== ENDEREÇO ======
-export interface Endereco {
-    cep?: string;
-    logradouro: string;
-    numero: string;
-    complemento?: string;
-    bairro?: string;
-    cidade?: string;
-    uf?: 'AC' | 'AL' | 'AP' | 'AM' | 'BA' | 'CE' | 'DF' | 'ES' | 'GO' | 'MA' | 'MT' | 'MS' | 'MG' | 'PA' | 'PB' | 'PR' | 'PE' | 'PI' | 'RJ' | 'RN' | 'RS' | 'RO' | 'RR' | 'SC' | 'SP' | 'SE' | 'TO';
-    enderecoFormatado?: string;
+export enum CategoriaUsuario {
+  ADMINISTRADOR = 'ADMINISTRADOR',
+  USUARIO = 'USUARIO'
 }
 
-// ====== TELEFONE ======
+export enum TipoTelefone {
+  FIXO = 'FIXO',
+  CELULAR = 'CELULAR'
+}
+
+export enum UF {
+  AC = 'AC', AL = 'AL', AP = 'AP', AM = 'AM', BA = 'BA', CE = 'CE',
+  DF = 'DF', ES = 'ES', GO = 'GO', MA = 'MA', MT = 'MT', MS = 'MS',
+  MG = 'MG', PA = 'PA', PB = 'PB', PR = 'PR', PE = 'PE', PI = 'PI',
+  RJ = 'RJ', RN = 'RN', RS = 'RS', RO = 'RO', RR = 'RR', SC = 'SC',
+  SP = 'SP', SE = 'SE', TO = 'TO'
+}
+
+// Interfaces para DTOs
 export interface Telefone {
-    tipo: 'FIXO' | 'CELULAR';
-    ddd: number;
-    numero: number;
+  tipo: TipoTelefone;
+  ddd: number;
+  numero: number;
 }
 
-// ====== AUTENTICAÇÃO ======
-export interface LoginRequest {
-    username: string; // Mudou de email para username
-    password: string; // Mudou de senha para password
-    unidadeAtendimentoId: string; // UUID
+export interface Endereco {
+  cep?: string;
+  logradouro: string;
+  numero: string;
+  complemento?: string;
+  bairro?: string;
+  cidade?: string;
+  uf?: UF;
+  enderecoFormatado?: string;
 }
 
-export interface LoginResponse {
-    success: boolean;
-    message: string;
-    data: string; // JWT Token
-}
-
-// ====== UNIDADE DE ATENDIMENTO ======
-export interface UnidadeAtendimentoPublicDTO {
-    id: string; // UUID
-    nome: string;
-}
-
-export interface UnidadeAtendimentoResponseDTO {
-    id: string;
-    nome: string;
-    endereco?: string;
-    telefone?: string;
-    email?: string;
-    ativo: boolean;
-    dataCriacao: string;
-    dataAtualizacao: string;
+// DTOs de criação
+export interface FilaCreateDTO {
+  nome: string;
+  setorId: string;
+  unidadeAtendimentoId: string;
 }
 
 export interface UnidadeAtendimentoCreateDTO {
-    nome: string;
-    endereco?: string;
-    telefone?: string;
-    email?: string;
-}
-
-export interface UnidadeAtendimentoUpdateDTO {
-    nome?: string;
-    endereco?: Endereco;
-    telefones?: Telefone[];
-}
-
-// ====== USUÁRIO ======
-export interface UsuarioResponseDTO {
-    id: string;
-    nomeUsuario: string;
-    email: string;
-    categoria: CategoriaUsuario;
-    ativo: boolean;
-    dataCriacao: string;
-    dataAtualizacao: string;
-}
-
-export interface UsuarioCreateDTO {
-    nomeUsuario: string;
-    email: string;
-    senha: string;
-    categoria: CategoriaUsuario;
-}
-
-export interface UsuarioUpdateDTO {
-    nomeUsuario?: string;
-    email?: string;
-    categoria?: CategoriaUsuario;
-}
-
-// ====== SETOR ======
-export interface SetorResponseDTO {
-    id: string;
-    nome: string;
-    descricao?: string;
-    cor?: string;
-    unidadeAtendimentoId: string;
-    ativo: boolean;
-    dataCriacao: string;
-    dataAtualizacao: string;
+  nome: string;
+  endereco?: Endereco;
+  telefones?: Telefone[];
 }
 
 export interface SetorCreateDTO {
-    nome: string;
-    descricao?: string;
-    cor?: string;
-    unidadeAtendimentoId?: string;
+  nome: string;
 }
 
-// ====== CLIENTE ======
-export interface ClienteResponseDTO {
-    id: string;
-    cpf: string;
-    nome: string;
-    email: string;
-    telefones: Telefone[];
-    endereco?: Endereco;
+export interface UsuarioCreateDTO {
+  nomeUsuario: string;
+  email: string;
+  senha: string;
+  categoria: CategoriaUsuario;
+  unidadesIds?: string[];
 }
 
-export interface ClienteCreateDTO {
-    cpf: string;
-    nome: string;
-    email: string;
-    telefones?: Telefone[];
-    endereco?: Endereco;
+// DTOs de resposta
+export interface SetorResponseDTO {
+  id: string;
+  nome: string;
 }
 
-export interface ClienteUpdateDTO {
-    cpf?: string;
-    nome?: string;
-    email?: string;
-    telefones?: Telefone[];
-    endereco?: Endereco;
+export interface UnidadeAtendimentoResponseDTO {
+  id: string;
+  nome: string;
+  endereco?: Endereco;
+  telefones?: Telefone[];
 }
 
-// ====== FILA ======
+export interface UsuarioResponseDTO {
+  id: string;
+  nomeUsuario: string;
+  email: string;
+  categoria: CategoriaUsuario;
+  unidadesIds?: string[];
+}
+
 export interface FilaResponseDTO {
-    id: string;
-    nome: string;
-    setorId: string;
-    unidadeAtendimentoId: string;
-    ativo: boolean;
-    dataCriacao: string;
-    dataAtualizacao: string;
+  id: string;
+  nome: string;
+  setor: SetorResponseDTO;
+  unidade: UnidadeAtendimentoResponseDTO;
 }
 
-export interface FilaCreateDTO {
-    nome: string;
-    setorId: string;
-    unidadeAtendimentoId: string;
-}
-
+// DTOs de atualização
 export interface FilaUpdateDTO {
-    nome?: string;
-    setorId: string;
-    unidadeAtendimentoId: string;
+  nome?: string;
+  setorId?: string;
+  unidadeAtendimentoId?: string;
 }
 
-// ====== ENTRADA FILA ======
+export interface UnidadeAtendimentoUpdateDTO {
+  nome?: string;
+  endereco?: Endereco;
+  telefones?: Telefone[];
+}
+
+export interface SetorUpdateDTO {
+  nome?: string;
+}
+
+export interface UsuarioUpdateDTO {
+  nomeUsuario?: string;
+  email?: string;
+  categoria?: CategoriaUsuario;
+  unidadesIds?: string[];
+}
+
+// API Response wrapper
+export interface ApiResponse<T> {
+  success: boolean;
+  message: string;
+  data: T;
+  errors?: string[];
+  timestamp: string;
+}
+
+// Outros tipos que podem existir
+export interface ClienteResponseDTO {
+  id: string;
+  cpf: string;
+  nome: string;
+  email?: string;
+  telefones?: Telefone[];
+  endereco?: Endereco;
+}
+
 export interface EntradaFilaResponseDTO {
-    id: string;
-    clienteId: string;
-    filaId: string;
-    numeroSenha: string;
-    status: string;
-    horaEntrada: string;
-    horaChamada?: string;
-    horaAtendimento?: string;
-    horaFinalizacao?: string;
-    observacoes?: string;
-}
-
-export interface EntradaFilaCreateDTO {
-    clienteId: string;
-    filaId: string;
-    observacoes?: string;
-}
-
-// ====== PAINEL ======
-export interface PainelResponseDTO {
-    id: string; // UUID
-    descricao: string;
-    unidadeAtendimentoId: string; // UUID
-}
-
-export interface PainelCreateDTO {
-    descricao: string;
-    unidadeAtendimentoId: string; // UUID
-}
-
-export interface PainelUpdateDTO {
-    descricao?: string;
-    unidadeAtendimentoId?: string; // UUID
-}
-
-// ====== DASHBOARD ANALYTICS ======
-export interface TempoEsperaDTO {
-    filaNome: string;
-    setorNome: string;
-    unidadeNome: string;
-    tempoMedioEsperaMinutos: number;
-    periodoInicio: string; // ISO DateTime
-    periodoFim: string; // ISO DateTime
-}
-
-export interface ProdutividadeDTO {
-    profissionalNome: string;
-    setorNome: string;
-    unidadeNome: string;
-    atendimentosRealizados: number;
-    tempoMedioAtendimentoMinutos: number;
-}
-
-export interface HorarioPicoDTO {
-    unidadeNome: string;
-    setorNome: string;
-    horario: string; // ISO DateTime
-    quantidadeAtendimentos: number;
-}
-
-export interface FluxoPacientesDTO {
-    unidadeNome: string;
-    setorOrigem: string;
-    setorDestino: string;
-    quantidadePacientes: number;
+  id: string;
+  status: 'AGUARDANDO' | 'CHAMADO' | 'ATENDIDO' | 'CANCELADO';
+  prioridade: boolean;
+  isRetorno?: boolean;
+  dataHoraEntrada: string;
+  dataHoraChamada?: string;
+  dataHoraSaida?: string;
+  guicheOuSalaAtendimento?: string;
+  cliente: ClienteResponseDTO;
+  fila: FilaResponseDTO;
+  usuarioResponsavelId?: string;
 }
 
 // ====== EMAIL ======
