@@ -9,16 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import {
-  Plus,
-  Edit,
-  Trash2,
-  MapPin,
-  Phone,
-  UserPlus,
-  Shield,
-  ShieldCheck
-} from 'lucide-react';
+import { Plus, Edit, Trash2, MapPin, Phone, UserPlus, Shield, ShieldCheck } from 'lucide-react';
 
 // Services
 import { filaService } from '@/services/filaService';
@@ -32,27 +23,21 @@ import { authService } from '@/services/authService';
 import {
   FilaCreateDTO,
   FilaResponseDTO,
-  FilaUpdateDTO,
   SetorCreateDTO,
   SetorResponseDTO,
   UnidadeAtendimentoCreateDTO,
   UnidadeAtendimentoResponseDTO,
-  UnidadeAtendimentoUpdateDTO,
   UsuarioCreateDTO,
   UsuarioResponseDTO,
-  UsuarioUpdateDTO,
   CategoriaUsuario,
   TipoTelefone,
   UF,
   Telefone,
   ClienteCreateDTO,
-  ClienteResponseDTO,
-  ClienteUpdateDTO
+  ClienteResponseDTO
 } from '@/types';
 
-interface FormErrors {
-  [key: string]: string;
-}
+interface FormErrors { [key: string]: string }
 
 // Helper: base URL da API
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8899';
@@ -61,171 +46,170 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8899';
 interface PaginationMeta {
   totalCount: number;
   totalPages: number;
-  page: number;
+  page: number; // 0-based vindo do backend
   pageSize: number;
 }
 
 const Gestao = () => {
   const { toast } = useToast();
 
-  // Estados para dados
+  // ===== Dados =====
   const [filas, setFilas] = useState<FilaResponseDTO[]>([]);
   const [setores, setSetores] = useState<SetorResponseDTO[]>([]);
   const [unidades, setUnidades] = useState<UnidadeAtendimentoResponseDTO[]>([]);
   const [usuarios, setUsuarios] = useState<UsuarioResponseDTO[]>([]);
   const [clientes, setClientes] = useState<ClienteResponseDTO[]>([]);
 
-  // Estados para loading
+  // ===== Estados globais =====
   const [loading, setLoading] = useState(false);
 
-  // Estados para modais
+  // ===== Modais =====
   const [filaModalOpen, setFilaModalOpen] = useState(false);
   const [setorModalOpen, setSetorModalOpen] = useState(false);
   const [unidadeModalOpen, setUnidadeModalOpen] = useState(false);
   const [usuarioModalOpen, setUsuarioModalOpen] = useState(false);
   const [clienteModalOpen, setClienteModalOpen] = useState(false);
 
-  // Estados para edição
+  // ===== Edição =====
   const [editingFila, setEditingFila] = useState<FilaResponseDTO | null>(null);
   const [editingSetor, setEditingSetor] = useState<SetorResponseDTO | null>(null);
   const [editingUnidade, setEditingUnidade] = useState<UnidadeAtendimentoResponseDTO | null>(null);
   const [editingUsuario, setEditingUsuario] = useState<UsuarioResponseDTO | null>(null);
   const [editingCliente, setEditingCliente] = useState<ClienteResponseDTO | null>(null);
 
-  // Estados para formulários
-  const [filaForm, setFilaForm] = useState<FilaCreateDTO>({
-    nome: '',
-    setorId: '',
-    unidadeAtendimentoId: ''
-  });
-
-  const [setorForm, setSetorForm] = useState<SetorCreateDTO>({
-    nome: ''
-  });
-
+  // ===== Formulários =====
+  const [filaForm, setFilaForm] = useState<FilaCreateDTO>({ nome: '', setorId: '', unidadeAtendimentoId: '' });
+  const [setorForm, setSetorForm] = useState<SetorCreateDTO>({ nome: '' });
   const [unidadeForm, setUnidadeForm] = useState<UnidadeAtendimentoCreateDTO>({
     nome: '',
-    endereco: {
-      logradouro: '',
-      numero: '',
-      complemento: '',
-      bairro: '',
-      cidade: '',
-      cep: '',
-      uf: undefined
-    },
+    endereco: { logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', cep: '', uf: undefined },
     telefones: []
   });
-
   const [usuarioForm, setUsuarioForm] = useState<UsuarioCreateDTO>({
-    nomeUsuario: '',
-    email: '',
-    senha: '',
-    categoria: CategoriaUsuario.USUARIO,
-    unidadesIds: []
+    nomeUsuario: '', email: '', senha: '', categoria: CategoriaUsuario.USUARIO, unidadesIds: []
   });
   const [clienteForm, setClienteForm] = useState<ClienteCreateDTO>({
-    cpf: '',
-    nome: '',
-    email: '',
+    cpf: '', nome: '', email: '',
     telefones: [],
-    endereco: {
-      logradouro: '',
-      numero: '',
-      complemento: '',
-      bairro: '',
-      cidade: '',
-      cep: '',
-      uf: undefined
-    }
+    endereco: { logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', cep: '', uf: undefined }
   });
 
-  // Estados para telefones temporários na unidade
-  const [telefoneTemp, setTelefoneTemp] = useState<Telefone>({
-    tipo: TipoTelefone.FIXO,
-    ddd: 11,
-    numero: 0
-  });
-  const [telefoneClienteTemp, setTelefoneClienteTemp] = useState<Telefone>({
-    tipo: TipoTelefone.CELULAR,
-    ddd: 11,
-    numero: 0
-  });
+  // Telefones temporários
+  const [telefoneTemp, setTelefoneTemp] = useState<Telefone>({ tipo: TipoTelefone.FIXO, ddd: 11, numero: 0 });
+  const [telefoneClienteTemp, setTelefoneClienteTemp] = useState<Telefone>({ tipo: TipoTelefone.CELULAR, ddd: 11, numero: 0 });
 
-  // Estados para erros de validação
+  // Erros de validação
   const [errors, setErrors] = useState<FormErrors>({});
 
-  // ===== Estados de paginação e busca =====
+  // ===== Paginação/Busca por aba =====
   // Filas
   const [filasPage, setFilasPage] = useState(0);
   const [filasSize, setFilasSize] = useState(10);
   const [filasMeta, setFilasMeta] = useState<PaginationMeta | null>(null);
   const [filasUnidadeId, setFilasUnidadeId] = useState<string>('');
+  const [filasSearchType, setFilasSearchType] = useState<'unidade'|'nome'|'setor'>('unidade');
+  const [filasSearchValue, setFilasSearchValue] = useState('');
+  const [filasSetorId, setFilasSetorId] = useState<string>('');
 
   // Setores
   const [setoresPage, setSetoresPage] = useState(0);
   const [setoresSize, setSetoresSize] = useState(10);
   const [setoresMeta, setSetoresMeta] = useState<PaginationMeta | null>(null);
-  const [setoresSearchType, setSetoresSearchType] = useState<'todos' | 'nome'>('todos');
+  const [setoresSearchType, setSetoresSearchType] = useState<'todos'|'nome'>('todos');
   const [setoresSearchValue, setSetoresSearchValue] = useState('');
 
   // Unidades
   const [unidadesPage, setUnidadesPage] = useState(0);
   const [unidadesSize, setUnidadesSize] = useState(10);
   const [unidadesMeta, setUnidadesMeta] = useState<PaginationMeta | null>(null);
-  const [unidadesSearchType, setUnidadesSearchType] = useState<'todos' | 'nome'>('todos');
+  const [unidadesSearchType, setUnidadesSearchType] = useState<'todos'|'nome'>('todos');
   const [unidadesSearchValue, setUnidadesSearchValue] = useState('');
 
   // Usuários
   const [usuariosPage, setUsuariosPage] = useState(0);
   const [usuariosSize, setUsuariosSize] = useState(10);
   const [usuariosMeta, setUsuariosMeta] = useState<PaginationMeta | null>(null);
-  const [usuariosSearchType, setUsuariosSearchType] = useState<'todos' | 'email'>('todos');
+  const [usuariosSearchType, setUsuariosSearchType] = useState<'todos'|'email'>('todos');
   const [usuariosSearchValue, setUsuariosSearchValue] = useState('');
 
   // Clientes
   const [clientesPage, setClientesPage] = useState(0);
   const [clientesSize, setClientesSize] = useState(10);
   const [clientesMeta, setClientesMeta] = useState<PaginationMeta | null>(null);
-  const [clientesSearchType, setClientesSearchType] = useState<'todos' | 'nome' | 'cpf'>('todos');
+  const [clientesSearchType, setClientesSearchType] = useState<'todos'|'nome'|'cpf'>('todos');
   const [clientesSearchValue, setClientesSearchValue] = useState('');
 
-  // Opções completas para selects (sem paginação)
+  // Opções completas para selects (não paginadas)
   const [unidadeOptions, setUnidadeOptions] = useState<UnidadeAtendimentoResponseDTO[]>([]);
   const [setorOptions, setSetorOptions] = useState<SetorResponseDTO[]>([]);
 
-  // Helper: GET paginado com headers
-  async function getPaginated<T>(path: string, params?: Record<string, string | number>): Promise<{ data: T; meta: PaginationMeta | null; }> {
+  // ===== Helpers =====
+  const pageDisplay = (meta: PaginationMeta | null, statePage: number) => {
+    const current = (meta?.page ?? statePage) + 1; // 1-based
+    const total = Math.max(1, meta?.totalPages ?? 1);
+    return { current: Math.min(current, total), total };
+  };
+
+  async function getPaginated<T>(path: string, params?: Record<string, string|number>): Promise<{ data: T; meta: PaginationMeta | null; }> {
     const url = new URL(`${API_BASE_URL}${path}`);
-    if (params) {
-      Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, String(v)));
-    }
+    if (params) Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, String(v)));
     const res = await fetch(url.toString(), { headers: authService.getAuthHeaders() });
     if (!res.ok) throw new Error(res.statusText);
     const totalCount = Number(res.headers.get('X-Total-Count'));
     const totalPages = Number(res.headers.get('X-Total-Pages'));
     const page = Number(res.headers.get('X-Page'));
     const pageSize = Number(res.headers.get('X-Page-Size'));
-    const meta = isFinite(totalCount) && isFinite(totalPages) && isFinite(page) && isFinite(pageSize)
-      ? { totalCount, totalPages, page, pageSize }
-      : null;
-    const body = await res.json(); // ApiResponse<T>
+    const meta = [totalCount,totalPages,page,pageSize].every(Number.isFinite) ? { totalCount, totalPages, page, pageSize } : null;
+    const body = await res.json();
     return { data: body.data as T, meta };
   }
 
-  // Loaders por aba com paginação e busca
-  const loadFilasPage = async (page = filasPage, size = filasSize, unidadeId = filasUnidadeId) => {
-    if (!unidadeId) {
-      setFilas([]); setFilasMeta(null); return;
-    }
+  // Agregador para buscar filas por nome/setor dentro da unidade
+  const loadFilasByNomeOuSetor = async ({ page = filasPage, size = filasSize, unidadeId, nome, setorId }:
+    { page?: number; size?: number; unidadeId: string; nome?: string; setorId?: string; }) => {
+    if (!unidadeId) { setFilas([]); setFilasMeta({ totalCount: 0, totalPages: 1, page: 0, pageSize: size }); return; }
+    const fetchSize = 50; // reduzir chamadas
+    let all: FilaResponseDTO[] = [];
     try {
-      const { data, meta } = await getPaginated<FilaResponseDTO[]>(`/api/filas/unidade/${unidadeId}`, { page, size });
-      setFilas(data || []);
-      setFilasMeta(meta);
-      setFilasPage(meta?.page ?? page);
-      setFilasSize(meta?.pageSize ?? size);
-    } catch (e) {
-      setFilas([]); setFilasMeta(null);
+      const first = await getPaginated<FilaResponseDTO[]>(`/api/filas/unidade/${unidadeId}`, { page: 0, size: fetchSize });
+      all = [...(first.data || [])];
+      const totalBackendPages = first.meta?.totalPages ?? 1;
+      for (let p = 1; p < totalBackendPages; p++) {
+        const { data } = await getPaginated<FilaResponseDTO[]>(`/api/filas/unidade/${unidadeId}`, { page: p, size: fetchSize });
+        all.push(...(data || []));
+      }
+    } catch {
+      setFilas([]); setFilasMeta({ totalCount: 0, totalPages: 1, page: 0, pageSize: size }); return;
+    }
+    let filtered = all;
+    if (nome?.trim()) filtered = filtered.filter(f => f.nome?.toLowerCase().includes(nome.toLowerCase()));
+    if (setorId?.trim()) filtered = filtered.filter(f => f.setor?.id === setorId);
+    const totalCount = filtered.length;
+    const totalPages = Math.max(1, Math.ceil(totalCount / size));
+    const safePage = Math.min(page, totalPages - 1);
+    const slice = filtered.slice(safePage * size, safePage * size + size);
+    setFilas(slice);
+    setFilasMeta({ totalCount, totalPages, page: safePage, pageSize: size });
+    setFilasPage(safePage);
+    setFilasSize(size);
+  };
+
+  // ===== Loaders =====
+  const loadFilasPage = async (page = filasPage, size = filasSize, unidadeIdParam?: string) => {
+    const unidadeId = unidadeIdParam ?? filasUnidadeId;
+    if (filasSearchType === 'unidade') {
+      if (!unidadeId) { setFilas([]); setFilasMeta({ totalCount: 0, totalPages: 1, page: 0, pageSize: size }); return; }
+      try {
+        const { data, meta } = await getPaginated<FilaResponseDTO[]>(`/api/filas/unidade/${unidadeId}`, { page, size });
+        setFilas(data || []);
+        setFilasMeta(meta ?? { totalCount: data?.length || 0, totalPages: 1, page, pageSize: size });
+        setFilasPage(meta?.page ?? page);
+        setFilasSize(meta?.pageSize ?? size);
+      } catch { setFilas([]); setFilasMeta({ totalCount: 0, totalPages: 1, page: 0, pageSize: size }); }
+    } else if (filasSearchType === 'nome') {
+      await loadFilasByNomeOuSetor({ page, size, unidadeId, nome: filasSearchValue });
+    } else {
+      await loadFilasByNomeOuSetor({ page, size, unidadeId, setorId: filasSetorId });
     }
   };
 
@@ -238,9 +222,7 @@ const Gestao = () => {
         const { data, meta } = await getPaginated<SetorResponseDTO[]>(`/api/setores`, { page, size });
         setSetores(data || []); setSetoresMeta(meta); setSetoresPage(meta?.page ?? page); setSetoresSize(meta?.pageSize ?? size);
       }
-    } catch {
-      setSetores([]); setSetoresMeta(null);
-    }
+    } catch { setSetores([]); setSetoresMeta(null); }
   };
 
   const loadUnidadesPage = async (page = unidadesPage, size = unidadesSize) => {
@@ -252,9 +234,7 @@ const Gestao = () => {
         const { data, meta } = await getPaginated<UnidadeAtendimentoResponseDTO[]>(`/api/unidades-atendimento`, { page, size });
         setUnidades(data || []); setUnidadesMeta(meta); setUnidadesPage(meta?.page ?? page); setUnidadesSize(meta?.pageSize ?? size);
       }
-    } catch {
-      setUnidades([]); setUnidadesMeta(null);
-    }
+    } catch { setUnidades([]); setUnidadesMeta(null); }
   };
 
   const loadUsuariosPage = async (page = usuariosPage, size = usuariosSize) => {
@@ -262,19 +242,17 @@ const Gestao = () => {
       if (usuariosSearchType === 'email' && usuariosSearchValue.trim()) {
         const res = await fetch(`${API_BASE_URL}/api/usuarios/email/${encodeURIComponent(usuariosSearchValue)}`, { headers: authService.getAuthHeaders() });
         if (res.ok) {
-          const body = await res.json(); // ApiResponse<UsuarioResponseDTO>
+          const body = await res.json();
           const item = body.data as UsuarioResponseDTO;
           setUsuarios(item ? [item] : []);
           setUsuariosMeta({ totalCount: item ? 1 : 0, totalPages: 1, page: 0, pageSize: 1 });
           setUsuariosPage(0); setUsuariosSize(1);
-        } else { setUsuarios([]); setUsuariosMeta({ totalCount: 0, totalPages: 0, page: 0, pageSize: size }); }
+        } else { setUsuarios([]); setUsuariosMeta({ totalCount: 0, totalPages: 1, page: 0, pageSize: size }); }
       } else {
         const { data, meta } = await getPaginated<UsuarioResponseDTO[]>(`/api/usuarios`, { page, size });
         setUsuarios(data || []); setUsuariosMeta(meta); setUsuariosPage(meta?.page ?? page); setUsuariosSize(meta?.pageSize ?? size);
       }
-    } catch {
-      setUsuarios([]); setUsuariosMeta(null);
-    }
+    } catch { setUsuarios([]); setUsuariosMeta(null); }
   };
 
   const loadClientesPage = async (page = clientesPage, size = clientesSize) => {
@@ -290,567 +268,151 @@ const Gestao = () => {
           setClientes(item ? [item] : []);
           setClientesMeta({ totalCount: item ? 1 : 0, totalPages: 1, page: 0, pageSize: 1 });
           setClientesPage(0); setClientesSize(1);
-        } else { setClientes([]); setClientesMeta({ totalCount: 0, totalPages: 0, page: 0, pageSize: size }); }
+        } else { setClientes([]); setClientesMeta({ totalCount: 0, totalPages: 1, page: 0, pageSize: size }); }
       } else {
         const { data, meta } = await getPaginated<ClienteResponseDTO[]>(`/api/clientes`, { page, size });
         setClientes(data || []); setClientesMeta(meta); setClientesPage(meta?.page ?? page); setClientesSize(meta?.pageSize ?? size);
       }
-    } catch {
-      setClientes([]); setClientesMeta(null);
-    }
+    } catch { setClientes([]); setClientesMeta(null); }
   };
 
-  // Carregamento inicial dos dados
-  useEffect(() => {
-    carregarDados();
-  }, []);
+  // ===== Inicialização =====
+  useEffect(() => { carregarDados() }, []);
 
-  // ===== Ajuste do carregarDados inicial =====
   const carregarDados = async () => {
     setLoading(true);
     try {
-      // opções completas para selects (sem paginação)
-      const [setoresAll, unidadesAll] = await Promise.all([
-        setorService.listarTodos(),
-        unidadeService.listarTodas()
-      ]);
+      const [setoresAll, unidadesAll] = await Promise.all([ setorService.listarTodos(), unidadeService.listarTodas() ]);
       setSetorOptions(setoresAll.data || []);
       setUnidadeOptions(unidadesAll.data || []);
-
-      // definir unidade padrão para Filas
       const defaultUnid = (unidadesAll.data && unidadesAll.data[0]?.id) || '';
       setFilasUnidadeId(prev => prev || defaultUnid);
-
-      // carregar listagens paginadas iniciais
       await Promise.all([
         loadSetoresPage(0, setoresSize),
         loadUnidadesPage(0, unidadesSize),
         loadUsuariosPage(0, usuariosSize),
         loadClientesPage(0, clientesSize)
       ]);
-      // Filas depende do unidadeId setado acima
       await loadFilasPage(0, filasSize, defaultUnid);
     } catch (err) {
       console.error('Erro ao carregar dados:', err);
       setFilas([]); setSetores([]); setUnidades([]); setUsuarios([]); setClientes([]);
       setFilasMeta(null); setSetoresMeta(null); setUnidadesMeta(null); setUsuariosMeta(null); setClientesMeta(null);
       toast({ title: 'Erro', description: 'Erro ao carregar dados.', variant: 'destructive' });
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
-  // Validação de formulários
+  // ===== Validações =====
   const validarFilaForm = (form: FilaCreateDTO): FormErrors => {
-    const errors: FormErrors = {};
-    if (!form.nome || form.nome.length < 3 || form.nome.length > 50) {
-      errors.nome = 'Nome deve ter entre 3 e 50 caracteres';
-    }
-    if (!form.setorId) {
-      errors.setorId = 'Setor é obrigatório';
-    }
-    if (!form.unidadeAtendimentoId) {
-      errors.unidadeAtendimentoId = 'Unidade de Atendimento é obrigatória';
-    }
-    return errors;
+    const e: FormErrors = {};
+    if (!form.nome || form.nome.length < 3 || form.nome.length > 50) e.nome = 'Nome deve ter entre 3 e 50 caracteres';
+    if (!form.setorId) e.setorId = 'Setor é obrigatório';
+    if (!form.unidadeAtendimentoId) e.unidadeAtendimentoId = 'Unidade de Atendimento é obrigatória';
+    return e;
   };
-
   const validarSetorForm = (form: SetorCreateDTO): FormErrors => {
-    const errors: FormErrors = {};
-    if (!form.nome || form.nome.length < 3 || form.nome.length > 50) {
-      errors.nome = 'Nome deve ter entre 3 e 50 caracteres';
-    }
-    return errors;
+    const e: FormErrors = {}; if (!form.nome || form.nome.length < 3 || form.nome.length > 50) e.nome = 'Nome deve ter entre 3 e 50 caracteres'; return e;
   };
-
   const validarUnidadeForm = (form: UnidadeAtendimentoCreateDTO): FormErrors => {
-    const errors: FormErrors = {};
-    if (!form.nome || form.nome.length < 3 || form.nome.length > 100) {
-      errors.nome = 'Nome deve ter entre 3 e 100 caracteres';
-    }
-    if (form.endereco?.logradouro && !form.endereco.logradouro.trim()) {
-      errors.logradouro = 'Logradouro não pode ser vazio';
-    }
-    if (form.endereco?.numero && !form.endereco.numero.trim()) {
-      errors.numero = 'Número não pode ser vazio';
-    }
-    return errors;
+    const e: FormErrors = {};
+    if (!form.nome || form.nome.length < 3 || form.nome.length > 100) e.nome = 'Nome deve ter entre 3 e 100 caracteres';
+    if (form.endereco?.logradouro && !form.endereco.logradouro.trim()) e.logradouro = 'Logradouro não pode ser vazio';
+    if (form.endereco?.numero && !form.endereco.numero.trim()) e.numero = 'Número não pode ser vazio';
+    return e;
   };
-
   const validarUsuarioForm = (form: UsuarioCreateDTO): FormErrors => {
-    const errors: FormErrors = {};
-    if (!form.nomeUsuario || form.nomeUsuario.length < 3) {
-      errors.nomeUsuario = 'Nome de usuário deve ter pelo menos 3 caracteres';
-    }
-    if (!form.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
-      errors.email = 'Email deve ter um formato válido';
-    }
-    if (!editingUsuario && (!form.senha || form.senha.length < 6)) {
-      errors.senha = 'Senha deve ter pelo menos 6 caracteres';
-    }
-    return errors;
+    const e: FormErrors = {};
+    if (!form.nomeUsuario || form.nomeUsuario.length < 3) e.nomeUsuario = 'Nome de usuário deve ter pelo menos 3 caracteres';
+    if (!form.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = 'Email deve ter um formato válido';
+    if (!editingUsuario && (!form.senha || form.senha.length < 6)) e.senha = 'Senha deve ter pelo menos 6 caracteres';
+    return e;
   };
-
   const validarClienteForm = (form: ClienteCreateDTO): FormErrors => {
-    const errors: FormErrors = {};
-    if (!form.cpf || !form.cpf.trim()) errors.cpf = 'CPF é obrigatório';
-    if (!form.nome || form.nome.length < 3 || form.nome.length > 100) errors.nome = 'Nome deve ter entre 3 e 100 caracteres';
-    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errors.email = 'Email inválido';
+    const e: FormErrors = {};
+    if (!form.cpf || !form.cpf.trim()) e.cpf = 'CPF é obrigatório';
+    if (!form.nome || form.nome.length < 3 || form.nome.length > 100) e.nome = 'Nome deve ter entre 3 e 100 caracteres';
+    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = 'Email inválido';
     if (form.endereco) {
-      if (form.endereco.logradouro !== undefined && !form.endereco.logradouro.trim()) errors.logradouro = 'Logradouro não pode ser vazio';
-      if (form.endereco.numero !== undefined && !form.endereco.numero.trim()) errors.numero = 'Número não pode ser vazio';
+      if (form.endereco.logradouro !== undefined && !form.endereco.logradouro.trim()) e.logradouro = 'Logradouro não pode ser vazio';
+      if (form.endereco.numero !== undefined && !form.endereco.numero.trim()) e.numero = 'Número não pode ser vazio';
     }
-    return errors;
+    return e;
   };
 
-  // Funções para manipular filas
+  // ===== Handlers CRUD =====
   const handleSalvarFila = async () => {
-    const validationErrors = validarFilaForm(filaForm);
-    if (Object.keys(validationErrors).length > 0) {
-      setErrors(validationErrors);
-      return;
-    }
-
+    const errs = validarFilaForm(filaForm); if (Object.keys(errs).length) { setErrors(errs); return; }
     try {
       if (editingFila) {
-        const updateData: FilaUpdateDTO = {
-          nome: filaForm.nome,
-          setorId: filaForm.setorId,
-          unidadeAtendimentoId: filaForm.unidadeAtendimentoId
-        };
-        await filaService.atualizarParcialmente(editingFila.id, updateData);
-        toast({
-          title: "Sucesso",
-          description: "Fila atualizada com sucesso"
-        });
-      } else {
-        await filaService.criar(filaForm);
-        toast({
-          title: "Sucesso",
-          description: "Fila criada com sucesso"
-        });
-      }
-
-      setFilaModalOpen(false);
-      resetFilaForm();
-      carregarDados();
-    } catch (err) {
-      toast({
-        title: "Erro",
-        description: "Erro ao salvar fila",
-        variant: "destructive"
-      });
-    }
+        await filaService.atualizarParcialmente(editingFila.id, { nome: filaForm.nome, setorId: filaForm.setorId, unidadeAtendimentoId: filaForm.unidadeAtendimentoId });
+        toast({ title: 'Sucesso', description: 'Fila atualizada com sucesso' });
+      } else { await filaService.criar(filaForm); toast({ title: 'Sucesso', description: 'Fila criada com sucesso' }); }
+      setFilaModalOpen(false); setErrors({}); setEditingFila(null); setFilaForm({ nome: '', setorId: '', unidadeAtendimentoId: '' }); carregarDados();
+    } catch { toast({ title: 'Erro', description: 'Erro ao salvar fila', variant: 'destructive' }); }
   };
+  const handleEditarFila = (fila: FilaResponseDTO) => { setEditingFila(fila); setFilaForm({ nome: fila.nome, setorId: fila.setor.id, unidadeAtendimentoId: fila.unidade.id }); setFilaModalOpen(true); };
+  const handleExcluirFila = async (id: string) => { if (confirm('Tem certeza que deseja excluir esta fila?')) { try { await filaService.desativar(id); toast({ title: 'Sucesso', description: 'Fila excluída com sucesso' }); carregarDados(); } catch { toast({ title: 'Erro', description: 'Erro ao excluir fila', variant: 'destructive' }); } } };
 
-  const handleEditarFila = (fila: FilaResponseDTO) => {
-    setEditingFila(fila);
-    setFilaForm({
-      nome: fila.nome,
-      setorId: fila.setor.id,
-      unidadeAtendimentoId: fila.unidade.id
-    });
-    setFilaModalOpen(true);
-  };
-
-  const handleExcluirFila = async (id: string) => {
-    if (confirm('Tem certeza que deseja excluir esta fila?')) {
-      try {
-        await filaService.desativar(id);
-        toast({
-          title: "Sucesso",
-          description: "Fila excluída com sucesso"
-        });
-        carregarDados();
-      } catch (err) {
-        toast({
-          title: "Erro",
-          description: "Erro ao excluir fila",
-          variant: "destructive"
-        });
-      }
-    }
-  };
-
-  const resetFilaForm = () => {
-    setFilaForm({
-      nome: '',
-      setorId: '',
-      unidadeAtendimentoId: ''
-    });
-    setEditingFila(null);
-    setErrors({});
-  };
-
-  // Funções para manipular setores
   const handleSalvarSetor = async () => {
-    const validationErrors = validarSetorForm(setorForm);
-    if (Object.keys(validationErrors).length > 0) {
-      setErrors(validationErrors);
-      return;
-    }
-
+    const errs = validarSetorForm(setorForm); if (Object.keys(errs).length) { setErrors(errs); return; }
     try {
-      if (editingSetor) {
-        await setorService.substituir(editingSetor.id, setorForm);
-        toast({
-          title: "Sucesso",
-          description: "Setor atualizado com sucesso"
-        });
-      } else {
-        await setorService.criar(setorForm);
-        toast({
-          title: "Sucesso",
-          description: "Setor criado com sucesso"
-        });
-      }
-
-      setSetorModalOpen(false);
-      resetSetorForm();
-      carregarDados();
-    } catch (err) {
-      toast({
-        title: "Erro",
-        description: "Erro ao salvar setor",
-        variant: "destructive"
-      });
-    }
+      if (editingSetor) { await setorService.substituir(editingSetor.id, setorForm); toast({ title: 'Sucesso', description: 'Setor atualizado com sucesso' }); }
+      else { await setorService.criar(setorForm); toast({ title: 'Sucesso', description: 'Setor criado com sucesso' }); }
+      setSetorModalOpen(false); setErrors({}); setEditingSetor(null); setSetorForm({ nome: '' }); carregarDados();
+    } catch { toast({ title: 'Erro', description: 'Erro ao salvar setor', variant: 'destructive' }); }
   };
+  const handleEditarSetor = (setor: SetorResponseDTO) => { setEditingSetor(setor); setSetorForm({ nome: setor.nome }); setSetorModalOpen(true); };
+  const handleExcluirSetor = async (id: string) => { if (confirm('Tem certeza que deseja excluir este setor?')) { try { await setorService.desativar(id); toast({ title: 'Sucesso', description: 'Setor excluído com sucesso' }); carregarDados(); } catch { toast({ title: 'Erro', description: 'Erro ao excluir setor', variant: 'destructive' }); } } };
 
-  const handleEditarSetor = (setor: SetorResponseDTO) => {
-    setEditingSetor(setor);
-    setSetorForm({
-      nome: setor.nome
-    });
-    setSetorModalOpen(true);
-  };
-
-  const handleExcluirSetor = async (id: string) => {
-    if (confirm('Tem certeza que deseja excluir este setor?')) {
-      try {
-        await setorService.desativar(id);
-        toast({
-          title: "Sucesso",
-          description: "Setor excluído com sucesso"
-        });
-        carregarDados();
-      } catch (err) {
-        toast({
-          title: "Erro",
-          description: "Erro ao excluir setor",
-          variant: "destructive"
-        });
-      }
-    }
-  };
-
-  const resetSetorForm = () => {
-    setSetorForm({ nome: '' });
-    setEditingSetor(null);
-    setErrors({});
-  };
-
-  // Funções para manipular unidades
   const handleSalvarUnidade = async () => {
-    const validationErrors = validarUnidadeForm(unidadeForm);
-    if (Object.keys(validationErrors).length > 0) {
-      setErrors(validationErrors);
-      return;
-    }
-
+    const errs = validarUnidadeForm(unidadeForm); if (Object.keys(errs).length) { setErrors(errs); return; }
     try {
-      if (editingUnidade) {
-        const updateData: UnidadeAtendimentoUpdateDTO = {
-          nome: unidadeForm.nome,
-          endereco: unidadeForm.endereco,
-          telefones: unidadeForm.telefones
-        };
-        await unidadeService.atualizarParcialmente(editingUnidade.id, updateData);
-        toast({
-          title: "Sucesso",
-          description: "Unidade atualizada com sucesso"
-        });
-      } else {
-        await unidadeService.criar(unidadeForm);
-        toast({
-          title: "Sucesso",
-          description: "Unidade criada com sucesso"
-        });
-      }
-
-      setUnidadeModalOpen(false);
-      resetUnidadeForm();
+      if (editingUnidade) { await unidadeService.atualizarParcialmente(editingUnidade.id, { nome: unidadeForm.nome, endereco: unidadeForm.endereco, telefones: unidadeForm.telefones }); toast({ title: 'Sucesso', description: 'Unidade atualizada com sucesso' }); }
+      else { await unidadeService.criar(unidadeForm); toast({ title: 'Sucesso', description: 'Unidade criada com sucesso' }); }
+      setUnidadeModalOpen(false); setErrors({}); setEditingUnidade(null);
+      setUnidadeForm({ nome: '', endereco: { logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', cep: '', uf: undefined }, telefones: [] });
       carregarDados();
-    } catch (err) {
-      toast({
-        title: "Erro",
-        description: "Erro ao salvar unidade",
-        variant: "destructive"
-      });
-    }
+    } catch { toast({ title: 'Erro', description: 'Erro ao salvar unidade', variant: 'destructive' }); }
   };
-
   const handleEditarUnidade = (unidade: UnidadeAtendimentoResponseDTO) => {
     setEditingUnidade(unidade);
-    setUnidadeForm({
-      nome: unidade.nome,
-      endereco: unidade.endereco || {
-        logradouro: '',
-        numero: '',
-        complemento: '',
-        bairro: '',
-        cidade: '',
-        cep: '',
-        uf: undefined
-      },
-      telefones: unidade.telefones || []
-    });
+    setUnidadeForm({ nome: unidade.nome, endereco: unidade.endereco || { logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', cep: '', uf: undefined }, telefones: unidade.telefones || [] });
     setUnidadeModalOpen(true);
   };
+  const handleExcluirUnidade = async (id: string) => { if (confirm('Tem certeza que deseja excluir esta unidade?')) { try { await unidadeService.desativar(id); toast({ title: 'Sucesso', description: 'Unidade excluída com sucesso' }); carregarDados(); } catch { toast({ title: 'Erro', description: 'Erro ao excluir unidade', variant: 'destructive' }); } } };
 
-  const handleExcluirUnidade = async (id: string) => {
-    if (confirm('Tem certeza que deseja excluir esta unidade?')) {
-      try {
-        await unidadeService.desativar(id);
-        toast({
-          title: "Sucesso",
-          description: "Unidade excluída com sucesso"
-        });
-        carregarDados();
-      } catch (err) {
-        toast({
-          title: "Erro",
-          description: "Erro ao excluir unidade",
-          variant: "destructive"
-        });
-      }
-    }
-  };
+  const adicionarTelefone = () => { if (telefoneTemp.ddd && telefoneTemp.numero) { setUnidadeForm(p => ({ ...p, telefones: [...(p.telefones || []), telefoneTemp] })); setTelefoneTemp({ tipo: TipoTelefone.FIXO, ddd: 11, numero: 0 }); } };
+  const removerTelefone = (index: number) => { setUnidadeForm(p => ({ ...p, telefones: p.telefones?.filter((_, i) => i !== index) || [] })); };
 
-  const resetUnidadeForm = () => {
-    setUnidadeForm({
-      nome: '',
-      endereco: {
-        logradouro: '',
-        numero: '',
-        complemento: '',
-        bairro: '',
-        cidade: '',
-        cep: '',
-        uf: undefined
-      },
-      telefones: []
-    });
-    setEditingUnidade(null);
-    setErrors({});
-  };
-
-  const adicionarTelefone = () => {
-    if (telefoneTemp.ddd && telefoneTemp.numero) {
-      setUnidadeForm(prev => ({
-        ...prev,
-        telefones: [...(prev.telefones || []), telefoneTemp]
-      }));
-      setTelefoneTemp({
-        tipo: TipoTelefone.FIXO,
-        ddd: 11,
-        numero: 0
-      });
-    }
-  };
-
-  const adicionarTelefoneCliente = () => {
-    if (telefoneClienteTemp.ddd && telefoneClienteTemp.numero) {
-      setClienteForm(prev => ({
-        ...prev,
-        telefones: [...(prev.telefones || []), telefoneClienteTemp]
-      }));
-      setTelefoneClienteTemp({ tipo: TipoTelefone.CELULAR, ddd: 11, numero: 0 });
-    }
-  };
-
-  const removerTelefone = (index: number) => {
-    setUnidadeForm(prev => ({
-      ...prev,
-      telefones: prev.telefones?.filter((_, i) => i !== index) || []
-    }));
-  };
-
-  const removerTelefoneCliente = (index: number) => {
-    setClienteForm(prev => ({
-      ...prev,
-      telefones: prev.telefones?.filter((_, i) => i !== index) || []
-    }));
-  };
-
-  // Funções para manipular usuários
   const handleSalvarUsuario = async () => {
-    const validationErrors = validarUsuarioForm(usuarioForm);
-    if (Object.keys(validationErrors).length > 0) {
-      setErrors(validationErrors);
-      return;
-    }
-
+    const errs = validarUsuarioForm(usuarioForm); if (Object.keys(errs).length) { setErrors(errs); return; }
     try {
-      if (editingUsuario) {
-        const updateData: UsuarioUpdateDTO = {
-          nomeUsuario: usuarioForm.nomeUsuario,
-          email: usuarioForm.email,
-          categoria: usuarioForm.categoria,
-          unidadesIds: usuarioForm.unidadesIds
-        };
-        await usuarioService.atualizarParcialmente(editingUsuario.id, updateData);
-        toast({
-          title: "Sucesso",
-          description: "Usuário atualizado com sucesso"
-        });
-      } else {
-        await usuarioService.criar(usuarioForm);
-        toast({
-          title: "Sucesso",
-          description: "Usuário criado com sucesso"
-        });
-      }
-
-      setUsuarioModalOpen(false);
-      resetUsuarioForm();
+      if (editingUsuario) { await usuarioService.atualizarParcialmente(editingUsuario.id, { nomeUsuario: usuarioForm.nomeUsuario, email: usuarioForm.email, categoria: usuarioForm.categoria, unidadesIds: usuarioForm.unidadesIds }); toast({ title: 'Sucesso', description: 'Usuário atualizado com sucesso' }); }
+      else { await usuarioService.criar(usuarioForm); toast({ title: 'Sucesso', description: 'Usuário criado com sucesso' }); }
+      setUsuarioModalOpen(false); setErrors({}); setEditingUsuario(null);
+      setUsuarioForm({ nomeUsuario: '', email: '', senha: '', categoria: CategoriaUsuario.USUARIO, unidadesIds: [] });
       carregarDados();
-    } catch (err) {
-      toast({
-        title: "Erro",
-        description: "Erro ao salvar usuário",
-        variant: "destructive"
-      });
-    }
+    } catch { toast({ title: 'Erro', description: 'Erro ao salvar usuário', variant: 'destructive' }); }
   };
+  const handleEditarUsuario = (usuario: UsuarioResponseDTO) => { setEditingUsuario(usuario); setUsuarioForm({ nomeUsuario: usuario.nomeUsuario, email: usuario.email, senha: '', categoria: usuario.categoria, unidadesIds: usuario.unidadesIds || [] }); setUsuarioModalOpen(true); };
+  const handleExcluirUsuario = async (id: string) => { if (confirm('Tem certeza que deseja excluir este usuário?')) { try { await usuarioService.desativar(id); toast({ title: 'Sucesso', description: 'Usuário excluído com sucesso' }); carregarDados(); } catch { toast({ title: 'Erro', description: 'Erro ao excluir usuário', variant: 'destructive' }); } } };
+  const handlePromoverUsuario = async (id: string) => { if (confirm('Tem certeza que deseja promover este usuário para administrador?')) { try { await usuarioService.promoverParaAdministrador(id); toast({ title: 'Sucesso', description: 'Usuário promovido com sucesso' }); carregarDados(); } catch { toast({ title: 'Erro', description: 'Erro ao promover usuário', variant: 'destructive' }); } } };
 
-  const handleEditarUsuario = (usuario: UsuarioResponseDTO) => {
-    setEditingUsuario(usuario);
-    setUsuarioForm({
-      nomeUsuario: usuario.nomeUsuario,
-      email: usuario.email,
-      senha: '', // Não preenchemos a senha na edição
-      categoria: usuario.categoria,
-      unidadesIds: usuario.unidadesIds || []
-    });
-    setUsuarioModalOpen(true);
-  };
+  const adicionarTelefoneCliente = () => { if (telefoneClienteTemp.ddd && telefoneClienteTemp.numero) { setClienteForm(p => ({ ...p, telefones: [...(p.telefones || []), telefoneClienteTemp] })); setTelefoneClienteTemp({ tipo: TipoTelefone.CELULAR, ddd: 11, numero: 0 }); } };
+  const removerTelefoneCliente = (index: number) => { setClienteForm(p => ({ ...p, telefones: p.telefones?.filter((_, i) => i !== index) || [] })); };
 
-  const handleExcluirUsuario = async (id: string) => {
-    if (confirm('Tem certeza que deseja excluir este usuário?')) {
-      try {
-        await usuarioService.desativar(id);
-        toast({
-          title: "Sucesso",
-          description: "Usuário excluído com sucesso"
-        });
-        carregarDados();
-      } catch (err) {
-        toast({
-          title: "Erro",
-          description: "Erro ao excluir usuário",
-          variant: "destructive"
-        });
-      }
-    }
-  };
-
-  const handlePromoverUsuario = async (id: string) => {
-    if (confirm('Tem certeza que deseja promover este usuário para administrador?')) {
-      try {
-        await usuarioService.promoverParaAdministrador(id);
-        toast({
-          title: "Sucesso",
-          description: "Usuário promovido com sucesso"
-        });
-        carregarDados();
-      } catch (err) {
-        toast({
-          title: "Erro",
-          description: "Erro ao promover usuário",
-          variant: "destructive"
-        });
-      }
-    }
-  };
-
-  const resetUsuarioForm = () => {
-    setUsuarioForm({
-      nomeUsuario: '',
-      email: '',
-      senha: '',
-      categoria: CategoriaUsuario.USUARIO,
-      unidadesIds: []
-    });
-    setEditingUsuario(null);
-    setErrors({});
-  };
-
-  const resetClienteForm = () => {
-    setClienteForm({
-      cpf: '',
-      nome: '',
-      email: '',
-      telefones: [],
-      endereco: { logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', cep: '', uf: undefined }
-    });
-    setEditingCliente(null);
-    setErrors({});
-  };
-
-  // Funções para manipular clientes
   const handleSalvarCliente = async () => {
-    const validationErrors = validarClienteForm(clienteForm);
-    if (Object.keys(validationErrors).length > 0) {
-      setErrors(validationErrors);
-      return;
-    }
+    const errs = validarClienteForm(clienteForm); if (Object.keys(errs).length) { setErrors(errs); return; }
     try {
-      if (editingCliente) {
-        const updateData: ClienteUpdateDTO = {
-          cpf: clienteForm.cpf,
-          nome: clienteForm.nome,
-          email: clienteForm.email,
-          telefones: clienteForm.telefones,
-          endereco: clienteForm.endereco
-        };
-        await clienteService.atualizarParcialmente(editingCliente.id, updateData);
-        toast({ title: 'Sucesso', description: 'Cliente atualizado com sucesso' });
-      } else {
-        await clienteService.criar(clienteForm);
-        toast({ title: 'Sucesso', description: 'Cliente criado com sucesso' });
-      }
-      setClienteModalOpen(false);
-      resetClienteForm();
+      if (editingCliente) { await clienteService.atualizarParcialmente(editingCliente.id, { cpf: clienteForm.cpf, nome: clienteForm.nome, email: clienteForm.email, telefones: clienteForm.telefones, endereco: clienteForm.endereco }); toast({ title: 'Sucesso', description: 'Cliente atualizado com sucesso' }); }
+      else { await clienteService.criar(clienteForm); toast({ title: 'Sucesso', description: 'Cliente criado com sucesso' }); }
+      setClienteModalOpen(false); setErrors({}); setEditingCliente(null);
+      setClienteForm({ cpf: '', nome: '', email: '', telefones: [], endereco: { logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', cep: '', uf: undefined } });
       carregarDados();
-    } catch (err) {
-      toast({ title: 'Erro', description: 'Erro ao salvar cliente', variant: 'destructive' });
-    }
+    } catch { toast({ title: 'Erro', description: 'Erro ao salvar cliente', variant: 'destructive' }); }
   };
-
-  const handleEditarCliente = (cliente: ClienteResponseDTO) => {
-    setEditingCliente(cliente);
-    setClienteForm({
-      cpf: cliente.cpf || '',
-      nome: cliente.nome || '',
-      email: cliente.email || '',
-      telefones: cliente.telefones || [],
-      endereco: cliente.endereco || { logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', cep: '', uf: undefined }
-    });
-    setClienteModalOpen(true);
-  };
-
-  const handleExcluirCliente = async (id: string) => {
-    if (confirm('Tem certeza que deseja excluir este cliente?')) {
-      try {
-        await clienteService.desativar(id);
-        toast({ title: 'Sucesso', description: 'Cliente excluído com sucesso' });
-        carregarDados();
-      } catch (err) {
-        toast({ title: 'Erro', description: 'Erro ao excluir cliente', variant: 'destructive' });
-      }
-    }
-  };
+  const handleEditarCliente = (cliente: ClienteResponseDTO) => { setEditingCliente(cliente); setClienteForm({ cpf: cliente.cpf || '', nome: cliente.nome || '', email: cliente.email || '', telefones: cliente.telefones || [], endereco: cliente.endereco || { logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', cep: '', uf: undefined } }); setClienteModalOpen(true); };
+  const handleExcluirCliente = async (id: string) => { if (confirm('Tem certeza que deseja excluir este cliente?')) { try { await clienteService.desativar(id); toast({ title: 'Sucesso', description: 'Cliente excluído com sucesso' }); carregarDados(); } catch { toast({ title: 'Erro', description: 'Erro ao excluir cliente', variant: 'destructive' }); } } };
 
   return (
     <div className="container mx-auto p-6">
@@ -859,9 +421,7 @@ const Gestao = () => {
       </div>
 
       {loading ? (
-        <div className="flex justify-center items-center h-64">
-          <p>Carregando...</p>
-        </div>
+        <div className="flex justify-center items-center h-64"><p>Carregando...</p></div>
       ) : (
         <Tabs defaultValue="filas" className="space-y-4">
           <TabsList className="grid w-full grid-cols-5">
@@ -872,126 +432,130 @@ const Gestao = () => {
             <TabsTrigger value="clientes">Clientes</TabsTrigger>
           </TabsList>
 
-          {/* Tab Filas */}
+          {/* Filas */}
           <TabsContent value="filas">
             <Card>
               <CardHeader>
                 <div className="flex justify-between items-center">
                   <div>
                     <CardTitle>Gerenciar Filas</CardTitle>
-                    <CardDescription>
-                      Gerencie as filas de atendimento do sistema
-                    </CardDescription>
+                    <CardDescription>Gerencie as filas de atendimento do sistema</CardDescription>
                   </div>
                   <Dialog open={filaModalOpen} onOpenChange={setFilaModalOpen}>
                     <DialogTrigger asChild>
-                      <Button onClick={resetFilaForm}>
-                        <Plus className="w-4 h-4 mr-2" />
-                        Nova Fila
-                      </Button>
+                      <Button onClick={() => { setEditingFila(null); setFilaForm({ nome: '', setorId: '', unidadeAtendimentoId: '' }); setErrors({}); }}> <Plus className="w-4 h-4 mr-2"/> Nova Fila</Button>
                     </DialogTrigger>
                     <DialogContent className="sm:max-w-[425px]">
                       <DialogHeader>
-                        <DialogTitle>
-                          {editingFila ? 'Editar Fila' : 'Nova Fila'}
-                        </DialogTitle>
-                        <DialogDescription>
-                          {editingFila ? 'Edite os dados da fila' : 'Preencha os dados da nova fila'}
-                        </DialogDescription>
+                        <DialogTitle>{editingFila ? 'Editar Fila' : 'Nova Fila'}</DialogTitle>
+                        <DialogDescription>{editingFila ? 'Edite os dados da fila' : 'Preencha os dados da nova fila'}</DialogDescription>
                       </DialogHeader>
                       <div className="grid gap-4 py-4">
                         <div className="grid gap-2">
                           <Label htmlFor="fila-nome">Nome da Fila *</Label>
-                          <Input
-                            id="fila-nome"
-                            value={filaForm.nome}
-                            onChange={(e) => setFilaForm(prev => ({ ...prev, nome: e.target.value }))}
-                            placeholder="Digite o nome da fila"
-                            className={errors.nome ? 'border-red-500' : ''}
-                          />
+                          <Input id="fila-nome" value={filaForm.nome} onChange={(e)=> setFilaForm(p=>({ ...p, nome: e.target.value }))} placeholder="Digite o nome da fila" className={errors.nome ? 'border-red-500' : ''}/>
                           {errors.nome && <p className="text-sm text-red-500">{errors.nome}</p>}
                         </div>
-
                         <div className="grid gap-2">
                           <Label htmlFor="fila-setor">Setor *</Label>
-                          <Select
-                            value={filaForm.setorId}
-                            onValueChange={(value) => setFilaForm(prev => ({ ...prev, setorId: value }))}
-                          >
-                            <SelectTrigger className={errors.setorId ? 'border-red-500' : ''}>
-                              <SelectValue placeholder="Selecione um setor" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {setores.map((setor) => (
-                                <SelectItem key={setor.id} value={setor.id}>
-                                  {setor.nome}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
+                          <Select value={filaForm.setorId} onValueChange={(v)=> setFilaForm(p=>({ ...p, setorId: v }))}>
+                            <SelectTrigger className={errors.setorId ? 'border-red-500' : ''}><SelectValue placeholder="Selecione um setor"/></SelectTrigger>
+                            <SelectContent>{setorOptions.map(s=> <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>)}</SelectContent>
                           </Select>
                           {errors.setorId && <p className="text-sm text-red-500">{errors.setorId}</p>}
                         </div>
-
                         <div className="grid gap-2">
                           <Label htmlFor="fila-unidade">Unidade de Atendimento *</Label>
-                          <Select
-                            value={filaForm.unidadeAtendimentoId}
-                            onValueChange={(value) => setFilaForm(prev => ({ ...prev, unidadeAtendimentoId: value }))}
-                          >
-                            <SelectTrigger className={errors.unidadeAtendimentoId ? 'border-red-500' : ''}>
-                              <SelectValue placeholder="Selecione uma unidade" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {unidades.map((unidade) => (
-                                <SelectItem key={unidade.id} value={unidade.id}>
-                                  {unidade.nome}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
+                          <Select value={filaForm.unidadeAtendimentoId} onValueChange={(v)=> setFilaForm(p=>({ ...p, unidadeAtendimentoId: v }))}>
+                            <SelectTrigger className={errors.unidadeAtendimentoId ? 'border-red-500' : ''}><SelectValue placeholder="Selecione uma unidade"/></SelectTrigger>
+                            <SelectContent>{unidadeOptions.map(u=> <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>)}</SelectContent>
                           </Select>
                           {errors.unidadeAtendimentoId && <p className="text-sm text-red-500">{errors.unidadeAtendimentoId}</p>}
                         </div>
                       </div>
                       <DialogFooter>
-                        <Button variant="outline" onClick={() => setFilaModalOpen(false)}>
-                          Cancelar
-                        </Button>
-                        <Button onClick={handleSalvarFila}>
-                          {editingFila ? 'Atualizar' : 'Criar'}
-                        </Button>
+                        <Button variant="outline" onClick={()=> setFilaModalOpen(false)}>Cancelar</Button>
+                        <Button onClick={handleSalvarFila}>{editingFila ? 'Atualizar' : 'Criar'}</Button>
                       </DialogFooter>
                     </DialogContent>
                   </Dialog>
                 </div>
               </CardHeader>
               <CardContent>
-                {/* Controles de busca/paginação */}
-                <div className="flex items-center gap-2 mb-4">
-                  <Select value={filasUnidadeId} onValueChange={(v)=> { setFilasUnidadeId(v); setFilasPage(0); loadFilasPage(0, filasSize, v); }}>
-                    <SelectTrigger className="min-w-[220px]"><SelectValue placeholder="Selecione uma unidade"/></SelectTrigger>
-                    <SelectContent>
-                      {unidadeOptions.map(u=> <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                  <Select value={String(filasSize)} onValueChange={(v)=> { const s=Number(v); setFilasSize(s); setFilasPage(0); loadFilasPage(0, s); }}>
-                    <SelectTrigger className="w-[110px]"><SelectValue placeholder="Tamanho"/></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="10">10</SelectItem>
-                      <SelectItem value="25">25</SelectItem>
-                      <SelectItem value="50">50</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Button variant="outline" onClick={()=> loadFilasPage()}>Buscar</Button>
+                {/* Controles de busca */}
+                <div className="flex flex-wrap items-end gap-3 mb-4">
+                  <div className="flex flex-col min-w-[180px]">
+                    <Label className="mb-1">Tipo de busca</Label>
+                    <Select value={filasSearchType} onValueChange={(v:any)=> { setFilasSearchType(v); setFilasPage(0); }}>
+                      <SelectTrigger><SelectValue placeholder="Selecione o tipo de busca"/></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="unidade">Por Unidade</SelectItem>
+                        <SelectItem value="nome">Por Nome</SelectItem>
+                        <SelectItem value="setor">Por Setor</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {filasSearchType==='unidade' && (
+                    <div className="flex flex-col min-w-[240px]">
+                      <Label className="mb-1">Unidade de Atendimento</Label>
+                      <Select value={filasUnidadeId} onValueChange={(v)=> { setFilasUnidadeId(v); setFilasPage(0); }}>
+                        <SelectTrigger><SelectValue placeholder="Selecione a unidade"/></SelectTrigger>
+                        <SelectContent>{unidadeOptions.map(u=> <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                  {filasSearchType==='nome' && (
+                    <>
+                      <div className="flex flex-col min-w-[240px]">
+                        <Label className="mb-1">Unidade (obrigatório)</Label>
+                        <Select value={filasUnidadeId} onValueChange={(v)=> { setFilasUnidadeId(v); setFilasPage(0); }}>
+                          <SelectTrigger><SelectValue placeholder="Selecione a unidade"/></SelectTrigger>
+                          <SelectContent>{unidadeOptions.map(u=> <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>
+                      <div className="flex flex-col min-w-[240px]">
+                        <Label className="mb-1">Nome da Fila</Label>
+                        <Input placeholder="Digite parte do nome da fila" value={filasSearchValue} onChange={(e)=> setFilasSearchValue(e.target.value)}/>
+                      </div>
+                    </>
+                  )}
+                  {filasSearchType==='setor' && (
+                    <>
+                      <div className="flex flex-col min-w-[240px]">
+                        <Label className="mb-1">Unidade (obrigatório)</Label>
+                        <Select value={filasUnidadeId} onValueChange={(v)=> { setFilasUnidadeId(v); setFilasPage(0); }}>
+                          <SelectTrigger><SelectValue placeholder="Selecione a unidade"/></SelectTrigger>
+                          <SelectContent>{unidadeOptions.map(u=> <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>
+                      <div className="flex flex-col min-w-[240px]">
+                        <Label className="mb-1">Setor</Label>
+                        <Select value={filasSetorId} onValueChange={(v)=> setFilasSetorId(v)}>
+                          <SelectTrigger><SelectValue placeholder="Selecione o setor"/></SelectTrigger>
+                          <SelectContent>{setorOptions.map(s=> <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>
+                    </>
+                  )}
+                  <div className="flex flex-col min-w-[130px]">
+                    <Label className="mb-1">Itens por página</Label>
+                    <Select value={String(filasSize)} onValueChange={(v)=> { const s=Number(v); setFilasSize(s); setFilasPage(0); }}>
+                      <SelectTrigger><SelectValue placeholder="Selecione"/></SelectTrigger>
+                      <SelectContent><SelectItem value="10">10</SelectItem><SelectItem value="25">25</SelectItem><SelectItem value="50">50</SelectItem></SelectContent>
+                    </Select>
+                  </div>
+                  <div className="pb-1"><Button variant="outline" onClick={()=> loadFilasPage(0, filasSize)}>Buscar</Button></div>
                 </div>
 
-                {/* Controles de paginação */}
-                <div className="flex items-center justify-between mb-3 text-sm text-muted-foreground">
-                  <div>Página { (filasMeta?.page ?? filasPage) + 1 } de { filasMeta?.totalPages ?? 1 }</div>
-                  <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={()=> {const p=Math.max(0,(filasMeta?.page ?? filasPage)-1); setFilasPage(p); loadFilasPage(p);}} disabled={(filasMeta?.page ?? filasPage) <= 0}>Anterior</Button>
-                    <Button variant="outline" size="sm" onClick={()=> {const p=(filasMeta?.page ?? filasPage)+1; if (filasMeta && p>=filasMeta.totalPages) return; setFilasPage(p); loadFilasPage(p);}} disabled={!!filasMeta && (filasMeta.page+1)>=filasMeta.totalPages}>Próxima</Button>
+                {(() => { const d = pageDisplay(filasMeta, filasPage); return (
+                  <div className="flex items-center justify-between mb-3 text-sm text-muted-foreground">
+                    <div>Página {d.current} de {d.total}</div>
+                    <div className="flex items-center gap-2">
+                      <Button variant="outline" size="sm" onClick={()=> { const p=Math.max(0,(filasMeta?.page ?? filasPage)-1); setFilasPage(p); loadFilasPage(p); }} disabled={(filasMeta?.page ?? filasPage)<=0}>Anterior</Button>
+                      <Button variant="outline" size="sm" onClick={()=> { const next=(filasMeta?.page ?? filasPage)+1; if (next+1>d.total) return; setFilasPage(next); loadFilasPage(next); }} disabled={((filasMeta?.page ?? filasPage)+1)>=d.total}>Próxima</Button>
+                    </div>
                   </div>
-                </div>
+                ); })()}
 
                 <Table>
                   <TableHeader>
@@ -1003,27 +567,15 @@ const Gestao = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filas.map((fila) => (
+                    {filas.map(fila => (
                       <TableRow key={fila.id}>
                         <TableCell>{fila.nome}</TableCell>
                         <TableCell>{fila.setor.nome}</TableCell>
                         <TableCell>{fila.unidade.nome}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex gap-2 justify-end">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleEditarFila(fila)}
-                            >
-                              <Edit className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleExcluirFila(fila.id)}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
+                            <Button variant="outline" size="sm" onClick={()=> handleEditarFila(fila)}><Edit className="w-4 h-4"/></Button>
+                            <Button variant="outline" size="sm" onClick={()=> handleExcluirFila(fila.id)}><Trash2 className="w-4 h-4"/></Button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -1034,86 +586,74 @@ const Gestao = () => {
             </Card>
           </TabsContent>
 
-          {/* Tab Setores */}
+          {/* Setores */}
           <TabsContent value="setores">
             <Card>
               <CardHeader>
                 <div className="flex justify-between items-center">
                   <div>
                     <CardTitle>Gerenciar Setores</CardTitle>
-                    <CardDescription>
-                      Gerencie os setores de atendimento
-                    </CardDescription>
+                    <CardDescription>Gerencie os setores de atendimento</CardDescription>
                   </div>
                   <Dialog open={setorModalOpen} onOpenChange={setSetorModalOpen}>
                     <DialogTrigger asChild>
-                      <Button onClick={resetSetorForm}>
-                        <Plus className="w-4 h-4 mr-2" />
-                        Novo Setor
-                      </Button>
+                      <Button onClick={()=> { setEditingSetor(null); setSetorForm({ nome: '' }); setErrors({}); }}><Plus className="w-4 h-4 mr-2"/> Novo Setor</Button>
                     </DialogTrigger>
                     <DialogContent className="sm:max-w-[425px]">
                       <DialogHeader>
-                        <DialogTitle>
-                          {editingSetor ? 'Editar Setor' : 'Novo Setor'}
-                        </DialogTitle>
-                        <DialogDescription>
-                          {editingSetor ? 'Edite os dados do setor' : 'Preencha os dados do novo setor'}
-                        </DialogDescription>
+                        <DialogTitle>{editingSetor ? 'Editar Setor' : 'Novo Setor'}</DialogTitle>
+                        <DialogDescription>{editingSetor ? 'Edite os dados do setor' : 'Preencha os dados do novo setor'}</DialogDescription>
                       </DialogHeader>
                       <div className="grid gap-4 py-4">
                         <div className="grid gap-2">
                           <Label htmlFor="setor-nome">Nome do Setor *</Label>
-                          <Input
-                            id="setor-nome"
-                            value={setorForm.nome}
-                            onChange={(e) => setSetorForm(prev => ({ ...prev, nome: e.target.value }))}
-                            placeholder="Digite o nome do setor"
-                            className={errors.nome ? 'border-red-500' : ''}
-                          />
+                          <Input id="setor-nome" value={setorForm.nome} onChange={(e)=> setSetorForm({ nome: e.target.value })} placeholder="Digite o nome do setor" className={errors.nome ? 'border-red-500' : ''}/>
                           {errors.nome && <p className="text-sm text-red-500">{errors.nome}</p>}
                         </div>
                       </div>
                       <DialogFooter>
-                        <Button variant="outline" onClick={() => setSetorModalOpen(false)}>
-                          Cancelar
-                        </Button>
-                        <Button onClick={handleSalvarSetor}>
-                          {editingSetor ? 'Atualizar' : 'Criar'}
-                        </Button>
+                        <Button variant="outline" onClick={()=> setSetorModalOpen(false)}>Cancelar</Button>
+                        <Button onClick={handleSalvarSetor}>{editingSetor ? 'Atualizar' : 'Criar'}</Button>
                       </DialogFooter>
                     </DialogContent>
                   </Dialog>
                 </div>
               </CardHeader>
               <CardContent>
-                {/* Controles de busca/paginação */}
-                <div className="flex items-center gap-2 mb-4">
-                  <Select value={setoresSearchType} onValueChange={(v: any)=> setSetoresSearchType(v)}>
-                    <SelectTrigger className="w-[150px]"><SelectValue/></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="todos">Todos</SelectItem>
-                      <SelectItem value="nome">Nome contém</SelectItem>
-                    </SelectContent>
-                  </Select>
+                <div className="flex flex-wrap items-end gap-3 mb-4">
+                  <div className="flex flex-col min-w-[150px]">
+                    <Label className="mb-1">Tipo de busca</Label>
+                    <Select value={setoresSearchType} onValueChange={(v:any)=> setSetoresSearchType(v)}>
+                      <SelectTrigger><SelectValue placeholder="Selecione"/></SelectTrigger>
+                      <SelectContent><SelectItem value="todos">Todos</SelectItem><SelectItem value="nome">Nome contém</SelectItem></SelectContent>
+                    </Select>
+                  </div>
                   {setoresSearchType==='nome' && (
-                    <Input className="w-[220px]" placeholder="Buscar por nome" value={setoresSearchValue} onChange={(e)=> setSetoresSearchValue(e.target.value)}/>
+                    <div className="flex flex-col min-w-[220px]">
+                      <Label className="mb-1">Nome do Setor</Label>
+                      <Input placeholder="Digite parte do nome" value={setoresSearchValue} onChange={(e)=> setSetoresSearchValue(e.target.value)}/>
+                    </div>
                   )}
-                  <Select value={String(setoresSize)} onValueChange={(v)=> {const s=Number(v); setSetoresSize(s); setSetoresPage(0); loadSetoresPage(0,s);}}>
-                    <SelectTrigger className="w-[110px]"><SelectValue/></SelectTrigger>
-                    <SelectContent><SelectItem value="10">10</SelectItem><SelectItem value="25">25</SelectItem><SelectItem value="50">50</SelectItem></SelectContent>
-                  </Select>
-                  <Button variant="outline" onClick={()=> loadSetoresPage(0, setoresSize)}>Buscar</Button>
+                  <div className="flex flex-col min-w-[130px]">
+                    <Label className="mb-1">Itens por página</Label>
+                    <Select value={String(setoresSize)} onValueChange={(v)=> { const s=Number(v); setSetoresSize(s); setSetoresPage(0); }}>
+                      <SelectTrigger><SelectValue placeholder="Selecione"/></SelectTrigger>
+                      <SelectContent><SelectItem value="10">10</SelectItem><SelectItem value="25">25</SelectItem><SelectItem value="50">50</SelectItem></SelectContent>
+                    </Select>
+                  </div>
+                  <div className="pb-1"><Button variant="outline" onClick={()=> loadSetoresPage(0, setoresSize)}>Buscar</Button></div>
                 </div>
 
-                {/* Controles de paginação */}
-                <div className="flex items-center justify-between mb-3 text-sm text-muted-foreground">
-                  <div>Página { (setoresMeta?.page ?? setoresPage) + 1 } de { setoresMeta?.totalPages ?? 1 }</div>
-                  <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={()=> {const p=Math.max(0,(setoresMeta?.page ?? setoresPage)-1); setSetoresPage(p); loadSetoresPage(p);}} disabled={(setoresMeta?.page ?? setoresPage) <= 0}>Anterior</Button>
-                    <Button variant="outline" size="sm" onClick={()=> {const p=(setoresMeta?.page ?? setoresPage)+1; if (setoresMeta && p>=setoresMeta.totalPages) return; setSetoresPage(p); loadSetoresPage(p);}} disabled={!!setoresMeta && (setoresMeta.page+1)>=setoresMeta.totalPages}>Próxima</Button>
+                {(() => { const d = pageDisplay(setoresMeta, setoresPage); return (
+                  <div className="flex items-center justify-between mb-3 text-sm text-muted-foreground">
+                    <div>Página {d.current} de {d.total}</div>
+                    <div className="flex items-center gap-2">
+                      <Button variant="outline" size="sm" onClick={()=> { const p=Math.max(0,(setoresMeta?.page ?? setoresPage)-1); setSetoresPage(p); loadSetoresPage(p); }} disabled={(setoresMeta?.page ?? setoresPage)<=0}>Anterior</Button>
+                      <Button variant="outline" size="sm" onClick={()=> { const next=(setoresMeta?.page ?? setoresPage)+1; if (next+1>d.total) return; setSetoresPage(next); loadSetoresPage(next); }} disabled={((setoresMeta?.page ?? setoresPage)+1)>=d.total}>Próxima</Button>
+                    </div>
                   </div>
-                </div>
+                ); })()}
+
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -1122,25 +662,13 @@ const Gestao = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {setores.map((setor) => (
+                    {setores.map(setor => (
                       <TableRow key={setor.id}>
                         <TableCell>{setor.nome}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex gap-2 justify-end">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleEditarSetor(setor)}
-                            >
-                              <Edit className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleExcluirSetor(setor.id)}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
+                            <Button variant="outline" size="sm" onClick={()=> handleEditarSetor(setor)}><Edit className="w-4 h-4"/></Button>
+                            <Button variant="outline" size="sm" onClick={()=> handleExcluirSetor(setor.id)}><Trash2 className="w-4 h-4"/></Button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -1151,219 +679,89 @@ const Gestao = () => {
             </Card>
           </TabsContent>
 
-          {/* Tab Unidades */}
+          {/* Unidades */}
           <TabsContent value="unidades">
             <Card>
               <CardHeader>
                 <div className="flex justify-between items-center">
                   <div>
                     <CardTitle>Gerenciar Unidades</CardTitle>
-                    <CardDescription>
-                      Gerencie as unidades de atendimento
-                    </CardDescription>
+                    <CardDescription>Gerencie as unidades de atendimento</CardDescription>
                   </div>
                   <Dialog open={unidadeModalOpen} onOpenChange={setUnidadeModalOpen}>
                     <DialogTrigger asChild>
-                      <Button onClick={resetUnidadeForm}>
-                        <Plus className="w-4 h-4 mr-2" />
-                        Nova Unidade
-                      </Button>
+                      <Button onClick={()=> { setEditingUnidade(null); setErrors({}); setUnidadeForm({ nome: '', endereco: { logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', cep: '', uf: undefined }, telefones: [] }); }}><Plus className="w-4 h-4 mr-2"/> Nova Unidade</Button>
                     </DialogTrigger>
                     <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
                       <DialogHeader>
-                        <DialogTitle>
-                          {editingUnidade ? 'Editar Unidade' : 'Nova Unidade'}
-                        </DialogTitle>
-                        <DialogDescription>
-                          {editingUnidade ? 'Edite os dados da unidade' : 'Preencha os dados da nova unidade'}
-                        </DialogDescription>
+                        <DialogTitle>{editingUnidade ? 'Editar Unidade' : 'Nova Unidade'}</DialogTitle>
+                        <DialogDescription>{editingUnidade ? 'Edite os dados da unidade' : 'Preencha os dados da nova unidade'}</DialogDescription>
                       </DialogHeader>
                       <div className="grid gap-4 py-4">
                         <div className="grid gap-2">
                           <Label htmlFor="unidade-nome">Nome da Unidade *</Label>
-                          <Input
-                            id="unidade-nome"
-                            value={unidadeForm.nome}
-                            onChange={(e) => setUnidadeForm(prev => ({ ...prev, nome: e.target.value }))}
-                            placeholder="Digite o nome da unidade"
-                            className={errors.nome ? 'border-red-500' : ''}
-                          />
+                          <Input id="unidade-nome" value={unidadeForm.nome} onChange={(e)=> setUnidadeForm(p=>({ ...p, nome: e.target.value }))} placeholder="Digite o nome da unidade" className={errors.nome ? 'border-red-500' : ''}/>
                           {errors.nome && <p className="text-sm text-red-500">{errors.nome}</p>}
                         </div>
-
-                        {/* Seção de Endereço */}
+                        {/* Endereço */}
                         <div className="space-y-4">
-                          <h4 className="font-medium flex items-center gap-2">
-                            <MapPin className="w-4 h-4" />
-                            Endereço
-                          </h4>
-
+                          <h4 className="font-medium flex items-center gap-2"><MapPin className="w-4 h-4"/> Endereço</h4>
                           <div className="grid gap-2">
                             <Label htmlFor="cep">CEP</Label>
-                            <Input
-                              id="cep"
-                              value={unidadeForm.endereco?.cep || ''}
-                              onChange={(e) => setUnidadeForm(prev => ({
-                                ...prev,
-                                endereco: { ...prev.endereco!, cep: e.target.value }
-                              }))}
-                              placeholder="00000-000"
-                            />
+                            <Input id="cep" value={unidadeForm.endereco?.cep || ''} onChange={(e)=> setUnidadeForm(p=>({ ...p, endereco: { ...p.endereco!, cep: e.target.value } }))} placeholder="00000-000"/>
                           </div>
-
                           <div className="grid grid-cols-2 gap-2">
                             <div className="grid gap-2">
                               <Label htmlFor="logradouro">Logradouro</Label>
-                              <Input
-                                id="logradouro"
-                                value={unidadeForm.endereco?.logradouro || ''}
-                                onChange={(e) => setUnidadeForm(prev => ({
-                                  ...prev,
-                                  endereco: { ...prev.endereco!, logradouro: e.target.value }
-                                }))}
-                                placeholder="Rua, Avenida, etc."
-                                className={errors.logradouro ? 'border-red-500' : ''}
-                              />
+                              <Input id="logradouro" value={unidadeForm.endereco?.logradouro || ''} onChange={(e)=> setUnidadeForm(p=>({ ...p, endereco: { ...p.endereco!, logradouro: e.target.value } }))} placeholder="Rua, Avenida, etc." className={errors.logradouro ? 'border-red-500' : ''}/>
                               {errors.logradouro && <p className="text-sm text-red-500">{errors.logradouro}</p>}
                             </div>
-
                             <div className="grid gap-2">
                               <Label htmlFor="numero">Número</Label>
-                              <Input
-                                id="numero"
-                                value={unidadeForm.endereco?.numero || ''}
-                                onChange={(e) => setUnidadeForm(prev => ({
-                                  ...prev,
-                                  endereco: { ...prev.endereco!, numero: e.target.value }
-                                }))}
-                                placeholder="123"
-                                className={errors.numero ? 'border-red-500' : ''}
-                              />
+                              <Input id="numero" value={unidadeForm.endereco?.numero || ''} onChange={(e)=> setUnidadeForm(p=>({ ...p, endereco: { ...p.endereco!, numero: e.target.value } }))} placeholder="123" className={errors.numero ? 'border-red-500' : ''}/>
                               {errors.numero && <p className="text-sm text-red-500">{errors.numero}</p>}
                             </div>
                           </div>
-
                           <div className="grid gap-2">
                             <Label htmlFor="complemento">Complemento</Label>
-                            <Input
-                              id="complemento"
-                              value={unidadeForm.endereco?.complemento || ''}
-                              onChange={(e) => setUnidadeForm(prev => ({
-                                ...prev,
-                                endereco: { ...prev.endereco!, complemento: e.target.value }
-                              }))}
-                              placeholder="Apartamento, sala, etc."
-                            />
+                            <Input id="complemento" value={unidadeForm.endereco?.complemento || ''} onChange={(e)=> setUnidadeForm(p=>({ ...p, endereco: { ...p.endereco!, complemento: e.target.value } }))} placeholder="Apartamento, sala, etc."/>
                           </div>
-
                           <div className="grid grid-cols-2 gap-2">
                             <div className="grid gap-2">
                               <Label htmlFor="bairro">Bairro</Label>
-                              <Input
-                                id="bairro"
-                                value={unidadeForm.endereco?.bairro || ''}
-                                onChange={(e) => setUnidadeForm(prev => ({
-                                  ...prev,
-                                  endereco: { ...prev.endereco!, bairro: e.target.value }
-                                }))}
-                                placeholder="Nome do bairro"
-                              />
+                              <Input id="bairro" value={unidadeForm.endereco?.bairro || ''} onChange={(e)=> setUnidadeForm(p=>({ ...p, endereco: { ...p.endereco!, bairro: e.target.value } }))} placeholder="Nome do bairro"/>
                             </div>
-
                             <div className="grid gap-2">
                               <Label htmlFor="cidade">Cidade</Label>
-                              <Input
-                                id="cidade"
-                                value={unidadeForm.endereco?.cidade || ''}
-                                onChange={(e) => setUnidadeForm(prev => ({
-                                  ...prev,
-                                  endereco: { ...prev.endereco!, cidade: e.target.value }
-                                }))}
-                                placeholder="Nome da cidade"
-                              />
+                              <Input id="cidade" value={unidadeForm.endereco?.cidade || ''} onChange={(e)=> setUnidadeForm(p=>({ ...p, endereco: { ...p.endereco!, cidade: e.target.value } }))} placeholder="Nome da cidade"/>
                             </div>
                           </div>
-
                           <div className="grid gap-2">
                             <Label htmlFor="uf">UF</Label>
-                            <Select
-                              value={unidadeForm.endereco?.uf || ''}
-                              onValueChange={(value) => setUnidadeForm(prev => ({
-                                ...prev,
-                                endereco: { ...prev.endereco!, uf: value as UF }
-                              }))}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Selecione o estado" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {Object.values(UF).map((uf) => (
-                                  <SelectItem key={uf} value={uf}>
-                                    {uf}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
+                            <Select value={unidadeForm.endereco?.uf || ''} onValueChange={(v)=> setUnidadeForm(p=>({ ...p, endereco: { ...p.endereco!, uf: v as UF } }))}>
+                              <SelectTrigger><SelectValue placeholder="Selecione o estado"/></SelectTrigger>
+                              <SelectContent>{Object.values(UF).map(uf=> <SelectItem key={uf} value={uf}>{uf}</SelectItem>)}</SelectContent>
                             </Select>
                           </div>
                         </div>
-
-                        {/* Seção de Telefones */}
+                        {/* Telefones */}
                         <div className="space-y-4">
-                          <h4 className="font-medium flex items-center gap-2">
-                            <Phone className="w-4 h-4" />
-                            Telefones
-                          </h4>
-
+                          <h4 className="font-medium flex items-center gap-2"><Phone className="w-4 h-4"/> Telefones</h4>
                           <div className="grid grid-cols-4 gap-2">
-                            <Select
-                              value={telefoneTemp.tipo}
-                              onValueChange={(value) => setTelefoneTemp(prev => ({ ...prev, tipo: value as TipoTelefone }))}
-                            >
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value={TipoTelefone.FIXO}>Fixo</SelectItem>
-                                <SelectItem value={TipoTelefone.CELULAR}>Celular</SelectItem>
-                              </SelectContent>
+                            <Select value={telefoneTemp.tipo} onValueChange={(v)=> setTelefoneTemp(p=>({ ...p, tipo: v as TipoTelefone }))}>
+                              <SelectTrigger><SelectValue /></SelectTrigger>
+                              <SelectContent><SelectItem value={TipoTelefone.FIXO}>Fixo</SelectItem><SelectItem value={TipoTelefone.CELULAR}>Celular</SelectItem></SelectContent>
                             </Select>
-
-                            <Input
-                              type="number"
-                              value={telefoneTemp.ddd || ''}
-                              onChange={(e) => setTelefoneTemp(prev => ({ ...prev, ddd: parseInt(e.target.value) || 0 }))
-                              }
-                              placeholder="DDD"
-                            />
-
-                            <Input
-                              type="number"
-                              value={telefoneTemp.numero || ''}
-                              onChange={(e) => setTelefoneTemp(prev => ({ ...prev, numero: parseInt(e.target.value) || 0 }))
-                              }
-                              placeholder="Número"
-                            />
-
-                            <Button type="button" onClick={adicionarTelefone}>
-                              <Plus className="w-4 h-4" />
-                            </Button>
+                            <Input type="number" value={telefoneTemp.ddd || ''} placeholder="DDD" onChange={(e)=> setTelefoneTemp(p=>({ ...p, ddd: parseInt(e.target.value)||0 }))}/>
+                            <Input type="number" value={telefoneTemp.numero || ''} placeholder="Número" onChange={(e)=> setTelefoneTemp(p=>({ ...p, numero: parseInt(e.target.value)||0 }))}/>
+                            <Button type="button" onClick={adicionarTelefone}><Plus className="w-4 h-4"/></Button>
                           </div>
-
-                          {unidadeForm.telefones && unidadeForm.telefones.length > 0 && (
+                          {unidadeForm.telefones && unidadeForm.telefones.length>0 && (
                             <div className="space-y-2">
-                              {unidadeForm.telefones.map((telefone, index) => (
-                                <div key={index} className="flex items-center justify-between p-2 border rounded">
-                                  <span>
-                                    {telefone.tipo} - ({telefone.ddd}) {telefone.numero}
-                                  </span>
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => removerTelefone(index)}
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </Button>
+                              {unidadeForm.telefones.map((t, i)=> (
+                                <div key={i} className="flex items-center justify-between p-2 border rounded">
+                                  <span>{t.tipo} - ({t.ddd}) {t.numero}</span>
+                                  <Button type="button" variant="outline" size="sm" onClick={()=> removerTelefone(i)}><Trash2 className="w-4 h-4"/></Button>
                                 </div>
                               ))}
                             </div>
@@ -1371,45 +769,48 @@ const Gestao = () => {
                         </div>
                       </div>
                       <DialogFooter>
-                        <Button variant="outline" onClick={() => setUnidadeModalOpen(false)}>
-                          Cancelar
-                        </Button>
-                        <Button onClick={handleSalvarUnidade}>
-                          {editingUnidade ? 'Atualizar' : 'Criar'}
-                        </Button>
+                        <Button variant="outline" onClick={()=> setUnidadeModalOpen(false)}>Cancelar</Button>
+                        <Button onClick={handleSalvarUnidade}>{editingUnidade ? 'Atualizar' : 'Criar'}</Button>
                       </DialogFooter>
                     </DialogContent>
                   </Dialog>
                 </div>
               </CardHeader>
               <CardContent>
-                {/* Controles de busca/paginação */}
-                <div className="flex items-center gap-2 mb-4">
-                  <Select value={unidadesSearchType} onValueChange={(v: any)=> setUnidadesSearchType(v)}>
-                    <SelectTrigger className="w-[150px]"><SelectValue/></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="todos">Todos</SelectItem>
-                      <SelectItem value="nome">Nome contém</SelectItem>
-                    </SelectContent>
-                  </Select>
+                <div className="flex flex-wrap items-end gap-3 mb-4">
+                  <div className="flex flex-col min-w-[150px]">
+                    <Label className="mb-1">Tipo de busca</Label>
+                    <Select value={unidadesSearchType} onValueChange={(v:any)=> setUnidadesSearchType(v)}>
+                      <SelectTrigger><SelectValue placeholder="Selecione"/></SelectTrigger>
+                      <SelectContent><SelectItem value="todos">Todos</SelectItem><SelectItem value="nome">Nome contém</SelectItem></SelectContent>
+                    </Select>
+                  </div>
                   {unidadesSearchType==='nome' && (
-                    <Input className="w-[220px]" placeholder="Buscar por nome" value={unidadesSearchValue} onChange={(e)=> setUnidadesSearchValue(e.target.value)}/>
+                    <div className="flex flex-col min-w-[220px]">
+                      <Label className="mb-1">Nome da Unidade</Label>
+                      <Input placeholder="Digite parte do nome" value={unidadesSearchValue} onChange={(e)=> setUnidadesSearchValue(e.target.value)}/>
+                    </div>
                   )}
-                  <Select value={String(unidadesSize)} onValueChange={(v)=> {const s=Number(v); setUnidadesSize(s); setUnidadesPage(0); loadUnidadesPage(0,s);}}>
-                    <SelectTrigger className="w-[110px]"><SelectValue/></SelectTrigger>
-                    <SelectContent><SelectItem value="10">10</SelectItem><SelectItem value="25">25</SelectItem><SelectItem value="50">50</SelectItem></SelectContent>
-                  </Select>
-                  <Button variant="outline" onClick={()=> loadUnidadesPage(0, unidadesSize)}>Buscar</Button>
+                  <div className="flex flex-col min-w-[130px]">
+                    <Label className="mb-1">Itens por página</Label>
+                    <Select value={String(unidadesSize)} onValueChange={(v)=> { const s=Number(v); setUnidadesSize(s); setUnidadesPage(0); }}>
+                      <SelectTrigger><SelectValue placeholder="Selecione"/></SelectTrigger>
+                      <SelectContent><SelectItem value="10">10</SelectItem><SelectItem value="25">25</SelectItem><SelectItem value="50">50</SelectItem></SelectContent>
+                    </Select>
+                  </div>
+                  <div className="pb-1"><Button variant="outline" onClick={()=> loadUnidadesPage(0, unidadesSize)}>Buscar</Button></div>
                 </div>
 
-                {/* Controles de paginação */}
-                <div className="flex items-center justify-between mb-3 text-sm text-muted-foreground">
-                  <div>Página { (unidadesMeta?.page ?? unidadesPage) + 1 } de { unidadesMeta?.totalPages ?? 1 }</div>
-                  <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={()=> {const p=Math.max(0,(unidadesMeta?.page ?? unidadesPage)-1); setUnidadesPage(p); loadUnidadesPage(p);}} disabled={(unidadesMeta?.page ?? unidadesPage) <= 0}>Anterior</Button>
-                    <Button variant="outline" size="sm" onClick={()=> {const p=(unidadesMeta?.page ?? unidadesPage)+1; if (unidadesMeta && p>=unidadesMeta.totalPages) return; setUnidadesPage(p); loadUnidadesPage(p);}} disabled={!!unidadesMeta && (unidadesMeta.page+1)>=unidadesMeta.totalPages}>Próxima</Button>
+                {(() => { const d = pageDisplay(unidadesMeta, unidadesPage); return (
+                  <div className="flex items-center justify-between mb-3 text-sm text-muted-foreground">
+                    <div>Página {d.current} de {d.total}</div>
+                    <div className="flex items-center gap-2">
+                      <Button variant="outline" size="sm" onClick={()=> { const p=Math.max(0,(unidadesMeta?.page ?? unidadesPage)-1); setUnidadesPage(p); loadUnidadesPage(p); }} disabled={(unidadesMeta?.page ?? unidadesPage)<=0}>Anterior</Button>
+                      <Button variant="outline" size="sm" onClick={()=> { const next=(unidadesMeta?.page ?? unidadesPage)+1; if (next+1>d.total) return; setUnidadesPage(next); loadUnidadesPage(next); }} disabled={((unidadesMeta?.page ?? unidadesPage)+1)>=d.total}>Próxima</Button>
+                    </div>
                   </div>
-                </div>
+                ); })()}
+
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -1420,37 +821,15 @@ const Gestao = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {unidades.map((unidade) => (
+                    {unidades.map(unidade => (
                       <TableRow key={unidade.id}>
                         <TableCell>{unidade.nome}</TableCell>
-                        <TableCell>
-                          {unidade.endereco?.enderecoFormatado ||
-                           `${unidade.endereco?.logradouro}, ${unidade.endereco?.numero}` ||
-                           'Não informado'}
-                        </TableCell>
-                        <TableCell>
-                          {unidade.telefones?.map((tel, idx) => (
-                            <div key={idx} className="text-sm">
-                              {tel.tipo}: ({tel.ddd}) {tel.numero}
-                            </div>
-                          )) || 'Nenhum'}
-                        </TableCell>
+                        <TableCell>{unidade.endereco?.enderecoFormatado || `${unidade.endereco?.logradouro}, ${unidade.endereco?.numero}` || 'Não informado'}</TableCell>
+                        <TableCell>{unidade.telefones?.map((t,i)=> <div key={i} className="text-sm">{t.tipo}: ({t.ddd}) {t.numero}</div>) || 'Nenhum'}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex gap-2 justify-end">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleEditarUnidade(unidade)}
-                            >
-                              <Edit className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleExcluirUnidade(unidade.id)}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
+                            <Button variant="outline" size="sm" onClick={()=> handleEditarUnidade(unidade)}><Edit className="w-4 h-4"/></Button>
+                            <Button variant="outline" size="sm" onClick={()=> handleExcluirUnidade(unidade.id)}><Trash2 className="w-4 h-4"/></Button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -1461,159 +840,105 @@ const Gestao = () => {
             </Card>
           </TabsContent>
 
-          {/* Tab Usuários */}
+          {/* Usuários */}
           <TabsContent value="usuarios">
             <Card>
               <CardHeader>
                 <div className="flex justify-between items-center">
                   <div>
                     <CardTitle>Gerenciar Usuários</CardTitle>
-                    <CardDescription>
-                      Gerencie os usuários do sistema
-                    </CardDescription>
+                    <CardDescription>Gerencie os usuários do sistema</CardDescription>
                   </div>
                   <Dialog open={usuarioModalOpen} onOpenChange={setUsuarioModalOpen}>
                     <DialogTrigger asChild>
-                      <Button onClick={resetUsuarioForm}>
-                        <Plus className="w-4 h-4 mr-2" />
-                        Novo Usuário
-                      </Button>
+                      <Button onClick={()=> { setEditingUsuario(null); setErrors({}); setUsuarioForm({ nomeUsuario: '', email: '', senha: '', categoria: CategoriaUsuario.USUARIO, unidadesIds: [] }); }}><Plus className="w-4 h-4 mr-2"/> Novo Usuário</Button>
                     </DialogTrigger>
                     <DialogContent className="sm:max-w-[500px]">
                       <DialogHeader>
-                        <DialogTitle>
-                          {editingUsuario ? 'Editar Usuário' : 'Novo Usuário'}
-                        </DialogTitle>
-                        <DialogDescription>
-                          {editingUsuario ? 'Edite os dados do usuário' : 'Preencha os dados do novo usuário'}
-                        </DialogDescription>
+                        <DialogTitle>{editingUsuario ? 'Editar Usuário' : 'Novo Usuário'}</DialogTitle>
+                        <DialogDescription>{editingUsuario ? 'Edite os dados do usuário' : 'Preencha os dados do novo usuário'}</DialogDescription>
                       </DialogHeader>
                       <div className="grid gap-4 py-4">
                         <div className="grid gap-2">
                           <Label htmlFor="usuario-nome">Nome de Usuário *</Label>
-                          <Input
-                            id="usuario-nome"
-                            value={usuarioForm.nomeUsuario}
-                            onChange={(e) => setUsuarioForm(prev => ({ ...prev, nomeUsuario: e.target.value }))}
-                            placeholder="Digite o nome de usuário"
-                            className={errors.nomeUsuario ? 'border-red-500' : ''}
-                          />
+                          <Input id="usuario-nome" value={usuarioForm.nomeUsuario} onChange={(e)=> setUsuarioForm(p=>({ ...p, nomeUsuario: e.target.value }))} placeholder="Digite o nome de usuário" className={errors.nomeUsuario ? 'border-red-500' : ''}/>
                           {errors.nomeUsuario && <p className="text-sm text-red-500">{errors.nomeUsuario}</p>}
                         </div>
-
                         <div className="grid gap-2">
                           <Label htmlFor="usuario-email">Email *</Label>
-                          <Input
-                            id="usuario-email"
-                            type="email"
-                            value={usuarioForm.email}
-                            onChange={(e) => setUsuarioForm(prev => ({ ...prev, email: e.target.value }))}
-                            placeholder="usuario@email.com"
-                            className={errors.email ? 'border-red-500' : ''}
-                          />
+                          <Input id="usuario-email" type="email" value={usuarioForm.email} onChange={(e)=> setUsuarioForm(p=>({ ...p, email: e.target.value }))} placeholder="usuario@email.com" className={errors.email ? 'border-red-500' : ''}/>
                           {errors.email && <p className="text-sm text-red-500">{errors.email}</p>}
                         </div>
-
                         {!editingUsuario && (
                           <div className="grid gap-2">
                             <Label htmlFor="usuario-senha">Senha *</Label>
-                            <Input
-                              id="usuario-senha"
-                              type="password"
-                              value={usuarioForm.senha}
-                              onChange={(e) => setUsuarioForm(prev => ({ ...prev, senha: e.target.value }))}
-                              placeholder="Digite a senha"
-                              className={errors.senha ? 'border-red-500' : ''}
-                            />
+                            <Input id="usuario-senha" type="password" value={usuarioForm.senha} onChange={(e)=> setUsuarioForm(p=>({ ...p, senha: e.target.value }))} placeholder="Digite a senha" className={errors.senha ? 'border-red-500' : ''}/>
                             {errors.senha && <p className="text-sm text-red-500">{errors.senha}</p>}
                           </div>
                         )}
-
                         <div className="grid gap-2">
                           <Label htmlFor="usuario-categoria">Categoria *</Label>
-                          <Select
-                            value={usuarioForm.categoria}
-                            onValueChange={(value) => setUsuarioForm(prev => ({ ...prev, categoria: value as CategoriaUsuario }))}
-                          >
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value={CategoriaUsuario.USUARIO}>Usuário</SelectItem>
-                              <SelectItem value={CategoriaUsuario.ADMINISTRADOR}>Administrador</SelectItem>
-                            </SelectContent>
+                          <Select value={usuarioForm.categoria} onValueChange={(v)=> setUsuarioForm(p=>({ ...p, categoria: v as CategoriaUsuario }))}>
+                            <SelectTrigger><SelectValue/></SelectTrigger>
+                            <SelectContent><SelectItem value={CategoriaUsuario.USUARIO}>Usuário</SelectItem><SelectItem value={CategoriaUsuario.ADMINISTRADOR}>Administrador</SelectItem></SelectContent>
                           </Select>
                         </div>
-
                         <div className="grid gap-2">
                           <Label>Unidades de Acesso</Label>
                           <div className="space-y-2">
-                            {unidades.map((unidade) => (
-                              <div key={unidade.id} className="flex items-center space-x-2">
-                                <input
-                                  type="checkbox"
-                                  id={`unidade-${unidade.id}`}
-                                  checked={usuarioForm.unidadesIds?.includes(unidade.id) || false}
-                                  onChange={(e) => {
-                                    if (e.target.checked) {
-                                      setUsuarioForm(prev => ({
-                                        ...prev,
-                                        unidadesIds: [...(prev.unidadesIds || []), unidade.id]
-                                      }));
-                                    } else {
-                                      setUsuarioForm(prev => ({
-                                        ...prev,
-                                        unidadesIds: prev.unidadesIds?.filter(id => id !== unidade.id) || []
-                                      }));
-                                    }
-                                  }}
-                                />
-                                <Label htmlFor={`unidade-${unidade.id}`}>{unidade.nome}</Label>
+                            {unidades.map(u => (
+                              <div key={u.id} className="flex items-center space-x-2">
+                                <input type="checkbox" id={`unidade-${u.id}`} checked={usuarioForm.unidadesIds?.includes(u.id) || false}
+                                  onChange={(e)=> setUsuarioForm(p=> e.target.checked ? ({ ...p, unidadesIds: [...(p.unidadesIds||[]), u.id] }) : ({ ...p, unidadesIds: (p.unidadesIds||[]).filter(id => id !== u.id) }))}/>
+                                <Label htmlFor={`unidade-${u.id}`}>{u.nome}</Label>
                               </div>
                             ))}
                           </div>
                         </div>
                       </div>
                       <DialogFooter>
-                        <Button variant="outline" onClick={() => setUsuarioModalOpen(false)}>
-                          Cancelar
-                        </Button>
-                        <Button onClick={handleSalvarUsuario}>
-                          {editingUsuario ? 'Atualizar' : 'Criar'}
-                        </Button>
+                        <Button variant="outline" onClick={()=> setUsuarioModalOpen(false)}>Cancelar</Button>
+                        <Button onClick={handleSalvarUsuario}>{editingUsuario ? 'Atualizar' : 'Criar'}</Button>
                       </DialogFooter>
                     </DialogContent>
                   </Dialog>
                 </div>
               </CardHeader>
               <CardContent>
-                {/* Controles de busca/paginação */}
-                <div className="flex items-center gap-2 mb-4">
-                  <Select value={usuariosSearchType} onValueChange={(v: any)=> setUsuariosSearchType(v)}>
-                    <SelectTrigger className="w-[150px]"><SelectValue/></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="todos">Todos</SelectItem>
-                      <SelectItem value="email">Email exato</SelectItem>
-                    </SelectContent>
-                  </Select>
+                <div className="flex flex-wrap items-end gap-3 mb-4">
+                  <div className="flex flex-col min-w-[150px]">
+                    <Label className="mb-1">Tipo de busca</Label>
+                    <Select value={usuariosSearchType} onValueChange={(v:any)=> setUsuariosSearchType(v)}>
+                      <SelectTrigger><SelectValue placeholder="Selecione"/></SelectTrigger>
+                      <SelectContent><SelectItem value="todos">Todos</SelectItem><SelectItem value="email">Email exato</SelectItem></SelectContent>
+                    </Select>
+                  </div>
                   {usuariosSearchType==='email' && (
-                    <Input className="w-[220px]" placeholder="usuario@email.com" value={usuariosSearchValue} onChange={(e)=> setUsuariosSearchValue(e.target.value)}/>
+                    <div className="flex flex-col min-w-[220px]">
+                      <Label className="mb-1">Email</Label>
+                      <Input placeholder="usuario@email.com" value={usuariosSearchValue} onChange={(e)=> setUsuariosSearchValue(e.target.value)}/>
+                    </div>
                   )}
-                  <Select value={String(usuariosSize)} onValueChange={(v)=> {const s=Number(v); setUsuariosSize(s); setUsuariosPage(0); loadUsuariosPage(0,s);}}>
-                    <SelectTrigger className="w-[110px]"><SelectValue/></SelectTrigger>
-                    <SelectContent><SelectItem value="10">10</SelectItem><SelectItem value="25">25</SelectItem><SelectItem value="50">50</SelectItem></SelectContent>
-                  </Select>
-                  <Button variant="outline" onClick={()=> loadUsuariosPage(0, usuariosSize)}>Buscar</Button>
+                  <div className="flex flex-col min-w-[130px]">
+                    <Label className="mb-1">Itens por página</Label>
+                    <Select value={String(usuariosSize)} onValueChange={(v)=> { const s=Number(v); setUsuariosSize(s); setUsuariosPage(0); loadUsuariosPage(0,s);}}>
+                      <SelectTrigger><SelectValue placeholder="Selecione"/></SelectTrigger>
+                      <SelectContent><SelectItem value="10">10</SelectItem><SelectItem value="25">25</SelectItem><SelectItem value="50">50</SelectItem></SelectContent>
+                    </Select>
+                  </div>
+                  <div className="pb-1"><Button variant="outline" onClick={()=> loadUsuariosPage(0, usuariosSize)}>Buscar</Button></div>
                 </div>
 
-                {/* Controles de paginação */}
-                <div className="flex items-center justify-between mb-3 text-sm text-muted-foreground">
-                  <div>Página { (usuariosMeta?.page ?? usuariosPage) + 1 } de { usuariosMeta?.totalPages ?? 1 }</div>
-                  <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={()=> {const p=Math.max(0,(usuariosMeta?.page ?? usuariosPage)-1); setUsuariosPage(p); loadUsuariosPage(p);}} disabled={(usuariosMeta?.page ?? usuariosPage) <= 0}>Anterior</Button>
-                    <Button variant="outline" size="sm" onClick={()=> {const p=(usuariosMeta?.page ?? usuariosPage)+1; if (usuariosMeta && p>=usuariosMeta.totalPages) return; setUsuariosPage(p); loadUsuariosPage(p);}} disabled={!!usuariosMeta && (usuariosMeta.page+1)>=usuariosMeta.totalPages}>Próxima</Button>
+                {(() => { const d = pageDisplay(usuariosMeta, usuariosPage); return (
+                  <div className="flex items-center justify-between mb-3 text-sm text-muted-foreground">
+                    <div>Página {d.current} de {d.total}</div>
+                    <div className="flex items-center gap-2">
+                      <Button variant="outline" size="sm" onClick={()=> { const p=Math.max(0,(usuariosMeta?.page ?? usuariosPage)-1); setUsuariosPage(p); loadUsuariosPage(p); }} disabled={(usuariosMeta?.page ?? usuariosPage)<=0}>Anterior</Button>
+                      <Button variant="outline" size="sm" onClick={()=> { const next=(usuariosMeta?.page ?? usuariosPage)+1; if (next+1>d.total) return; setUsuariosPage(next); loadUsuariosPage(next); }} disabled={((usuariosMeta?.page ?? usuariosPage)+1)>=d.total}>Próxima</Button>
+                    </div>
                   </div>
-                </div>
+                ); })()}
+
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -1625,47 +950,23 @@ const Gestao = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {usuarios.map((usuario) => (
+                    {usuarios.map(usuario => (
                       <TableRow key={usuario.id}>
                         <TableCell>{usuario.nomeUsuario}</TableCell>
                         <TableCell>{usuario.email}</TableCell>
                         <TableCell>
                           <Badge variant={usuario.categoria === CategoriaUsuario.ADMINISTRADOR ? 'default' : 'secondary'}>
-                            {usuario.categoria === CategoriaUsuario.ADMINISTRADOR ? (
-                              <><ShieldCheck className="w-3 h-3 mr-1" />Admin</>
-                            ) : (
-                              <><Shield className="w-3 h-3 mr-1" />Usuário</>
-                            )}
+                            {usuario.categoria === CategoriaUsuario.ADMINISTRADOR ? (<><ShieldCheck className="w-3 h-3 mr-1"/>Admin</>) : (<><Shield className="w-3 h-3 mr-1"/>Usuário</>)}
                           </Badge>
                         </TableCell>
-                        <TableCell>
-                          {usuario.unidadesIds?.length || 0} unidade(s)
-                        </TableCell>
+                        <TableCell>{usuario.unidadesIds?.length || 0} unidade(s)</TableCell>
                         <TableCell className="text-right">
                           <div className="flex gap-2 justify-end">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleEditarUsuario(usuario)}
-                            >
-                              <Edit className="w-4 h-4" />
-                            </Button>
+                            <Button variant="outline" size="sm" onClick={()=> handleEditarUsuario(usuario)}><Edit className="w-4 h-4"/></Button>
                             {usuario.categoria !== CategoriaUsuario.ADMINISTRADOR && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handlePromoverUsuario(usuario.id)}
-                              >
-                                <UserPlus className="w-4 h-4" />
-                              </Button>
+                              <Button variant="outline" size="sm" onClick={()=> handlePromoverUsuario(usuario.id)}><UserPlus className="w-4 h-4"/></Button>
                             )}
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleExcluirUsuario(usuario.id)}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
+                            <Button variant="outline" size="sm" onClick={()=> handleExcluirUsuario(usuario.id)}><Trash2 className="w-4 h-4"/></Button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -1676,7 +977,7 @@ const Gestao = () => {
             </Card>
           </TabsContent>
 
-          {/* Tab Clientes */}
+          {/* Clientes */}
           <TabsContent value="clientes">
             <Card>
               <CardHeader>
@@ -1687,126 +988,88 @@ const Gestao = () => {
                   </div>
                   <Dialog open={clienteModalOpen} onOpenChange={setClienteModalOpen}>
                     <DialogTrigger asChild>
-                      <Button onClick={resetClienteForm}>
-                        <Plus className="w-4 h-4 mr-2" />
-                        Novo Cliente
-                      </Button>
+                      <Button onClick={()=> { setEditingCliente(null); setErrors({}); setClienteForm({ cpf: '', nome: '', email: '', telefones: [], endereco: { logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', cep: '', uf: undefined } }); }}><Plus className="w-4 h-4 mr-2"/> Novo Cliente</Button>
                     </DialogTrigger>
                     <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
                       <DialogHeader>
                         <DialogTitle>{editingCliente ? 'Editar Cliente' : 'Novo Cliente'}</DialogTitle>
-                        <DialogDescription>
-                          {editingCliente ? 'Edite os dados do cliente' : 'Preencha os dados do novo cliente'}
-                        </DialogDescription>
+                        <DialogDescription>{editingCliente ? 'Edite os dados do cliente' : 'Preencha os dados do novo cliente'}</DialogDescription>
                       </DialogHeader>
                       <div className="grid gap-4 py-4">
                         <div className="grid gap-2">
                           <Label htmlFor="cliente-cpf">CPF *</Label>
-                          <Input id="cliente-cpf" value={clienteForm.cpf}
-                            onChange={(e)=> setClienteForm(prev=>({...prev, cpf: e.target.value}))}
-                            placeholder="000.000.000-00" className={errors.cpf ? 'border-red-500' : ''}/>
+                          <Input id="cliente-cpf" value={clienteForm.cpf} onChange={(e)=> setClienteForm(p=>({ ...p, cpf: e.target.value }))} placeholder="000.000.000-00" className={errors.cpf ? 'border-red-500' : ''}/>
                           {errors.cpf && <p className="text-sm text-red-500">{errors.cpf}</p>}
                         </div>
                         <div className="grid gap-2">
                           <Label htmlFor="cliente-nome">Nome *</Label>
-                          <Input id="cliente-nome" value={clienteForm.nome}
-                            onChange={(e)=> setClienteForm(prev=>({...prev, nome: e.target.value}))}
-                            placeholder="Nome completo" className={errors.nome ? 'border-red-500' : ''}/>
+                          <Input id="cliente-nome" value={clienteForm.nome} onChange={(e)=> setClienteForm(p=>({ ...p, nome: e.target.value }))} placeholder="Nome completo" className={errors.nome ? 'border-red-500' : ''}/>
                           {errors.nome && <p className="text-sm text-red-500">{errors.nome}</p>}
                         </div>
                         <div className="grid gap-2">
                           <Label htmlFor="cliente-email">Email</Label>
-                          <Input id="cliente-email" type="email" value={clienteForm.email || ''}
-                            onChange={(e)=> setClienteForm(prev=>({...prev, email: e.target.value}))}
-                            placeholder="cliente@email.com" className={errors.email ? 'border-red-500' : ''}/>
+                          <Input id="cliente-email" type="email" value={clienteForm.email || ''} onChange={(e)=> setClienteForm(p=>({ ...p, email: e.target.value }))} placeholder="cliente@email.com" className={errors.email ? 'border-red-500' : ''}/>
                           {errors.email && <p className="text-sm text-red-500">{errors.email}</p>}
                         </div>
-
-                        {/* Endereço do Cliente */}
+                        {/* Endereço */}
                         <div className="space-y-4">
-                          <h4 className="font-medium flex items-center gap-2"><MapPin className="w-4 h-4" />Endereço</h4>
+                          <h4 className="font-medium flex items-center gap-2"><MapPin className="w-4 h-4"/> Endereço</h4>
                           <div className="grid gap-2">
                             <Label htmlFor="cliente-cep">CEP</Label>
-                            <Input id="cliente-cep" value={clienteForm.endereco?.cep || ''}
-                              onChange={(e)=> setClienteForm(prev=>({...prev, endereco:{...prev.endereco!, cep: e.target.value}}))}
-                              placeholder="00000-000"/>
+                            <Input id="cliente-cep" value={clienteForm.endereco?.cep || ''} onChange={(e)=> setClienteForm(p=>({ ...p, endereco: { ...p.endereco!, cep: e.target.value } }))} placeholder="00000-000"/>
                           </div>
                           <div className="grid grid-cols-2 gap-2">
                             <div className="grid gap-2">
                               <Label htmlFor="cliente-logradouro">Logradouro</Label>
-                              <Input id="cliente-logradouro" value={clienteForm.endereco?.logradouro || ''}
-                                onChange={(e)=> setClienteForm(prev=>({...prev, endereco:{...prev.endereco!, logradouro: e.target.value}}))}
-                                placeholder="Rua, Avenida, etc." className={errors.logradouro ? 'border-red-500' : ''}/>
+                              <Input id="cliente-logradouro" value={clienteForm.endereco?.logradouro || ''} onChange={(e)=> setClienteForm(p=>({ ...p, endereco: { ...p.endereco!, logradouro: e.target.value } }))} placeholder="Rua, Avenida, etc." className={errors.logradouro ? 'border-red-500' : ''}/>
                               {errors.logradouro && <p className="text-sm text-red-500">{errors.logradouro}</p>}
                             </div>
                             <div className="grid gap-2">
                               <Label htmlFor="cliente-numero">Número</Label>
-                              <Input id="cliente-numero" value={clienteForm.endereco?.numero || ''}
-                                onChange={(e)=> setClienteForm(prev=>({...prev, endereco:{...prev.endereco!, numero: e.target.value}}))}
-                                placeholder="123" className={errors.numero ? 'border-red-500' : ''}/>
+                              <Input id="cliente-numero" value={clienteForm.endereco?.numero || ''} onChange={(e)=> setClienteForm(p=>({ ...p, endereco: { ...p.endereco!, numero: e.target.value } }))} placeholder="123" className={errors.numero ? 'border-red-500' : ''}/>
                               {errors.numero && <p className="text-sm text-red-500">{errors.numero}</p>}
                             </div>
                           </div>
                           <div className="grid gap-2">
                             <Label htmlFor="cliente-complemento">Complemento</Label>
-                            <Input id="cliente-complemento" value={clienteForm.endereco?.complemento || ''}
-                              onChange={(e)=> setClienteForm(prev=>({...prev, endereco:{...prev.endereco!, complemento: e.target.value}}))}
-                              placeholder="Apartamento, sala, etc."/>
+                            <Input id="cliente-complemento" value={clienteForm.endereco?.complemento || ''} onChange={(e)=> setClienteForm(p=>({ ...p, endereco: { ...p.endereco!, complemento: e.target.value } }))} placeholder="Apartamento, sala, etc."/>
                           </div>
                           <div className="grid grid-cols-2 gap-2">
                             <div className="grid gap-2">
                               <Label htmlFor="cliente-bairro">Bairro</Label>
-                              <Input id="cliente-bairro" value={clienteForm.endereco?.bairro || ''}
-                                onChange={(e)=> setClienteForm(prev=>({...prev, endereco:{...prev.endereco!, bairro: e.target.value}}))}
-                                placeholder="Bairro"/>
+                              <Input id="cliente-bairro" value={clienteForm.endereco?.bairro || ''} onChange={(e)=> setClienteForm(p=>({ ...p, endereco: { ...p.endereco!, bairro: e.target.value } }))} placeholder="Bairro"/>
                             </div>
                             <div className="grid gap-2">
                               <Label htmlFor="cliente-cidade">Cidade</Label>
-                              <Input id="cliente-cidade" value={clienteForm.endereco?.cidade || ''}
-                                onChange={(e)=> setClienteForm(prev=>({...prev, endereco:{...prev.endereco!, cidade: e.target.value}}))}
-                                placeholder="Cidade"/>
+                              <Input id="cliente-cidade" value={clienteForm.endereco?.cidade || ''} onChange={(e)=> setClienteForm(p=>({ ...p, endereco: { ...p.endereco!, cidade: e.target.value } }))} placeholder="Cidade"/>
                             </div>
                           </div>
                           <div className="grid gap-2">
                             <Label htmlFor="cliente-uf">UF</Label>
-                            <Select value={clienteForm.endereco?.uf || ''}
-                              onValueChange={(value)=> setClienteForm(prev=>({...prev, endereco:{...prev.endereco!, uf: value as UF}}))}>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Selecione o estado" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {Object.values(UF).map(uf=> (<SelectItem key={uf} value={uf}>{uf}</SelectItem>))}
-                              </SelectContent>
+                            <Select value={clienteForm.endereco?.uf || ''} onValueChange={(v)=> setClienteForm(p=>({ ...p, endereco: { ...p.endereco!, uf: v as UF } }))}>
+                              <SelectTrigger><SelectValue placeholder="Selecione o estado"/></SelectTrigger>
+                              <SelectContent>{Object.values(UF).map(uf=> <SelectItem key={uf} value={uf}>{uf}</SelectItem>)}</SelectContent>
                             </Select>
                           </div>
                         </div>
-
-                        {/* Telefones do Cliente */}
+                        {/* Telefones */}
                         <div className="space-y-4">
-                          <h4 className="font-medium flex items-center gap-2"><Phone className="w-4 h-4" />Telefones</h4>
+                          <h4 className="font-medium flex items-center gap-2"><Phone className="w-4 h-4"/> Telefones</h4>
                           <div className="grid grid-cols-4 gap-2">
-                            <Select value={telefoneClienteTemp.tipo}
-                              onValueChange={(value)=> setTelefoneClienteTemp(prev=>({...prev, tipo: value as TipoTelefone}))}>
+                            <Select value={telefoneClienteTemp.tipo} onValueChange={(v)=> setTelefoneClienteTemp(p=>({ ...p, tipo: v as TipoTelefone }))}>
                               <SelectTrigger><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value={TipoTelefone.FIXO}>Fixo</SelectItem>
-                                <SelectItem value={TipoTelefone.CELULAR}>Celular</SelectItem>
-                              </SelectContent>
+                              <SelectContent><SelectItem value={TipoTelefone.FIXO}>Fixo</SelectItem><SelectItem value={TipoTelefone.CELULAR}>Celular</SelectItem></SelectContent>
                             </Select>
-                            <Input type="number" value={telefoneClienteTemp.ddd || ''} placeholder="DDD"
-                              onChange={(e)=> setTelefoneClienteTemp(prev=>({...prev, ddd: parseInt(e.target.value)||0}))}/>
-                            <Input type="number" value={telefoneClienteTemp.numero || ''} placeholder="Número"
-                              onChange={(e)=> setTelefoneClienteTemp(prev=>({...prev, numero: parseInt(e.target.value)||0}))}/>
-                            <Button type="button" onClick={adicionarTelefoneCliente}><Plus className="w-4 h-4" /></Button>
+                            <Input type="number" value={telefoneClienteTemp.ddd || ''} placeholder="DDD" onChange={(e)=> setTelefoneClienteTemp(p=>({ ...p, ddd: parseInt(e.target.value)||0 }))}/>
+                            <Input type="number" value={telefoneClienteTemp.numero || ''} placeholder="Número" onChange={(e)=> setTelefoneClienteTemp(p=>({ ...p, numero: parseInt(e.target.value)||0 }))}/>
+                            <Button type="button" onClick={adicionarTelefoneCliente}><Plus className="w-4 h-4"/></Button>
                           </div>
-                          {clienteForm.telefones && clienteForm.telefones.length > 0 && (
+                          {clienteForm.telefones && clienteForm.telefones.length>0 && (
                             <div className="space-y-2">
-                              {clienteForm.telefones.map((tel, idx)=> (
-                                <div key={idx} className="flex items-center justify-between p-2 border rounded">
-                                  <span>{tel.tipo} - ({tel.ddd}) {tel.numero}</span>
-                                  <Button type="button" variant="outline" size="sm" onClick={()=> removerTelefoneCliente(idx)}>
-                                    <Trash2 className="w-4 h-4" />
-                                  </Button>
+                              {clienteForm.telefones.map((t,i)=> (
+                                <div key={i} className="flex items-center justify-between p-2 border rounded">
+                                  <span>{t.tipo} - ({t.ddd}) {t.numero}</span>
+                                  <Button type="button" variant="outline" size="sm" onClick={()=> removerTelefoneCliente(i)}><Trash2 className="w-4 h-4"/></Button>
                                 </div>
                               ))}
                             </div>
@@ -1822,34 +1085,40 @@ const Gestao = () => {
                 </div>
               </CardHeader>
               <CardContent>
-                {/* Controles de busca/paginação */}
-                <div className="flex items-center gap-2 mb-4">
-                  <Select value={clientesSearchType} onValueChange={(v: any)=> setClientesSearchType(v)}>
-                    <SelectTrigger className="w-[150px]"><SelectValue/></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="todos">Todos</SelectItem>
-                      <SelectItem value="nome">Nome contém</SelectItem>
-                      <SelectItem value="cpf">CPF exato</SelectItem>
-                    </SelectContent>
-                  </Select>
+                <div className="flex flex-wrap items-end gap-3 mb-4">
+                  <div className="flex flex-col min-w-[150px]">
+                    <Label className="mb-1">Tipo de busca</Label>
+                    <Select value={clientesSearchType} onValueChange={(v:any)=> setClientesSearchType(v)}>
+                      <SelectTrigger><SelectValue placeholder="Selecione"/></SelectTrigger>
+                      <SelectContent><SelectItem value="todos">Todos</SelectItem><SelectItem value="nome">Nome contém</SelectItem><SelectItem value="cpf">CPF exato</SelectItem></SelectContent>
+                    </Select>
+                  </div>
                   {clientesSearchType!=='todos' && (
-                    <Input className="w-[220px]" placeholder={clientesSearchType==='nome' ? 'Nome' : 'CPF'} value={clientesSearchValue} onChange={(e)=> setClientesSearchValue(e.target.value)}/>
+                    <div className="flex flex-col min-w-[220px]">
+                      <Label className="mb-1">{clientesSearchType==='nome' ? 'Nome' : 'CPF'}</Label>
+                      <Input placeholder={clientesSearchType==='nome' ? 'Digite parte do nome' : '000.000.000-00'} value={clientesSearchValue} onChange={(e)=> setClientesSearchValue(e.target.value)}/>
+                    </div>
                   )}
-                  <Select value={String(clientesSize)} onValueChange={(v)=> {const s=Number(v); setClientesSize(s); setClientesPage(0); loadClientesPage(0,s);}}>
-                    <SelectTrigger className="w-[110px]"><SelectValue/></SelectTrigger>
-                    <SelectContent><SelectItem value="10">10</SelectItem><SelectItem value="25">25</SelectItem><SelectItem value="50">50</SelectItem></SelectContent>
-                  </Select>
-                  <Button variant="outline" onClick={()=> loadClientesPage(0, clientesSize)}>Buscar</Button>
+                  <div className="flex flex-col min-w-[130px]">
+                    <Label className="mb-1">Itens por página</Label>
+                    <Select value={String(clientesSize)} onValueChange={(v)=> { const s=Number(v); setClientesSize(s); setClientesPage(0); loadClientesPage(0,s);}}>
+                      <SelectTrigger><SelectValue placeholder="Selecione"/></SelectTrigger>
+                      <SelectContent><SelectItem value="10">10</SelectItem><SelectItem value="25">25</SelectItem><SelectItem value="50">50</SelectItem></SelectContent>
+                    </Select>
+                  </div>
+                  <div className="pb-1"><Button variant="outline" onClick={()=> loadClientesPage(0, clientesSize)}>Buscar</Button></div>
                 </div>
 
-                {/* Controles de paginação */}
-                <div className="flex items-center justify-between mb-3 text-sm text-muted-foreground">
-                  <div>Página { (clientesMeta?.page ?? clientesPage) + 1 } de { clientesMeta?.totalPages ?? 1 }</div>
-                  <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={()=> {const p=Math.max(0,(clientesMeta?.page ?? clientesPage)-1); setClientesPage(p); loadClientesPage(p);}} disabled={(clientesMeta?.page ?? clientesPage) <= 0}>Anterior</Button>
-                    <Button variant="outline" size="sm" onClick={()=> {const p=(clientesMeta?.page ?? clientesPage)+1; if (clientesMeta && p>=clientesMeta.totalPages) return; setClientesPage(p); loadClientesPage(p);}} disabled={!!clientesMeta && (clientesMeta.page+1)>=clientesMeta.totalPages}>Próxima</Button>
+                {(() => { const d = pageDisplay(clientesMeta, clientesPage); return (
+                  <div className="flex items-center justify-between mb-3 text-sm text-muted-foreground">
+                    <div>Página {d.current} de {d.total}</div>
+                    <div className="flex items-center gap-2">
+                      <Button variant="outline" size="sm" onClick={()=> { const p=Math.max(0,(clientesMeta?.page ?? clientesPage)-1); setClientesPage(p); loadClientesPage(p); }} disabled={(clientesMeta?.page ?? clientesPage)<=0}>Anterior</Button>
+                      <Button variant="outline" size="sm" onClick={()=> { const next=(clientesMeta?.page ?? clientesPage)+1; if (next+1>d.total) return; setClientesPage(next); loadClientesPage(next); }} disabled={((clientesMeta?.page ?? clientesPage)+1)>=d.total}>Próxima</Button>
+                    </div>
                   </div>
-                </div>
+                ); })()}
+
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -1861,28 +1130,20 @@ const Gestao = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {clientes.map((cliente)=> (
+                    {clientes.map(cliente => (
                       <TableRow key={cliente.id}>
                         <TableCell>{cliente.nome}</TableCell>
                         <TableCell>{cliente.cpf}</TableCell>
                         <TableCell>{cliente.email || '-'}</TableCell>
                         <TableCell>
                           {cliente.telefones && cliente.telefones.length>0 ? (
-                            <div className="space-y-1">
-                              {cliente.telefones.map((t, i)=> (
-                                <div key={i} className="text-sm">{t.tipo}: ({t.ddd}) {t.numero}</div>
-                              ))}
-                            </div>
+                            <div className="space-y-1">{cliente.telefones.map((t,i)=> <div key={i} className="text-sm">{t.tipo}: ({t.ddd}) {t.numero}</div>)}</div>
                           ) : 'Nenhum'}
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex gap-2 justify-end">
-                            <Button variant="outline" size="sm" onClick={()=> handleEditarCliente(cliente)}>
-                              <Edit className="w-4 h-4" />
-                            </Button>
-                            <Button variant="outline" size="sm" onClick={()=> handleExcluirCliente(cliente.id)}>
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
+                            <Button variant="outline" size="sm" onClick={()=> handleEditarCliente(cliente)}><Edit className="w-4 h-4"/></Button>
+                            <Button variant="outline" size="sm" onClick={()=> handleExcluirCliente(cliente.id)}><Trash2 className="w-4 h-4"/></Button>
                           </div>
                         </TableCell>
                       </TableRow>
