@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,14 +7,12 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Separator } from "@/components/ui/separator";
 import {
     Phone,
     UserCheck,
     Users,
     Clock,
     AlertCircle,
-    CheckCircle,
     XCircle,
     ArrowRight,
     Loader2,
@@ -22,31 +20,84 @@ import {
     User,
     Activity,
     Stethoscope,
-    RefreshCw
+    RefreshCw,
+    FileCheck
 } from "lucide-react";
 
 // Importar serviços
 import { entradaFilaService } from "@/services/entradaFilaService";
 import { filaService } from "@/services/filaService";
+import { clienteService } from "@/services/clienteService";
 import { useAuth } from "@/contexts/AuthContext";
 
 // Importar tipos
 import {
     EntradaFilaResponseDTO,
     FilaResponseDTO,
-    EntradaFilaCreateDTO
+    EntradaFilaCreateDTO,
+    ClienteResponseDTO
 } from "@/types";
+
+// Interface atualizada para corresponder à resposta real da API
+interface EntradaFilaComClienteDTO {
+    id: string;
+    status: string;
+    prioridade: boolean;
+    isRetorno: boolean;
+    dataHoraEntrada: string;
+    dataHoraChamada?: string;
+    dataHoraSaida?: string;
+    guicheOuSalaAtendimento?: string;
+    cliente: {
+        id: string;
+        cpf: string;
+        nome: string;
+        email: string;
+        telefones: Array<{
+            tipo: string;
+            ddd: number;
+            numero: number;
+        }>;
+        endereco: {
+            cep: string;
+            logradouro: string;
+            numero: string;
+            complemento: string;
+            bairro: string;
+            cidade: string;
+            uf: string;
+            enderecoFormatado: string;
+        };
+    };
+    fila: {
+        id: string;
+        nome: string;
+        setor: {
+            id: string;
+            nome: string;
+        };
+        unidade: {
+            id: string;
+            nome: string;
+        };
+    };
+    usuarioResponsavelId?: string;
+}
 
 const PainelProfissional = () => {
     const [filasDisponiveis, setFilasDisponiveis] = useState<FilaResponseDTO[]>([]);
     const [filaSelecionada, setFilaSelecionada] = useState<string>('');
-    const [clientesAguardando, setClientesAguardando] = useState<EntradaFilaResponseDTO[]>([]);
-    const [clienteAtual, setClienteAtual] = useState<EntradaFilaResponseDTO | null>(null);
+    const [clientesAguardando, setClientesAguardando] = useState<EntradaFilaComClienteDTO[]>([]);
+    const [clienteAtual, setClienteAtual] = useState<EntradaFilaComClienteDTO | null>(null);
     const [guiche, setGuiche] = useState('');
     const [loading, setLoading] = useState(true);
     const [loadingAction, setLoadingAction] = useState(false);
     const [showEncaminharModal, setShowEncaminharModal] = useState(false);
     const [filaEncaminhamento, setFilaEncaminhamento] = useState('');
+    const [isPrioridade, setIsPrioridade] = useState(false);
+    const [isRetorno, setIsRetorno] = useState(false);
+    const [observacoes, setObservacoes] = useState('');
+    const [tipoFinalizacao, setTipoFinalizacao] = useState<'encaminhar' | 'alta' | ''>('');
     const [tempoAtendimento, setTempoAtendimento] = useState(0);
     const [intervalId, setIntervalId] = useState<NodeJS.Timeout | null>(null);
 
@@ -68,8 +119,8 @@ const PainelProfissional = () => {
 
     // Timer para tempo de atendimento
     useEffect(() => {
-        if (clienteAtual && clienteAtual.status === 'CHAMADO') {
-            const inicioAtendimento = new Date(clienteAtual.dataHoraChamada!).getTime();
+        if (clienteAtual && clienteAtual.status === 'CHAMADO' && clienteAtual.dataHoraChamada) {
+            const inicioAtendimento = new Date(clienteAtual.dataHoraChamada).getTime();
             const interval = setInterval(() => {
                 const agora = Date.now();
                 const tempoDecorrido = Math.floor((agora - inicioAtendimento) / 1000);
@@ -87,6 +138,35 @@ const PainelProfissional = () => {
             setTempoAtendimento(0);
         }
     }, [clienteAtual]);
+
+    // Função para buscar dados completos do cliente por ID
+    const buscarDadosCliente = async (clienteId: string): Promise<ClienteResponseDTO | null> => {
+        try {
+            console.log('🔍 Buscando dados do cliente:', clienteId);
+            const cliente = await clienteService.buscarPorId(clienteId);
+            console.log('✅ Cliente encontrado:', cliente);
+            return cliente;
+        } catch (error: any) {
+            console.error('❌ Erro ao buscar cliente:', error);
+            return null;
+        }
+    };
+
+    // Função para enriquecer entrada na fila com dados do cliente
+    const enriquecerEntradaComCliente = async (entrada: EntradaFilaResponseDTO): Promise<EntradaFilaComClienteDTO | null> => {
+        const cliente = await buscarDadosCliente(entrada.clienteId);
+        if (!cliente) return null;
+
+        return {
+            ...entrada,
+            cliente,
+            prioridade: false, // TODO: Buscar da API se disponível
+            isRetorno: false,  // TODO: Buscar da API se disponível
+            dataHoraEntrada: entrada.horaEntrada,
+            dataHoraChamada: entrada.horaChamada,
+            guicheOuSalaAtendimento: ''
+        };
+    };
 
     const loadData = async () => {
         try {
@@ -122,12 +202,29 @@ const PainelProfissional = () => {
         if (!filaSelecionada) return;
 
         try {
+            console.log('🔍 Debug - Carregando clientes da fila:', filaSelecionada);
             const clientes = await entradaFilaService.listarAguardandoPorFila(filaSelecionada);
-            setClientesAguardando(clientes);
-            
-            // Verificar se há cliente em atendimento
-            const clienteEmAtendimento = clientes.find(c => c.status === 'CHAMADO');
-            setClienteAtual(clienteEmAtendimento || null);
+            console.log('🔍 Debug - Clientes retornados completos:', clientes);
+            console.log('🔍 Debug - Status de cada cliente:', clientes.map(c => ({ id: c.id.substring(0,8), status: c.status, nome: c.cliente?.nome })));
+
+            // A API já retorna os dados completos! Não preciso buscar individualmente
+            setClientesAguardando(clientes as EntradaFilaComClienteDTO[]);
+
+            // Verificar cliente em atendimento - expandir critérios de busca
+            const clienteEmAtendimento = clientes.find((c: any) => {
+                const isEmAtendimento = c.status === 'CHAMADO' ||
+                                       c.status === 'EM_ATENDIMENTO' ||
+                                       c.dataHoraChamada !== null ||
+                                       c.usuarioResponsavelId !== null;
+
+                console.log(`🔍 Cliente ${c.cliente?.nome}: status=${c.status}, chamada=${c.dataHoraChamada}, responsavel=${c.usuarioResponsavelId}, isEmAtendimento=${isEmAtendimento}`);
+
+                return isEmAtendimento;
+            });
+
+            console.log('🔍 Debug - Cliente em atendimento encontrado:', clienteEmAtendimento);
+            setClienteAtual(clienteEmAtendimento as EntradaFilaComClienteDTO || null);
+
         } catch (error: any) {
             console.error('❌ Erro ao carregar clientes aguardando:', error);
             toast({
@@ -151,19 +248,31 @@ const PainelProfissional = () => {
         try {
             setLoadingAction(true);
             
-            const clienteChamado = await entradaFilaService.chamarProximo(
+            console.log('🔍 Debug - Chamando próximo cliente...', { filaSelecionada, userId: user.id, guiche });
+            const entradaChamada = await entradaFilaService.chamarProximo(
                 filaSelecionada,
                 user.id,
                 guiche.trim()
             );
 
-            setClienteAtual(clienteChamado);
+            console.log('🔍 Debug - Entrada chamada retornada:', entradaChamada);
+
+            // Aguardar um momento para o backend processar
+            await new Promise(resolve => setTimeout(resolve, 1000));
+
+            // Forçar múltiplas atualizações para garantir que a mudança seja capturada
             await loadClientesAguardando();
+
+            // Segunda tentativa após mais um momento
+            setTimeout(async () => {
+                await loadClientesAguardando();
+            }, 2000);
 
             toast({
                 title: 'Cliente chamado!',
-                description: `${clienteChamado.cliente.nome} foi chamado para atendimento.`,
+                description: 'Próximo cliente foi chamado para atendimento.',
             });
+
         } catch (error: any) {
             console.error('❌ Erro ao chamar próximo cliente:', error);
             toast({
@@ -247,8 +356,8 @@ const PainelProfissional = () => {
             const novaEntrada: EntradaFilaCreateDTO = {
                 clienteId: clienteAtual.cliente.id,
                 filaId: filaEncaminhamento,
-                prioridade: false,
-                isRetorno: false
+                prioridade: isPrioridade,
+                isRetorno: isRetorno
             };
 
             await entradaFilaService.encaminharParaFila(clienteAtual.id, novaEntrada);
@@ -256,6 +365,9 @@ const PainelProfissional = () => {
             setClienteAtual(null);
             setShowEncaminharModal(false);
             setFilaEncaminhamento('');
+            setIsPrioridade(false);
+            setIsRetorno(false);
+            setObservacoes('');
             await loadClientesAguardando();
 
             toast({
@@ -272,6 +384,47 @@ const PainelProfissional = () => {
         } finally {
             setLoadingAction(false);
         }
+    };
+
+    const handleDarAlta = async () => {
+        if (!clienteAtual) return;
+
+        try {
+            setLoadingAction(true);
+
+            await entradaFilaService.finalizarAtendimento(clienteAtual.id);
+
+            setClienteAtual(null);
+            setShowEncaminharModal(false);
+            await loadClientesAguardando();
+
+            toast({
+                title: 'Alta médica concedida!',
+                description: `${clienteAtual.cliente.nome} recebeu alta e saiu do sistema.`,
+            });
+        } catch (error: any) {
+            console.error('❌ Erro ao dar alta:', error);
+            toast({
+                title: 'Erro ao dar alta',
+                description: error.message,
+                variant: 'destructive',
+            });
+        } finally {
+            setLoadingAction(false);
+        }
+    };
+
+    const resetModalEncaminhamento = () => {
+        setTipoFinalizacao('');
+        setFilaEncaminhamento('');
+        setIsPrioridade(false);
+        setIsRetorno(false);
+        setObservacoes('');
+    };
+
+    const handleAbrirModalEncaminhamento = () => {
+        resetModalEncaminhamento();
+        setShowEncaminharModal(true);
     };
 
     const formatarTempo = (segundos: number): string => {
@@ -408,15 +561,26 @@ const PainelProfissional = () => {
                                 <div className="space-y-4">
                                     <div className="p-4 bg-primary/5 border border-primary/20 rounded-lg">
                                         <div className="flex items-center justify-between mb-2">
-                                            <h3 className="font-semibold">{clienteAtual.cliente.nome}</h3>
+                                            <h3 className="font-semibold">{clienteAtual.cliente?.nome || 'Cliente'}</h3>
                                             {getStatusBadge(clienteAtual.status)}
                                         </div>
                                         <p className="text-sm text-muted-foreground">
-                                            CPF: {clienteAtual.cliente.cpf}
+                                            CPF: {clienteAtual.cliente?.cpf || 'Não informado'}
                                         </p>
                                         <p className="text-sm text-muted-foreground">
-                                            Guichê: {clienteAtual.guicheOuSalaAtendimento}
+                                            Entrada: {new Date(clienteAtual.dataHoraEntrada).toLocaleTimeString('pt-BR', {
+                                                hour: '2-digit',
+                                                minute: '2-digit'
+                                            })}
                                         </p>
+                                        {clienteAtual.dataHoraChamada && (
+                                            <p className="text-sm text-muted-foreground">
+                                                Chamado: {new Date(clienteAtual.dataHoraChamada).toLocaleTimeString('pt-BR', {
+                                                    hour: '2-digit',
+                                                    minute: '2-digit'
+                                                })}
+                                            </p>
+                                        )}
                                         {clienteAtual.prioridade && (
                                             <Badge variant="secondary" className="mt-2">
                                                 Prioritário
@@ -430,71 +594,139 @@ const PainelProfissional = () => {
                                         <span className="text-lg font-mono">{formatarTempo(tempoAtendimento)}</span>
                                     </div>
 
-                                    {/* Ações do Atendimento */}
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <Button 
-                                            onClick={handleFinalizarAtendimento}
-                                            disabled={loadingAction}
-                                            size="sm"
-                                            className="bg-green-600 hover:bg-green-700"
-                                        >
-                                            <CheckCircle className="mr-1 h-4 w-4" />
-                                            Finalizar
-                                        </Button>
-                                        <Button 
+                                    {/* Ações do Atendimento Refatoradas */}
+                                    <div className="space-y-3">
+                                        <Button
                                             onClick={handleCancelarAtendimento}
                                             disabled={loadingAction}
                                             variant="destructive"
                                             size="sm"
+                                            className="w-full"
                                         >
                                             <XCircle className="mr-1 h-4 w-4" />
-                                            Cancelar
+                                            Cancelar Atendimento
+                                        </Button>
+
+                                        {/* Botão direto para encaminhar cliente */}
+                                        <Dialog open={showEncaminharModal} onOpenChange={setShowEncaminharModal}>
+                                            <DialogTrigger asChild>
+                                                <Button
+                                                    onClick={() => {
+                                                        resetModalEncaminhamento();
+                                                        setTipoFinalizacao('encaminhar');
+                                                        setShowEncaminharModal(true);
+                                                    }}
+                                                    variant="default"
+                                                    className="w-full"
+                                                    size="sm"
+                                                >
+                                                    <ArrowRight className="mr-1 h-4 w-4" />
+                                                    Encaminhar Cliente
+                                                </Button>
+                                            </DialogTrigger>
+                                            <DialogContent className="max-w-md">
+                                                <DialogHeader>
+                                                    <DialogTitle>Encaminhar Cliente</DialogTitle>
+                                                    <DialogDescription>
+                                                        Selecione a fila de destino para {clienteAtual.cliente.nome}.
+                                                        O cliente será automaticamente removido da fila atual.
+                                                    </DialogDescription>
+                                                </DialogHeader>
+
+                                                {/* Opções de encaminhamento direto */}
+                                                <div className="space-y-4 py-4">
+                                                    <div className="space-y-2">
+                                                        <Label>Fila de Destino *</Label>
+                                                        <Select value={filaEncaminhamento} onValueChange={setFilaEncaminhamento}>
+                                                            <SelectTrigger>
+                                                                <SelectValue placeholder="Selecione a fila de destino" />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                {filasDisponiveis
+                                                                    .filter(f => f.id !== filaSelecionada)
+                                                                    .map((fila) => (
+                                                                    <SelectItem key={fila.id} value={fila.id}>
+                                                                        <div className="flex flex-col">
+                                                                            <span className="font-medium">{fila.nome}</span>
+                                                                            <span className="text-xs text-muted-foreground">{fila.setor.nome}</span>
+                                                                        </div>
+                                                                    </SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-2 gap-4">
+                                                        <div className="flex items-center space-x-2">
+                                                            <input
+                                                                type="checkbox"
+                                                                id="prioridade"
+                                                                checked={isPrioridade}
+                                                                onChange={(e) => setIsPrioridade(e.target.checked)}
+                                                                className="rounded border-gray-300"
+                                                            />
+                                                            <Label htmlFor="prioridade" className="text-sm">Atendimento prioritário</Label>
+                                                        </div>
+                                                        <div className="flex items-center space-x-2">
+                                                            <input
+                                                                type="checkbox"
+                                                                id="retorno"
+                                                                checked={isRetorno}
+                                                                onChange={(e) => setIsRetorno(e.target.checked)}
+                                                                className="rounded border-gray-300"
+                                                            />
+                                                            <Label htmlFor="retorno" className="text-sm">Retorno</Label>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="space-y-2">
+                                                        <Label htmlFor="observacoes">Observações</Label>
+                                                        <textarea
+                                                            id="observacoes"
+                                                            placeholder="Observações sobre o encaminhamento (opcional)"
+                                                            value={observacoes}
+                                                            onChange={(e) => setObservacoes(e.target.value)}
+                                                            className="w-full px-3 py-2 border border-gray-300 rounded-md resize-none h-20 text-sm"
+                                                        />
+                                                    </div>
+
+                                                    <div className="flex justify-between gap-2 pt-4">
+                                                        <Button
+                                                            variant="outline"
+                                                            onClick={() => setShowEncaminharModal(false)}
+                                                            size="sm"
+                                                        >
+                                                            Cancelar
+                                                        </Button>
+                                                        <Button
+                                                            onClick={handleEncaminhar}
+                                                            disabled={loadingAction || !filaEncaminhamento}
+                                                            size="sm"
+                                                        >
+                                                            {loadingAction ? (
+                                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                            ) : (
+                                                                <ArrowRight className="mr-2 h-4 w-4" />
+                                                            )}
+                                                            Encaminhar
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            </DialogContent>
+                                        </Dialog>
+
+                                        {/* Botão para dar alta médica */}
+                                        <Button
+                                            onClick={handleDarAlta}
+                                            disabled={loadingAction}
+                                            variant="outline"
+                                            size="sm"
+                                            className="w-full"
+                                        >
+                                            <FileCheck className="mr-1 h-4 w-4" />
+                                            Dar Alta Médica
                                         </Button>
                                     </div>
-
-                                    <Dialog open={showEncaminharModal} onOpenChange={setShowEncaminharModal}>
-                                        <DialogTrigger asChild>
-                                            <Button variant="outline" className="w-full" size="sm">
-                                                <ArrowRight className="mr-1 h-4 w-4" />
-                                                Encaminhar
-                                            </Button>
-                                        </DialogTrigger>
-                                        <DialogContent>
-                                            <DialogHeader>
-                                                <DialogTitle>Encaminhar Cliente</DialogTitle>
-                                                <DialogDescription>
-                                                    Selecione a fila de destino para {clienteAtual.cliente.nome}
-                                                </DialogDescription>
-                                            </DialogHeader>
-                                            <div className="space-y-4">
-                                                <div className="space-y-2">
-                                                    <Label>Fila de Destino</Label>
-                                                    <Select value={filaEncaminhamento} onValueChange={setFilaEncaminhamento}>
-                                                        <SelectTrigger>
-                                                            <SelectValue placeholder="Selecione a fila" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            {filasDisponiveis
-                                                                .filter(f => f.id !== filaSelecionada)
-                                                                .map((fila) => (
-                                                                <SelectItem key={fila.id} value={fila.id}>
-                                                                    {fila.nome} - {fila.setor.nome}
-                                                                </SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                </div>
-                                                <div className="flex justify-end gap-2">
-                                                    <Button variant="outline" onClick={() => setShowEncaminharModal(false)}>
-                                                        Cancelar
-                                                    </Button>
-                                                    <Button onClick={handleEncaminhar} disabled={loadingAction}>
-                                                        Encaminhar
-                                                    </Button>
-                                                </div>
-                                            </div>
-                                        </DialogContent>
-                                    </Dialog>
                                 </div>
                             ) : (
                                 <div className="text-center py-8 text-muted-foreground">
@@ -535,8 +767,11 @@ const PainelProfissional = () => {
                                                 {index + 1}
                                             </div>
                                             <div>
-                                                <p className="font-medium">{cliente.cliente.nome}</p>
-                                                <p className="text-sm text-muted-foreground">{cliente.cliente.cpf}</p>
+                                                <p className="font-medium">{cliente.cliente?.nome || 'Cliente'}</p>
+                                                <p className="text-sm text-muted-foreground">{cliente.cliente?.cpf || 'CPF não informado'}</p>
+                                                <p className="text-sm text-muted-foreground">
+                                                    ID: {cliente.id.substring(0, 8)}...
+                                                </p>
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-2">
@@ -548,8 +783,8 @@ const PainelProfissional = () => {
                                             )}
                                             <div className="flex items-center text-muted-foreground text-sm">
                                                 <Clock className="mr-1 h-4 w-4" />
-                                                {new Date(cliente.dataHoraEntrada).toLocaleTimeString('pt-BR', { 
-                                                    hour: '2-digit', 
+                                                {new Date(cliente.dataHoraEntrada).toLocaleTimeString('pt-BR', {
+                                                    hour: '2-digit',
                                                     minute: '2-digit' 
                                                 })}
                                             </div>

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Confirme seu cadastro • Q-Manager</title>
+  <style>
+    /* Estilos inline-friendly para melhor compatibilidade em clientes de e-mail */
+    body { margin:0; padding:0; background-color:#0a0f1a; color:#e2e8f0; font-family: Arial, Helvetica, sans-serif; }
+    .wrapper { width:100%; background:#0a0f1a; padding:24px 0; }
+    .container { max-width:640px; margin:0 auto; background:#0f172a; border:1px solid rgba(255,255,255,0.06); border-radius:12px; overflow:hidden; }
+    .header { padding:20px 24px; background:linear-gradient(135deg, #00E1C6, #4F46E5); color:#0b1220; font-weight:bold; font-size:18px; }
+    .content { padding:24px; }
+    .title { font-size:20px; font-weight:bold; margin:0 0 12px 0; color:#e2e8f0; }
+    .text { font-size:14px; line-height:1.6; color:#cbd5e1; }
+    .btn { display:inline-block; margin-top:16px; background:linear-gradient(135deg, #00E1C6, #4F46E5); color:#0b1220!important; text-decoration:none; padding:12px 18px; border-radius:10px; font-weight:bold; }
+    .footer { padding:16px 24px; font-size:12px; color:#94a3b8; border-top:1px solid rgba(255,255,255,0.06); }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="container">
+      <div class="header">Q-Manager</div>
+      <div class="content">
+        <p class="title">Olá <span th:text="${userName}">Usuário</span>,</p>
+        <p class="text">Obrigado por se cadastrar no <strong>Q-Manager</strong>. Para concluirmos seu cadastro, por favor confirme seu e-mail clicando no botão abaixo:</p>
+        <p>
+          <a class="btn" th:href="${confirmationUrl}">Confirmar meu cadastro</a>
+        </p>
+        <p class="text">Se você não realizou este cadastro, ignore esta mensagem. Este link expira em <span th:text="${tokenExpiresIn}">24 horas</span>.</p>
+      </div>
+      <div class="footer">© <span th:text="${year}">2025</span> • Q-Manager</div>
+    </div>
+  </div>
+</body>
+</html>
+

@@ -38,6 +38,28 @@ O projeto é construído sobre uma base tecnológica moderna, robusta e escaláv
 | **Documentação** | **SpringDoc OpenAPI (Swagger UI)** | Geração automática de documentação interativa para a API.                                             |
 | **Qualidade** | **JaCoCo & JUnit 5** | Cobertura de código e testes unitários/integração para garantir qualidade e confiabilidade.                                             |
 
+---
+
+## Novidades (28/09/2025)
+
+Estas alterações impactam diretamente como o frontend consome a API:
+
+- Endpoint `GET /auth/confirmar` agora retorna uma PÁGINA HTML (Thymeleaf) estilizada e amigável, não mais JSON.
+  - Mostra mensagem de sucesso/erro da confirmação do e-mail.
+  - Exibe um único botão de ação que varia conforme o status:
+    - Sucesso: texto "Ir para Q-Manager" e redireciona para a URL de login do frontend.
+    - Erro: texto "Tentar novamente" e redireciona para a URL de retentativa/erro configurável.
+  - O link do botão inclui UTMs para analytics do frontend: `utm_source`, `utm_medium`, `utm_campaign`, `utm_content` (success/error).
+- Novas propriedades de configuração:
+  - `app.qmanager.login-url`: URL de login do frontend (por ambiente).
+  - `app.qmanager.error-url`: URL de erro/retentativa do frontend (por ambiente).
+  - `app.base-url`: base pública do backend usada para montar o link do e-mail de confirmação.
+- Templates Thymeleaf adicionados:
+  - Página de confirmação: `templates/auth/confirmacao-resultado.html`.
+  - E-mail de confirmação: `templates/email/confirmacao-cadastro.html`.
+
+---
+
 ## 4. Como Executar o Projeto
 
 ### Pré-requisitos
@@ -55,15 +77,33 @@ O projeto é construído sobre uma base tecnológica moderna, robusta e escaláv
     ```
 
 2.  **Configure as variáveis de ambiente:**
-    A aplicação utiliza variáveis de ambiente para a configuração do banco de dados e do serviço de e-mail. Crie um arquivo `application-dev.properties` ou configure as variáveis no seu sistema. As principais são:
-    * `DB_HOST`: URL de conexão JDBC para o PostgreSQL (ex: `jdbc:postgresql://localhost:5432/qmanager_db`).
-    * `DB_USER`: Usuário do banco de dados.
-    * `DB_PASSWORD`: Senha do banco de dados.
-    * `USERNAME-MAIL`: Usuário do seu serviço de e-mail (ex: Gmail).
-    * `PASSWORD-MAIL`: Senha do seu serviço de e-mail.
+    A aplicação utiliza variáveis de ambiente para a configuração do banco de dados, e-mail e integração com o frontend. As principais são:
+
+    Backend/DB/E-mail:
+    - `DB_HOST` • `DB_USER` • `DB_PASSWORD`
+    - `spring.mail.username` • `spring.mail.password` (ou equivalente via seu provedor)
+
+    Integração Frontend e Links:
+    - `QMANAGER_LOGIN_URL` (opcional) — URL de login no frontend; default em dev: `http://localhost:3000/login`.
+    - `QMANAGER_ERROR_URL` (opcional) — URL de erro/retentativa no frontend; default em dev: `http://localhost:3000/login?retry=true`.
+    - `app.base-url` (opcional) — base pública do backend para montar os links de confirmação enviados por e-mail; default: `http://localhost:8899`.
+
+    Exemplos nos profiles:
+    - `src/main/resources/application-dev.properties`
+      ```properties
+      app.qmanager.login-url=${QMANAGER_LOGIN_URL:http://localhost:3000/login}
+      app.qmanager.error-url=${QMANAGER_ERROR_URL:http://localhost:3000/login?retry=true}
+      app.base-url=http://localhost:8899
+      ```
+    - `src/main/resources/application-prod.properties`
+      ```properties
+      app.qmanager.login-url=${QMANAGER_LOGIN_URL:https://app.qmanager.example.com/login}
+      app.qmanager.error-url=${QMANAGER_ERROR_URL:https://app.qmanager.example.com/login?retry=true}
+      # app.base-url deve apontar para a URL pública do backend em produção
+      # app.base-url=https://api.suaempresa.com
+      ```
 
 3.  **Execute a aplicação:**
-    Utilize o Maven Wrapper para compilar e iniciar a aplicação:
     ```bash
     ./mvnw spring-boot:run
     ```
@@ -75,6 +115,8 @@ O projeto é construído sobre uma base tecnológica moderna, robusta e escaláv
     ```
     O relatório de cobertura estará disponível em `target/site/jacoco/index.html`.
 
+---
+
 ## 5. Documentação da API (Swagger)
 
 Com a aplicação em execução, a documentação completa e interativa da API pode ser acessada através do Swagger UI.
@@ -83,133 +125,52 @@ Com a aplicação em execução, a documentação completa e interativa da API p
 
 Nesta interface, é possível visualizar todos os endpoints, seus DTOs (Data Transfer Objects), parâmetros necessários e testar as requisições diretamente pelo navegador.
 
+---
+
 ## 6. Principais Módulos e Endpoints
 
-### 🔐 **Módulo de Autenticação (`/auth`) - ATUALIZADO**
-Responsável pela segurança e controle de acesso ao sistema com registro público.
+### 🔐 **Módulo de Autenticação (`/auth`) — ATUALIZADO**
 
-**⚠️ IMPORTANTE - Fluxo de Segurança:**
-- O registro de novos usuários (`POST /auth/register`) é **público** para permitir auto-cadastro
-- **TODOS os novos usuários são criados automaticamente como `USUARIO`** por segurança
-- Apenas **administradores** podem promover usuários através do endpoint de promoção
-- O login requer seleção de unidade de atendimento para validação de acesso
+- `POST /auth/login` — Autenticação de usuários com validação de acesso por unidade.
+- `POST /auth/register` — [PÚBLICO] Registro de novos usuários com confirmação por e-mail.
+- `GET /auth/confirmar` — [PÚBLICO] Retorna uma página HTML do Q-Manager informando o resultado da confirmação do e-mail.
+  - Quando o token é válido: exibe mensagem de sucesso e um botão "Ir para Q-Manager".
+  - Quando inválido/expirado: exibe mensagem de erro e um botão "Tentar novamente".
+  - O botão direciona para URLs configuráveis por ambiente e inclui UTMs para analytics:
+    - `utm_source=qmanager-backend`
+    - `utm_medium=confirm-email-page`
+    - `utm_campaign=signup_confirmation`
+    - `utm_content=success|error`
+- `DELETE /auth/delete/{email}` — Exclusão (desativação) de usuários por e-mail.
 
-**Endpoints principais:**
-- `POST /auth/login` - Autenticação de usuários com validação de acesso por unidade
-- `POST /auth/register` - **[PÚBLICO]** Registro de novos usuários com confirmação por e-mail
-- `GET /auth/confirmar` - Confirmação de e-mail para ativação de conta
-- `DELETE /auth/delete/{email}` - Exclusão de usuários por e-mail
+Notas importantes:
+- O endpoint `/auth/confirmar` não responde mais JSON; é uma view HTML (Thymeleaf) pensada para o navegador do usuário.
+- O link do e-mail é montado a partir de `app.base-url` (ex.: `https://api.seudominio.com/auth/confirmar?token=...`).
 
-### 🏥 **Módulo de Unidades de Atendimento (`/api/unidades-atendimento`) - ATUALIZADO**
-Gerencia as unidades físicas onde o atendimento acontece com endpoint público para login.
-
-**Endpoints principais:**
-- `GET /api/unidades-atendimento` - **[PROTEGIDO]** Listar todas as unidades (dados completos)
-- `GET /api/unidades-atendimento/public/login` - **[PÚBLICO]** Listar unidades para seleção no login (apenas ID e nome)
-- `GET /api/unidades-atendimento/{id}` - Buscar unidade específica
-- `GET /api/unidades-atendimento/nome/{nome}` - Buscar por nome
-- `POST /api/unidades-atendimento` - Criar nova unidade
-- `PUT /api/unidades-atendimento/{id}` - Atualizar unidade completa
-- `PATCH /api/unidades-atendimento/{id}` - Atualização parcial
-- `DELETE /api/unidades-atendimento/{id}` - Desativar unidade
-
-### 🏢 **Módulo de Setores (`/api/setores`)**
-Controla os setores dentro de cada unidade (Recepção, Triagem, Consultórios, etc.).
-
-**Endpoints principais:**
-- `GET /api/setores` - Listar todos os setores
-- `GET /api/setores/{id}` - Buscar setor específico
-- `GET /api/setores/nome/{nome}` - Buscar setores por nome
-- `POST /api/setores` - Criar novo setor
-- `PUT /api/setores/{id}` - Atualizar setor completo
-- `PATCH /api/setores/{id}` - Atualização parcial
-- `DELETE /api/setores/{id}` - Desativar setor
-
-### 📋 **Módulo de Filas (`/api/filas`)**
-Gerencia as filas de atendimento vinculadas aos setores.
-
-**Endpoints principais:**
-- `GET /api/filas/unidade/{unidadeId}` - Listar filas por unidade
-- `GET /api/filas/{id}` - Buscar fila específica
-- `POST /api/filas` - Criar nova fila
-- `PATCH /api/filas/{id}` - Atualizar fila
-- `DELETE /api/filas/{id}` - Desativar fila
-
-### 👥 **Módulo de Clientes (`/api/clientes`)**
-Cadastro e gestão dos clientes/pacientes do sistema.
-
-**Endpoints principais:**
-- `GET /api/clientes` - Listar todos os clientes
-- `GET /api/clientes/{id}` - Buscar cliente por ID
-- `GET /api/clientes/cpf/{cpf}` - Buscar cliente por CPF
-- `GET /api/clientes/nome/{nome}` - Buscar clientes por nome
-- `POST /api/clientes` - Cadastrar novo cliente
-- `PUT /api/clientes/{id}` - Atualizar cliente completo
-- `PATCH /api/clientes/{id}` - Atualização parcial
-- `DELETE /api/clientes/{id}` - Desativar cliente
-
-### 👨‍⚕️ **Módulo de Usuários (`/api/usuarios`) - ATUALIZADO**
-Gestão dos profissionais e administradores do sistema com funcionalidade de promoção.
-
-**Endpoints principais:**
-- `GET /api/usuarios` - Listar todos os usuários
-- `GET /api/usuarios/{id}` - Buscar usuário por ID
-- `GET /api/usuarios/email/{email}` - Buscar usuário por e-mail
-- `POST /api/usuarios` - Criar novo usuário
-- `PUT /api/usuarios/{id}` - Atualizar usuário completo
-- `PATCH /api/usuarios/{id}` - Atualização parcial
-- `PATCH /api/usuarios/{id}/promover` - **[ADMIN ONLY]** Promover usuário para ADMINISTRADOR
-- `DELETE /api/usuarios/{id}` - Desativar usuário
-
-### 🎯 **Módulo de Entrada em Fila (`/api/entrada-fila`) - CORAÇÃO DO SISTEMA**
-Este é o módulo mais importante, responsável por todo o fluxo de atendimento.
-
-**Endpoints principais:**
-- `POST /api/entrada-fila` - Adicionar cliente à fila
-- `POST /api/entrada-fila/chamar-proximo` - Chamar próximo cliente
-- `POST /api/entrada-fila/finalizar/{entradaFilaId}` - Finalizar atendimento
-- `POST /api/entrada-fila/cancelar/{entradaFilaId}` - Cancelar atendimento
-- `POST /api/entrada-fila/encaminhar/{entradaFilaIdOrigem}` - Encaminhar para outra fila
-- `GET /api/entrada-fila/aguardando/{filaId}` - Listar clientes aguardando
-
-### 📺 **Módulo de Painéis (`/painel`)**
-Gerencia os painéis de exibição pública para chamadas.
-
-**Endpoints principais:**
-- `GET /painel` - Listar painéis por unidade
-- `GET /painel/{id}` - Buscar painel específico
-- `GET /painel/unidade/{unidadeId}` - Listar painéis por unidade
-- `POST /painel` - Criar novo painel
-- `PUT /painel/{id}` - Atualizar painel
-- `DELETE /painel/{id}` - Desativar painel
-
-### 📊 **Módulo de Dashboard (`/api/dashboard`)**
-Fornece métricas e análises para gestão estratégica.
-
-**Endpoints principais:**
-- `GET /api/dashboard/tempo-medio-espera` - Calcular tempo médio de espera
-- `GET /api/dashboard/produtividade` - Analisar produtividade por profissional
-- `GET /api/dashboard/horarios-pico` - Identificar horários de maior movimento
-- `GET /api/dashboard/fluxo-pacientes` - Analisar fluxo de pacientes
-
-### 📧 **Módulo de E-mail (`/api/email`)**
-Serviço para envio de notificações e comunicações.
-
-**Endpoints principais:**
-- `POST /api/email/send` - Enviar e-mail
-
-### 🔌 **WebSocket para Tempo Real**
-Comunicação em tempo real para atualizações automáticas dos painéis.
-
-**Tópicos WebSocket:**
-- `/topic/painel/{filaId}` - Atualizações para painéis públicos
-- `/topic/fila/{setorId}` - Atualizações para painéis de profissionais
+### Templates relacionados
+- Página HTML (confirmação): `src/main/resources/templates/auth/confirmacao-resultado.html`
+- E-mail de confirmação: `src/main/resources/templates/email/confirmacao-cadastro.html`
 
 ---
 
-## 7. Guia de Telas para Desenvolvimento Frontend
+## 7. Guia rápido para o Frontend
 
-Esta seção detalha todas as telas que devem ser implementadas no frontend para atender completamente às funcionalidades da API.
+- Após o registro (POST `/auth/register`), o usuário recebe um e-mail com o link de confirmação.
+- Ao clicar, o navegador abre `/auth/confirmar?token=...`, que renderiza a página HTML do backend.
+- O botão exibido na página direciona para:
+  - Sucesso: `app.qmanager.login-url` com UTMs.
+  - Erro: `app.qmanager.error-url` com UTMs (por exemplo, uma página de login com instruções de nova tentativa).
+- O frontend pode instrumentar analytics através dessas UTMs sem nenhuma configuração adicional.
+
+---
+
+## 8. Seções seguintes inalteradas
+
+As demais descrições de módulos (Unidades, Setores, Filas, Clientes, Usuários, Painéis, Dashboard, E-mail, WebSocket, Telas do Frontend etc.) permanecem válidas. Consulte as seções abaixo para detalhes completos de cada módulo.
+
+---
+
+## 9. Telas do Frontend (referência)
 
 ### 🔐 **Módulo de Autenticação**
 

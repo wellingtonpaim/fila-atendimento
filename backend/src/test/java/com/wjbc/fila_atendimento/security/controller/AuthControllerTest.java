@@ -36,7 +36,7 @@ class AuthControllerTest {
 
     @BeforeEach
     void setUp() {
-        MockitoAnnotations.openMocks(this); // Para testes simples, manter assim
+        MockitoAnnotations.openMocks(this);
     }
 
     @Test
@@ -78,7 +78,7 @@ class AuthControllerTest {
     void testRegisterSuccess() {
         UsuarioCreateDTO dto = new UsuarioCreateDTO("nome", "email@test.com", "senha", null, null);
         doNothing().when(authService).register(any(UsuarioCreateDTO.class));
-        ResponseEntity<ApiResponse<Void>> response = authController.register(dto);
+        ResponseEntity<ApiResponse<String>> response = authController.register(dto);
         assertEquals(200, response.getStatusCode().value());
         assertEquals("E-mail de confirmação enviado com sucesso!", response.getBody().getMessage());
     }
@@ -87,25 +87,9 @@ class AuthControllerTest {
     void testRegisterIllegalArgumentException() {
         UsuarioCreateDTO dto = new UsuarioCreateDTO("nome", "email@test.com", "senha", null, null);
         doThrow(new IllegalArgumentException("Erro de validação")).when(authService).register(any(UsuarioCreateDTO.class));
-        ResponseEntity<ApiResponse<Void>> response = authController.register(dto);
+        ResponseEntity<ApiResponse<String>> response = authController.register(dto);
         assertEquals(400, response.getStatusCode().value());
         assertEquals("Erro de validação", response.getBody().getMessage());
-    }
-
-    @Test
-    void testConfirmEmailSuccess() {
-        doNothing().when(authService).confirmEmail(anyString());
-        ResponseEntity<ApiResponse<Void>> response = authController.confirmEmail("token");
-        assertEquals(200, response.getStatusCode().value());
-        assertEquals("E-mail confirmado com sucesso!", response.getBody().getMessage());
-    }
-
-    @Test
-    void testConfirmEmailIllegalArgumentException() {
-        doThrow(new IllegalArgumentException("Token inválido")).when(authService).confirmEmail(anyString());
-        ResponseEntity<ApiResponse<Void>> response = authController.confirmEmail("token");
-        assertEquals(400, response.getStatusCode().value());
-        assertEquals("Token inválido", response.getBody().getMessage());
     }
 
     @Test

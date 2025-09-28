@@ -5,6 +5,7 @@ import com.wjbc.fila_atendimento.domain.dto.UsuarioCreateDTO;
 import com.wjbc.fila_atendimento.domain.dto.UsuarioResponseDTO;
 import com.wjbc.fila_atendimento.domain.enumeration.CategoriaUsuario;
 import com.wjbc.fila_atendimento.domain.model.Usuario;
+import com.wjbc.fila_atendimento.domain.repository.UsuarioRepository;
 import com.wjbc.fila_atendimento.domain.service.EmailSenderService;
 import com.wjbc.fila_atendimento.domain.service.UsuarioService;
 import com.wjbc.fila_atendimento.security.model.ConfirmationToken;
@@ -12,8 +13,11 @@ import com.wjbc.fila_atendimento.security.repository.ConfirmationTokenRepository
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.thymeleaf.TemplateEngine;
+import org.thymeleaf.context.Context;
 
 import java.time.LocalDateTime;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -21,22 +25,31 @@ import java.util.concurrent.CompletableFuture;
 public class AuthService {
 
     private final UsuarioService usuarioService;
+    private final UsuarioRepository usuarioRepository;
     private final ConfirmationTokenRepository confirmationTokenRepository;
     private final EmailSenderService emailSenderService;
+    private final TemplateEngine templateEngine;
 
     public AuthService(
             UsuarioService usuarioService,
+            UsuarioRepository usuarioRepository,
             ConfirmationTokenRepository confirmationTokenRepository,
             Map<String, EmailSenderService> emailSenderServices,
-            @Value("${email.sender.impl}") String emailSenderImpl
+            @Value("${email.sender.impl}") String emailSenderImpl,
+            TemplateEngine templateEngine
     ) {
         this.usuarioService = usuarioService;
+        this.usuarioRepository = usuarioRepository;
         this.confirmationTokenRepository = confirmationTokenRepository;
         this.emailSenderService = emailSenderServices.get(emailSenderImpl);
         if (this.emailSenderService == null) {
             throw new IllegalArgumentException("Não foi encontrado um serviço de envio de email com o nome: " + emailSenderImpl);
         }
+        this.templateEngine = templateEngine;
     }
+
+    @Value("${app.base-url:http://localhost:8899}")
+    private String appBaseUrl;
 
     @Value("${spring.mail.username}")
     private String emailFrom;
@@ -60,10 +73,15 @@ public class AuthService {
 
     private void sendConfirmationEmailAsync(Usuario usuario, String token) {
         CompletableFuture.runAsync(() -> {
-            String confirmationUrl = "http://wjbcsystems.shop:8899/auth/confirmar?token=" + token;
-            String htmlBody = "<p>Olá " + usuario.getNomeUsuario() + ",</p>"
-                    + "<p>Por favor, confirme seu cadastro clicando no link abaixo:</p>"
-                    + "<a href=\"" + confirmationUrl + "\">Confirmar Cadastro</a>";
+            String confirmationUrl = appBaseUrl + "/auth/confirmar?token=" + token;
+
+            Context ctx = new Context(new Locale("pt", "BR"));
+            ctx.setVariable("userName", usuario.getNomeUsuario());
+            ctx.setVariable("confirmationUrl", confirmationUrl);
+            ctx.setVariable("tokenExpiresIn", "24 horas");
+            ctx.setVariable("year", String.valueOf(LocalDateTime.now().getYear()));
+
+            String htmlBody = templateEngine.process("email/confirmacao-cadastro", ctx);
 
             EmailRequestDTO emailRequest = new EmailRequestDTO(
                     "Confirmação de Cadastro",
@@ -84,19 +102,16 @@ public class AuthService {
         ConfirmationToken confirmationToken = confirmationTokenRepository.findByToken(token)
                 .orElseThrow(() -> new IllegalArgumentException("Token de confirmação inválido!"));
 
+
         if (confirmationToken.getExpiryDate().isBefore(LocalDateTime.now())) {
             throw new IllegalStateException("Token expirado");
         }
 
         Usuario usuario = confirmationToken.getUsuario();
         usuario.setAtivo(true);
-        usuarioService.criar(new UsuarioCreateDTO(
-                usuario.getNomeUsuario(),
-                usuario.getEmail(),
-                usuario.getSenha(),
-                usuario.getCategoria(),
-                usuario.getUnidades() != null ? usuario.getUnidades().stream().map(u -> u.getId()).toList() : null
-        ));
+
+        usuarioRepository.save(usuario);
+
         confirmationTokenRepository.delete(confirmationToken);
     }
 

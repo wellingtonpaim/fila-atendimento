@@ -48,8 +48,9 @@ public class UsuarioServiceImpl implements UsuarioService {
             novoUsuario.setUnidades(Collections.emptyList());
         }
 
-        novoUsuario.setAtivo(true);
-        return usuarioMapper.toResponseDTO(usuarioRepository.save(novoUsuario));
+        novoUsuario.setAtivo(false);
+        UsuarioResponseDTO usuarioResponseDTO = usuarioMapper.toResponseDTO(usuarioRepository.save(novoUsuario));
+        return usuarioResponseDTO;
     }
 
     @Override

@@ -10,7 +10,7 @@ import java.util.UUID;
 
 @Data
 @Entity
-@Table(name = "confirmation_token")
+@Table(name = "confirmation_token", schema = "fila_atendimento")
 public class ConfirmationToken {
 
     @Id

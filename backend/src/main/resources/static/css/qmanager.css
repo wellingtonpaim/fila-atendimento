@@ -1,0 +1,22 @@
+/* Q-Manager base styles */
+:root {
+  --qm-bg: #0a0f1a;
+  --qm-panel: #0f172a;
+  --qm-text: #e2e8f0;
+  --qm-muted: #94a3b8;
+  --qm-primary: #4F46E5; /* indigo-600 */
+  --qm-teal: #00E1C6;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body.qm-bg { margin: 0; background: radial-gradient(1200px 600px at 10% -10%, rgba(79,70,229,.18), transparent 60%), radial-gradient(1000px 600px at 100% 0%, rgba(0,225,198,.12), transparent 60%), var(--qm-bg); color: var(--qm-text); font-family: "Inter", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
+
+.caption { color: var(--qm-muted); font-size: .85rem; letter-spacing: .2px; }
+
+/* Utility */
+.center { display: grid; place-items: center; }
+.card { background: var(--qm-panel); border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; padding: 1rem; }
+.btn { display: inline-flex; align-items: center; gap: .5rem; border: none; cursor: pointer; }
+.btn:hover { filter: brightness(1.04); transform: translateY(-1px); transition: transform .15s ease, filter .15s ease; }
+

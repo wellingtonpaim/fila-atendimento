@@ -19,7 +19,6 @@ public record ClienteCreateDTO(
         @Size(min = 3, max = 100, message = "Nome deve ter entre 3 e 100 caracteres.")
         String nome,
 
-        @NotBlank(message = "Email não pode ser nulo ou vazio.")
         @Email(message = "Formato de email inválido.")
         String email,
 

@@ -5,9 +5,10 @@ export interface ApiResponse<T> {
     success: boolean;
     message: string;
     data: T;
-    errors?: string[];
-    timestamp?: string;
 }
+
+// Enums
+export type CategoriaUsuario = 'ADMINISTRADOR' | 'USUARIO';
 
 // ====== ENDEREÇO ======
 export interface Endereco {
@@ -48,16 +49,21 @@ export interface UnidadeAtendimentoPublicDTO {
 }
 
 export interface UnidadeAtendimentoResponseDTO {
-    id: string; // UUID
+    id: string;
     nome: string;
-    endereco?: Endereco;
-    telefones?: Telefone[];
+    endereco?: string;
+    telefone?: string;
+    email?: string;
+    ativo: boolean;
+    dataCriacao: string;
+    dataAtualizacao: string;
 }
 
 export interface UnidadeAtendimentoCreateDTO {
     nome: string;
-    endereco?: Endereco;
-    telefones?: Telefone[];
+    endereco?: string;
+    telefone?: string;
+    email?: string;
 }
 
 export interface UnidadeAtendimentoUpdateDTO {
@@ -68,49 +74,54 @@ export interface UnidadeAtendimentoUpdateDTO {
 
 // ====== USUÁRIO ======
 export interface UsuarioResponseDTO {
-    id: string; // UUID
+    id: string;
     nomeUsuario: string;
     email: string;
-    categoria: 'ADMINISTRADOR' | 'USUARIO';
-    unidadesIds: string[]; // Array de UUIDs
+    categoria: CategoriaUsuario;
+    ativo: boolean;
+    dataCriacao: string;
+    dataAtualizacao: string;
 }
 
 export interface UsuarioCreateDTO {
     nomeUsuario: string;
     email: string;
     senha: string;
-    categoria: 'ADMINISTRADOR' | 'USUARIO';
-    unidadesIds?: string[];
+    categoria: CategoriaUsuario;
 }
 
 export interface UsuarioUpdateDTO {
     nomeUsuario?: string;
     email?: string;
-    categoria: 'ADMINISTRADOR' | 'USUARIO';
-    unidadesIds?: string[];
+    categoria?: CategoriaUsuario;
 }
 
 // ====== SETOR ======
 export interface SetorResponseDTO {
-    id: string; // UUID
+    id: string;
     nome: string;
+    descricao?: string;
+    cor?: string;
+    unidadeAtendimentoId: string;
+    ativo: boolean;
+    dataCriacao: string;
+    dataAtualizacao: string;
 }
 
 export interface SetorCreateDTO {
     nome: string;
-}
-
-export interface SetorUpdateDTO {
-    nome?: string;
+    descricao?: string;
+    cor?: string;
+    unidadeAtendimentoId?: string;
 }
 
 // ====== CLIENTE ======
 export interface ClienteResponseDTO {
-    id: string; // UUID
+    id: string;
     cpf: string;
     nome: string;
     email: string;
-    telefones?: Telefone[];
+    telefones: Telefone[];
     endereco?: Endereco;
 }
 
@@ -132,42 +143,45 @@ export interface ClienteUpdateDTO {
 
 // ====== FILA ======
 export interface FilaResponseDTO {
-    id: string; // UUID
+    id: string;
     nome: string;
-    setor: SetorResponseDTO;
-    unidade: UnidadeAtendimentoResponseDTO;
+    setorId: string;
+    unidadeAtendimentoId: string;
+    ativo: boolean;
+    dataCriacao: string;
+    dataAtualizacao: string;
 }
 
 export interface FilaCreateDTO {
     nome: string;
-    setorId: string; // UUID
-    unidadeAtendimentoId: string; // UUID
+    setorId: string;
+    unidadeAtendimentoId: string;
 }
 
 export interface FilaUpdateDTO {
     nome?: string;
+    setorId: string;
+    unidadeAtendimentoId: string;
 }
 
 // ====== ENTRADA FILA ======
 export interface EntradaFilaResponseDTO {
-    id: string; // UUID
-    status: 'AGUARDANDO' | 'CHAMADO' | 'ATENDIDO' | 'CANCELADO';
-    prioridade: boolean;
-    isRetorno: boolean;
-    dataHoraEntrada: string; // ISO DateTime
-    dataHoraChamada?: string; // ISO DateTime
-    dataHoraSaida?: string; // ISO DateTime
-    guicheOuSalaAtendimento?: string;
-    cliente: ClienteResponseDTO;
-    fila: FilaResponseDTO;
-    usuarioResponsavelId?: string; // UUID
+    id: string;
+    clienteId: string;
+    filaId: string;
+    numeroSenha: string;
+    status: string;
+    horaEntrada: string;
+    horaChamada?: string;
+    horaAtendimento?: string;
+    horaFinalizacao?: string;
+    observacoes?: string;
 }
 
 export interface EntradaFilaCreateDTO {
-    clienteId: string; // UUID
-    filaId: string; // UUID
-    prioridade: boolean;
-    isRetorno?: boolean;
+    clienteId: string;
+    filaId: string;
+    observacoes?: string;
 }
 
 // ====== PAINEL ======
