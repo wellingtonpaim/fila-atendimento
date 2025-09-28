@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
-import { RefreshCw, Search, Pencil, Trash2, Save, X } from 'lucide-react';
+import { RefreshCw, Search, Pencil, Trash2, Save, X, Plus } from 'lucide-react';
 import { unidadeService } from '@/services/unidadeService';
 import { setorService } from '@/services/setorService';
 import { filaService } from '@/services/filaService';
@@ -23,6 +23,13 @@ import type {
   SetorUpdateDTO,
   FilaUpdateDTO,
   ClienteUpdateDTO,
+  FilaCreateDTO,
+  SetorCreateDTO,
+  UnidadeAtendimentoCreateDTO,
+  UsuarioCreateDTO,
+  ClienteCreateDTO,
+  Telefone,
+  Endereco,
 } from '@/types';
 
 // Aba na ordem solicitada
@@ -72,7 +79,38 @@ const Gestao = () => {
   const [editFilaId, setEditFilaId] = useState<string | null>(null);
   const [draftFila, setDraftFila] = useState<Partial<FilaUpdateDTO>>({});
 
+  // Criação por entidade
+  const [creatingFila, setCreatingFila] = useState(false);
+  const [createFila, setCreateFila] = useState<Partial<FilaCreateDTO>>({ nome: '', setorId: '', unidadeAtendimentoId: '' });
+
+  const [creatingUnidade, setCreatingUnidade] = useState(false);
+  const [createUnidade, setCreateUnidade] = useState<Partial<UnidadeAtendimentoCreateDTO>>({ nome: '' });
+
+  const [creatingSetor, setCreatingSetor] = useState(false);
+  const [createSetor, setCreateSetor] = useState<Partial<SetorCreateDTO>>({ nome: '' });
+
+  const [creatingCliente, setCreatingCliente] = useState(false);
+  const [createCliente, setCreateCliente] = useState<Partial<ClienteCreateDTO>>({ cpf: '', nome: '', email: '' });
+
+  const [creatingUsuario, setCreatingUsuario] = useState(false);
+  const [createUsuario, setCreateUsuario] = useState<Partial<UsuarioCreateDTO>>({ nomeUsuario: '', email: '', senha: '', categoria: 'USUARIO' });
+
   const { toast } = useToast();
+
+  // Helpers nomes
+  const getSetorNome = (id?: string) => setores.find((s) => (s as any).id === id)?.nome || id || '';
+  const getUnidadeNome = (id?: string) => unidades.find((u) => (u as any).id === id)?.nome || id || '';
+
+  const formatTelefones = (telefones?: Telefone[]) =>
+    (telefones || [])
+      .map((t) => `${t.ddd}-${t.numero} (${t.tipo})`)
+      .join(', ');
+
+  const formatEndereco = (end?: Endereco) => {
+    if (!end) return '';
+    const parts = [end.logradouro, end.numero, end.complemento, end.bairro, end.cidade, end.uf, end.cep].filter(Boolean);
+    return parts.join(', ');
+  };
 
   // Carregar dados
   useEffect(() => {
@@ -100,7 +138,7 @@ const Gestao = () => {
       const filasArrays = await Promise.all(
         (unidadesData || []).map((u) =>
           filaService
-            .listarPorUnidade(u.id)
+            .listarPorUnidade((u as any).id)
             .catch(() => [] as FilaResponseDTO[])
         )
       );
@@ -122,8 +160,8 @@ const Gestao = () => {
   const searchFields: Record<TabKey, { value: string; label: string }[]> = {
     filas: [
       { value: 'nome', label: 'Nome' },
-      { value: 'setorId', label: 'Setor (ID)' },
-      { value: 'unidadeAtendimentoId', label: 'Unidade (ID)' },
+      { value: 'setorId', label: 'Setor' },
+      { value: 'unidadeAtendimentoId', label: 'Unidade' },
     ],
     unidades: [{ value: 'nome', label: 'Nome' }],
     setores: [{ value: 'nome', label: 'Nome' }],
@@ -201,9 +239,11 @@ const Gestao = () => {
     if (!editClienteId) return;
     try {
       const payload: ClienteUpdateDTO = {
+        cpf: draftCliente.cpf,
         nome: draftCliente.nome,
         email: draftCliente.email,
-        cpf: draftCliente.cpf,
+        telefones: draftCliente.telefones as Telefone[] | undefined,
+        endereco: draftCliente.endereco as Endereco | undefined,
       };
       const updated = await clienteService.atualizarParcialmente(editClienteId, payload);
       setClientes((prev) => prev.map((c) => (c.id === editClienteId ? { ...c, ...updated } : c)));
@@ -218,11 +258,11 @@ const Gestao = () => {
   const saveFila = async () => {
     if (!editFilaId) return;
     try {
+      const current = filas.find((f) => f.id === editFilaId) as any;
       const payload: FilaUpdateDTO = {
-        nome: draftFila.nome || '',
-        setorId: draftFila.setorId || (filas.find((f) => f.id === editFilaId)?.setorId as any),
-        unidadeAtendimentoId:
-          draftFila.unidadeAtendimentoId || (filas.find((f) => f.id === editFilaId)?.unidadeAtendimentoId as any),
+        nome: draftFila.nome || current?.nome || '',
+        setorId: (draftFila as any).setorId || current?.setorId,
+        unidadeAtendimentoId: (draftFila as any).unidadeAtendimentoId || current?.unidadeAtendimentoId,
       } as FilaUpdateDTO;
       const updated = await filaService.atualizarParcialmente(editFilaId, payload);
       setFilas((prev) => prev.map((f) => (f.id === editFilaId ? { ...f, ...updated } : f)));
@@ -282,6 +322,107 @@ const Gestao = () => {
       toast({ title: 'Fila removida' });
     } catch (e: any) {
       toast({ title: 'Erro ao remover fila', description: e?.message || '', variant: 'destructive' });
+    }
+  };
+
+  // Criação handlers
+  const addFila = async () => {
+    try {
+      const payload: FilaCreateDTO = {
+        nome: (createFila.nome || '').trim(),
+        setorId: (createFila as any).setorId || '',
+        unidadeAtendimentoId: (createFila as any).unidadeAtendimentoId || '',
+      };
+      if (!payload.nome || !payload.setorId || !payload.unidadeAtendimentoId) {
+        toast({ title: 'Preencha nome, setor e unidade', variant: 'destructive' });
+        return;
+      }
+      const created = await filaService.criar(payload);
+      setFilas((prev) => [created, ...prev]);
+      setCreatingFila(false);
+      setCreateFila({ nome: '', setorId: '', unidadeAtendimentoId: '' });
+      toast({ title: 'Fila criada' });
+    } catch (e: any) {
+      toast({ title: 'Erro ao criar fila', description: e?.message || '', variant: 'destructive' });
+    }
+  };
+
+  const addUnidade = async () => {
+    try {
+      const payload: UnidadeAtendimentoCreateDTO = { nome: (createUnidade.nome || '').trim() } as any;
+      if (!payload.nome) {
+        toast({ title: 'Informe o nome da unidade', variant: 'destructive' });
+        return;
+      }
+      const created = await unidadeService.criar(payload);
+      setUnidades((prev) => [created, ...prev]);
+      setCreatingUnidade(false);
+      setCreateUnidade({ nome: '' });
+      toast({ title: 'Unidade criada' });
+    } catch (e: any) {
+      toast({ title: 'Erro ao criar unidade', description: e?.message || '', variant: 'destructive' });
+    }
+  };
+
+  const addSetor = async () => {
+    try {
+      const payload: SetorCreateDTO = { nome: (createSetor.nome || '').trim() };
+      if (!payload.nome) {
+        toast({ title: 'Informe o nome do setor', variant: 'destructive' });
+        return;
+      }
+      const created = await setorService.criar(payload);
+      setSetores((prev) => [created, ...prev]);
+      setCreatingSetor(false);
+      setCreateSetor({ nome: '' });
+      toast({ title: 'Setor criado' });
+    } catch (e: any) {
+      toast({ title: 'Erro ao criar setor', description: e?.message || '', variant: 'destructive' });
+    }
+  };
+
+  const addCliente = async () => {
+    try {
+      const payload: ClienteCreateDTO = {
+        cpf: (createCliente.cpf || '').trim(),
+        nome: (createCliente.nome || '').trim(),
+        email: (createCliente.email || '').trim(),
+        telefones: (createCliente.telefones as Telefone[]) || undefined,
+        endereco: (createCliente.endereco as Endereco) || undefined,
+      } as any;
+      if (!payload.cpf || !payload.nome) {
+        toast({ title: 'Informe ao menos CPF e Nome', variant: 'destructive' });
+        return;
+      }
+      const created = await clienteService.criar(payload);
+      setClientes((prev) => [created, ...prev]);
+      setCreatingCliente(false);
+      setCreateCliente({ cpf: '', nome: '', email: '' });
+      toast({ title: 'Cliente criado' });
+    } catch (e: any) {
+      toast({ title: 'Erro ao criar cliente', description: e?.message || '', variant: 'destructive' });
+    }
+  };
+
+  const addUsuario = async () => {
+    try {
+      const payload: UsuarioCreateDTO = {
+        nomeUsuario: (createUsuario.nomeUsuario || '').trim(),
+        email: (createUsuario.email || '').trim(),
+        senha: (createUsuario.senha || '').trim(),
+        categoria: (createUsuario.categoria as any) || 'USUARIO',
+      } as any;
+      if (!payload.nomeUsuario || !payload.email || !payload.senha) {
+        toast({ title: 'Informe nome, email e senha', variant: 'destructive' });
+        return;
+      }
+      const created = await usuarioService.criar(payload);
+      setUsuarios((prev) => [created, ...prev]);
+      setCreatingUsuario(false);
+      setCreateUsuario({ nomeUsuario: '', email: '', senha: '', categoria: 'USUARIO' });
+      toast({ title: 'Usuário criado' });
+    } catch (e: any) {
+      toast({ title: 'Erro ao criar usuário', description: e?.message || '', variant: 'destructive' });
     }
   };
 
@@ -354,6 +495,12 @@ const Gestao = () => {
                     onChange={(e) => setSearch((s) => ({ ...s, filas: { ...s.filas, query: e.target.value } }))}
                   />
                 </div>
+                <div className="sm:ml-auto">
+                  <Button size="sm" onClick={() => setCreatingFila((v) => !v)}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Adicionar
+                  </Button>
+                </div>
               </div>
 
               <div className="overflow-x-auto">
@@ -361,12 +508,68 @@ const Gestao = () => {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Nome</TableHead>
-                      <TableHead>Setor ID</TableHead>
-                      <TableHead>Unidade ID</TableHead>
+                      <TableHead>Setor</TableHead>
+                      <TableHead>Unidade</TableHead>
                       <TableHead className="text-right">Ação</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
+                    {creatingFila && (
+                      <TableRow>
+                        <TableCell>
+                          <Input
+                            value={createFila.nome || ''}
+                            placeholder="Nome da fila"
+                            onChange={(e) => setCreateFila((d) => ({ ...d, nome: e.target.value }))}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Select
+                            value={(createFila as any).setorId || ''}
+                            onValueChange={(val) => setCreateFila((d) => ({ ...d, setorId: val }))}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Selecione o setor" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {setores.map((s) => (
+                                <SelectItem key={(s as any).id} value={(s as any).id}>
+                                  {s.nome}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell>
+                          <Select
+                            value={(createFila as any).unidadeAtendimentoId || ''}
+                            onValueChange={(val) => setCreateFila((d) => ({ ...d, unidadeAtendimentoId: val }))}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Selecione a unidade" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {unidades.map((u) => (
+                                <SelectItem key={(u as any).id} value={(u as any).id}>
+                                  {u.nome}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button size="sm" onClick={addFila}>
+                              <Save className="h-4 w-4" />
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => setCreatingFila(false)}>
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+
                     {filtered.filas.map((f) => (
                       <TableRow key={f.id}>
                         <TableCell>
@@ -381,26 +584,44 @@ const Gestao = () => {
                         </TableCell>
                         <TableCell>
                           {editFilaId === f.id ? (
-                            <Input
-                              value={draftFila.setorId ?? (f as any).setorId ?? ''}
-                              onChange={(e) => setDraftFila((d) => ({ ...d, setorId: e.target.value }))}
-                            />
+                            <Select
+                              value={(draftFila as any).setorId ?? (f as any).setorId ?? ''}
+                              onValueChange={(val) => setDraftFila((d) => ({ ...d, setorId: val as any }))}
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {setores.map((s) => (
+                                  <SelectItem key={(s as any).id} value={(s as any).id}>
+                                    {s.nome}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                           ) : (
-                            <span>{(f as any).setorId}</span>
+                            <span>{getSetorNome((f as any).setorId)}</span>
                           )}
                         </TableCell>
                         <TableCell>
                           {editFilaId === f.id ? (
-                            <Input
-                              value={
-                                draftFila.unidadeAtendimentoId ?? (f as any).unidadeAtendimentoId ?? ''
-                              }
-                              onChange={(e) =>
-                                setDraftFila((d) => ({ ...d, unidadeAtendimentoId: e.target.value }))
-                              }
-                            />
+                            <Select
+                              value={(draftFila as any).unidadeAtendimentoId ?? (f as any).unidadeAtendimentoId ?? ''}
+                              onValueChange={(val) => setDraftFila((d) => ({ ...d, unidadeAtendimentoId: val as any }))}
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {unidades.map((u) => (
+                                  <SelectItem key={(u as any).id} value={(u as any).id}>
+                                    {u.nome}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                           ) : (
-                            <span>{(f as any).unidadeAtendimentoId}</span>
+                            <span>{getUnidadeNome((f as any).unidadeAtendimentoId)}</span>
                           )}
                         </TableCell>
                         <TableCell className="text-right">
@@ -440,7 +661,7 @@ const Gestao = () => {
                         </TableCell>
                       </TableRow>
                     ))}
-                    {filtered.filas.length === 0 && (
+                    {filtered.filas.length === 0 && !creatingFila && (
                       <TableRow>
                         <TableCell colSpan={4} className="text-center text-muted-foreground">
                           Nenhuma fila encontrada.
@@ -488,6 +709,12 @@ const Gestao = () => {
                     onChange={(e) => setSearch((s) => ({ ...s, unidades: { ...s.unidades, query: e.target.value } }))}
                   />
                 </div>
+                <div className="sm:ml-auto">
+                  <Button size="sm" onClick={() => setCreatingUnidade((v) => !v)}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Adicionar
+                  </Button>
+                </div>
               </div>
 
               <div className="overflow-x-auto">
@@ -499,6 +726,28 @@ const Gestao = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
+                    {creatingUnidade && (
+                      <TableRow>
+                        <TableCell>
+                          <Input
+                            value={createUnidade.nome || ''}
+                            placeholder="Nome da unidade"
+                            onChange={(e) => setCreateUnidade((d) => ({ ...d, nome: e.target.value }))}
+                          />
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button size="sm" onClick={addUnidade}>
+                              <Save className="h-4 w-4" />
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => setCreatingUnidade(false)}>
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+
                     {filtered.unidades.map((u) => (
                       <TableRow key={u.id}>
                         <TableCell>
@@ -548,7 +797,7 @@ const Gestao = () => {
                         </TableCell>
                       </TableRow>
                     ))}
-                    {filtered.unidades.length === 0 && (
+                    {filtered.unidades.length === 0 && !creatingUnidade && (
                       <TableRow>
                         <TableCell colSpan={2} className="text-center text-muted-foreground">
                           Nenhuma unidade encontrada.
@@ -596,6 +845,12 @@ const Gestao = () => {
                     onChange={(e) => setSearch((s) => ({ ...s, setores: { ...s.setores, query: e.target.value } }))}
                   />
                 </div>
+                <div className="sm:ml-auto">
+                  <Button size="sm" onClick={() => setCreatingSetor((v) => !v)}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Adicionar
+                  </Button>
+                </div>
               </div>
 
               <div className="overflow-x-auto">
@@ -607,6 +862,28 @@ const Gestao = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
+                    {creatingSetor && (
+                      <TableRow>
+                        <TableCell>
+                          <Input
+                            value={createSetor.nome || ''}
+                            placeholder="Nome do setor"
+                            onChange={(e) => setCreateSetor((d) => ({ ...d, nome: e.target.value }))}
+                          />
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button size="sm" onClick={addSetor}>
+                              <Save className="h-4 w-4" />
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => setCreatingSetor(false)}>
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+
                     {filtered.setores.map((s) => (
                       <TableRow key={s.id}>
                         <TableCell>
@@ -656,7 +933,7 @@ const Gestao = () => {
                         </TableCell>
                       </TableRow>
                     ))}
-                    {filtered.setores.length === 0 && (
+                    {filtered.setores.length === 0 && !creatingSetor && (
                       <TableRow>
                         <TableCell colSpan={2} className="text-center text-muted-foreground">
                           Nenhum setor encontrado.
@@ -704,6 +981,12 @@ const Gestao = () => {
                     onChange={(e) => setSearch((s) => ({ ...s, clientes: { ...s.clientes, query: e.target.value } }))}
                   />
                 </div>
+                <div className="sm:ml-auto">
+                  <Button size="sm" onClick={() => setCreatingCliente((v) => !v)}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Adicionar
+                  </Button>
+                </div>
               </div>
 
               <div className="overflow-x-auto">
@@ -713,16 +996,120 @@ const Gestao = () => {
                       <TableHead>CPF</TableHead>
                       <TableHead>Nome</TableHead>
                       <TableHead>Email</TableHead>
+                      <TableHead>Telefones</TableHead>
+                      <TableHead>Endereço</TableHead>
                       <TableHead className="text-right">Ação</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
+                    {creatingCliente && (
+                      <TableRow>
+                        <TableCell>
+                          <Input
+                            value={createCliente.cpf || ''}
+                            placeholder="CPF"
+                            onChange={(e) => setCreateCliente((d) => ({ ...d, cpf: e.target.value }))}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            value={createCliente.nome || ''}
+                            placeholder="Nome"
+                            onChange={(e) => setCreateCliente((d) => ({ ...d, nome: e.target.value }))}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            value={createCliente.email || ''}
+                            placeholder="Email"
+                            onChange={(e) => setCreateCliente((d) => ({ ...d, email: e.target.value }))}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-2">
+                            {((createCliente.telefones as Telefone[]) || []).map((t, idx) => (
+                              <div key={idx} className="grid grid-cols-3 gap-2">
+                                <Input
+                                  placeholder="DDD"
+                                  type="number"
+                                  value={t.ddd ?? ''}
+                                  onChange={(e) => {
+                                    const arr = [ ...((createCliente.telefones as Telefone[]) || []) ];
+                                    arr[idx] = { ...arr[idx], ddd: Number(e.target.value) } as Telefone;
+                                    setCreateCliente((d) => ({ ...d, telefones: arr }));
+                                  }}
+                                />
+                                <Input
+                                  placeholder="Número"
+                                  type="number"
+                                  value={t.numero ?? ''}
+                                  onChange={(e) => {
+                                    const arr = [ ...((createCliente.telefones as Telefone[]) || []) ];
+                                    arr[idx] = { ...arr[idx], numero: Number(e.target.value) } as Telefone;
+                                    setCreateCliente((d) => ({ ...d, telefones: arr }));
+                                  }}
+                                />
+                                <Select
+                                  value={t.tipo || 'CELULAR'}
+                                  onValueChange={(val) => {
+                                    const arr = [ ...((createCliente.telefones as Telefone[]) || []) ];
+                                    arr[idx] = { ...arr[idx], tipo: val as Telefone['tipo'] } as Telefone;
+                                    setCreateCliente((d) => ({ ...d, telefones: arr }));
+                                  }}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Tipo" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="CELULAR">CELULAR</SelectItem>
+                                    <SelectItem value="FIXO">FIXO</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            ))}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                const arr = [ ...((createCliente.telefones as Telefone[]) || []) ];
+                                arr.push({ ddd: 11, numero: 0, tipo: 'CELULAR' });
+                                setCreateCliente((d) => ({ ...d, telefones: arr }));
+                              }}
+                            >
+                              <Plus className="h-4 w-4 mr-2" /> Telefone
+                            </Button>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="grid grid-cols-2 gap-2">
+                            <Input placeholder="CEP" value={(createCliente.endereco as any)?.cep || ''} onChange={(e) => setCreateCliente((d) => ({ ...d, endereco: { ...(d.endereco as any), cep: e.target.value } }))} />
+                            <Input placeholder="UF" value={(createCliente.endereco as any)?.uf || ''} onChange={(e) => setCreateCliente((d) => ({ ...d, endereco: { ...(d.endereco as any), uf: e.target.value as any } }))} />
+                            <Input placeholder="Cidade" value={(createCliente.endereco as any)?.cidade || ''} onChange={(e) => setCreateCliente((d) => ({ ...d, endereco: { ...(d.endereco as any), cidade: e.target.value } }))} />
+                            <Input placeholder="Bairro" value={(createCliente.endereco as any)?.bairro || ''} onChange={(e) => setCreateCliente((d) => ({ ...d, endereco: { ...(d.endereco as any), bairro: e.target.value } }))} />
+                            <Input placeholder="Logradouro" value={(createCliente.endereco as any)?.logradouro || ''} onChange={(e) => setCreateCliente((d) => ({ ...d, endereco: { ...(d.endereco as any), logradouro: e.target.value } }))} />
+                            <Input placeholder="Número" value={(createCliente.endereco as any)?.numero || ''} onChange={(e) => setCreateCliente((d) => ({ ...d, endereco: { ...(d.endereco as any), numero: e.target.value } }))} />
+                            <Input placeholder="Compl." value={(createCliente.endereco as any)?.complemento || ''} onChange={(e) => setCreateCliente((d) => ({ ...d, endereco: { ...(d.endereco as any), complemento: e.target.value } }))} />
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button size="sm" onClick={addCliente}>
+                              <Save className="h-4 w-4" />
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => setCreatingCliente(false)}>
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+
                     {filtered.clientes.map((c) => (
                       <TableRow key={c.id}>
                         <TableCell>
                           {editClienteId === c.id ? (
                             <Input
-                              value={draftCliente.cpf ?? (c as any).cpf ?? ''}
+                              value={(draftCliente.cpf as any) ?? (c as any).cpf ?? ''}
                               onChange={(e) => setDraftCliente((d) => ({ ...d, cpf: e.target.value }))}
                             />
                           ) : (
@@ -749,6 +1136,82 @@ const Gestao = () => {
                             <span>{(c as any).email}</span>
                           )}
                         </TableCell>
+                        <TableCell>
+                          {editClienteId === c.id ? (
+                            <div className="space-y-2">
+                              {(((draftCliente.telefones as Telefone[]) || (c as any).telefones || []) as Telefone[]).map((t, idx) => (
+                                <div key={idx} className="grid grid-cols-3 gap-2">
+                                  <Input
+                                    placeholder="DDD"
+                                    type="number"
+                                    value={t.ddd ?? ''}
+                                    onChange={(e) => {
+                                      const base = [ ...(((draftCliente.telefones as Telefone[]) || (c as any).telefones || []) as Telefone[]) ];
+                                      base[idx] = { ...base[idx], ddd: Number(e.target.value) } as Telefone;
+                                      setDraftCliente((d) => ({ ...d, telefones: base }));
+                                    }}
+                                  />
+                                  <Input
+                                    placeholder="Número"
+                                    type="number"
+                                    value={t.numero ?? ''}
+                                    onChange={(e) => {
+                                      const base = [ ...(((draftCliente.telefones as Telefone[]) || (c as any).telefones || []) as Telefone[]) ];
+                                      base[idx] = { ...base[idx], numero: Number(e.target.value) } as Telefone;
+                                      setDraftCliente((d) => ({ ...d, telefones: base }));
+                                    }}
+                                  />
+                                  <Select
+                                    value={t.tipo || 'CELULAR'}
+                                    onValueChange={(val) => {
+                                      const base = [ ...(((draftCliente.telefones as Telefone[]) || (c as any).telefones || []) as Telefone[]) ];
+                                      base[idx] = { ...base[idx], tipo: val as Telefone['tipo'] } as Telefone;
+                                      setDraftCliente((d) => ({ ...d, telefones: base }));
+                                    }}
+                                  >
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Tipo" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="CELULAR">CELULAR</SelectItem>
+                                      <SelectItem value="FIXO">FIXO</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              ))}
+                              <div className="flex gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    const base = [ ...(((draftCliente.telefones as Telefone[]) || (c as any).telefones || []) as Telefone[]) ];
+                                    base.push({ ddd: 11, numero: 0, tipo: 'CELULAR' });
+                                    setDraftCliente((d) => ({ ...d, telefones: base }));
+                                  }}
+                                >
+                                  <Plus className="h-4 w-4 mr-2" /> Telefone
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <span>{formatTelefones((c as any).telefones)}</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {editClienteId === c.id ? (
+                            <div className="grid grid-cols-2 gap-2">
+                              <Input placeholder="CEP" value={(draftCliente.endereco as any)?.cep ?? (c as any)?.endereco?.cep ?? ''} onChange={(e) => setDraftCliente((d) => ({ ...d, endereco: { ...((d.endereco as any) || (c as any).endereco || {}), cep: e.target.value } }))} />
+                              <Input placeholder="UF" value={(draftCliente.endereco as any)?.uf ?? (c as any)?.endereco?.uf ?? ''} onChange={(e) => setDraftCliente((d) => ({ ...d, endereco: { ...((d.endereco as any) || (c as any).endereco || {}), uf: e.target.value as any } }))} />
+                              <Input placeholder="Cidade" value={(draftCliente.endereco as any)?.cidade ?? (c as any)?.endereco?.cidade ?? ''} onChange={(e) => setDraftCliente((d) => ({ ...d, endereco: { ...((d.endereco as any) || (c as any).endereco || {}), cidade: e.target.value } }))} />
+                              <Input placeholder="Bairro" value={(draftCliente.endereco as any)?.bairro ?? (c as any)?.endereco?.bairro ?? ''} onChange={(e) => setDraftCliente((d) => ({ ...d, endereco: { ...((d.endereco as any) || (c as any).endereco || {}), bairro: e.target.value } }))} />
+                              <Input placeholder="Logradouro" value={(draftCliente.endereco as any)?.logradouro ?? (c as any)?.endereco?.logradouro ?? ''} onChange={(e) => setDraftCliente((d) => ({ ...d, endereco: { ...((d.endereco as any) || (c as any).endereco || {}), logradouro: e.target.value } }))} />
+                              <Input placeholder="Número" value={(draftCliente.endereco as any)?.numero ?? (c as any)?.endereco?.numero ?? ''} onChange={(e) => setDraftCliente((d) => ({ ...d, endereco: { ...((d.endereco as any) || (c as any).endereco || {}), numero: e.target.value } }))} />
+                              <Input placeholder="Compl." value={(draftCliente.endereco as any)?.complemento ?? (c as any)?.endereco?.complemento ?? ''} onChange={(e) => setDraftCliente((d) => ({ ...d, endereco: { ...((d.endereco as any) || (c as any).endereco || {}), complemento: e.target.value } }))} />
+                            </div>
+                          ) : (
+                            <span>{formatEndereco((c as any).endereco)}</span>
+                          )}
+                        </TableCell>
                         <TableCell className="text-right">
                           {editClienteId === c.id ? (
                             <div className="flex justify-end gap-2">
@@ -773,7 +1236,7 @@ const Gestao = () => {
                                 variant="outline"
                                 onClick={() => {
                                   setEditClienteId(c.id);
-                                  setDraftCliente({ cpf: (c as any).cpf, nome: (c as any).nome, email: (c as any).email });
+                                  setDraftCliente({ cpf: (c as any).cpf, nome: (c as any).nome, email: (c as any).email, telefones: (c as any).telefones, endereco: (c as any).endereco});
                                 }}
                               >
                                 <Pencil className="h-4 w-4" />
@@ -786,9 +1249,9 @@ const Gestao = () => {
                         </TableCell>
                       </TableRow>
                     ))}
-                    {filtered.clientes.length === 0 && (
+                    {filtered.clientes.length === 0 && !creatingCliente && (
                       <TableRow>
-                        <TableCell colSpan={4} className="text-center text-muted-foreground">
+                        <TableCell colSpan={6} className="text-center text-muted-foreground">
                           Nenhum cliente encontrado.
                         </TableCell>
                       </TableRow>
@@ -834,6 +1297,12 @@ const Gestao = () => {
                     onChange={(e) => setSearch((s) => ({ ...s, usuarios: { ...s.usuarios, query: e.target.value } }))}
                   />
                 </div>
+                <div className="sm:ml-auto">
+                  <Button size="sm" onClick={() => setCreatingUsuario((v) => !v)}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Adicionar
+                  </Button>
+                </div>
               </div>
 
               <div className="overflow-x-auto">
@@ -847,6 +1316,58 @@ const Gestao = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
+                    {creatingUsuario && (
+                      <TableRow>
+                        <TableCell>
+                          <Input
+                            placeholder="Nome de usuário"
+                            value={createUsuario.nomeUsuario || ''}
+                            onChange={(e) => setCreateUsuario((d) => ({ ...d, nomeUsuario: e.target.value }))}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            placeholder="Email"
+                            value={createUsuario.email || ''}
+                            onChange={(e) => setCreateUsuario((d) => ({ ...d, email: e.target.value }))}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-2">
+                            <Select
+                              value={(createUsuario.categoria as any) || 'USUARIO'}
+                              onValueChange={(val) => setCreateUsuario((d) => ({ ...d, categoria: val as any }))}
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="ADMINISTRADOR">ADMINISTRADOR</SelectItem>
+                                <SelectItem value="USUARIO">USUARIO</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Input
+                              type="password"
+                              className="max-w-[160px]"
+                              placeholder="Senha"
+                              value={createUsuario.senha || ''}
+                              onChange={(e) => setCreateUsuario((d) => ({ ...d, senha: e.target.value }))}
+                            />
+                            <Button size="sm" onClick={addUsuario}>
+                              <Save className="h-4 w-4" />
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => setCreatingUsuario(false)}>
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+
                     {filtered.usuarios.map((u) => (
                       <TableRow key={u.id}>
                         <TableCell>
@@ -924,7 +1445,7 @@ const Gestao = () => {
                         </TableCell>
                       </TableRow>
                     ))}
-                    {filtered.usuarios.length === 0 && (
+                    {filtered.usuarios.length === 0 && !creatingUsuario && (
                       <TableRow>
                         <TableCell colSpan={4} className="text-center text-muted-foreground">
                           Nenhum usuário encontrado.
