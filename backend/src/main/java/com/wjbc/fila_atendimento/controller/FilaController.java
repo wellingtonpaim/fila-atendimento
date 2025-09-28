@@ -5,6 +5,7 @@ import com.wjbc.fila_atendimento.domain.dto.FilaCreateDTO;
 import com.wjbc.fila_atendimento.domain.dto.FilaUpdateDTO;
 import com.wjbc.fila_atendimento.domain.dto.FilaResponseDTO;
 import com.wjbc.fila_atendimento.domain.service.FilaService;
+import com.wjbc.fila_atendimento.controller.util.PaginationUtil;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
@@ -20,9 +21,13 @@ public class FilaController {
     }
 
     @GetMapping("/unidade/{unidadeId}")
-    public ResponseEntity<ApiResponse<List<FilaResponseDTO>>> listarPorUnidade(@PathVariable UUID unidadeId) {
+    public ResponseEntity<ApiResponse<List<FilaResponseDTO>>> listarPorUnidade(
+            @PathVariable UUID unidadeId,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
+    ) {
         List<FilaResponseDTO> filas = filaService.listarPorUnidade(unidadeId);
-        return ResponseEntity.ok(new ApiResponse<>(true, "Filas listadas por unidade", filas));
+        return PaginationUtil.build(filas, page, size, "Filas listadas por unidade");
     }
 
     @GetMapping("/{id}")

@@ -5,6 +5,7 @@ import com.wjbc.fila_atendimento.domain.dto.UsuarioCreateDTO;
 import com.wjbc.fila_atendimento.domain.dto.UsuarioUpdateDTO;
 import com.wjbc.fila_atendimento.domain.dto.UsuarioResponseDTO;
 import com.wjbc.fila_atendimento.domain.service.UsuarioService;
+import com.wjbc.fila_atendimento.controller.util.PaginationUtil;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
@@ -20,9 +21,12 @@ public class UsuarioController {
     }
 
     @GetMapping
-    public ResponseEntity<ApiResponse<List<UsuarioResponseDTO>>> listarTodos() {
+    public ResponseEntity<ApiResponse<List<UsuarioResponseDTO>>> listarTodos(
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
+    ) {
         List<UsuarioResponseDTO> usuarios = usuarioService.listarTodos();
-        return ResponseEntity.ok(new ApiResponse<>(true, "Usuários listados com sucesso", usuarios));
+        return PaginationUtil.build(usuarios, page, size, "Usuários listados com sucesso");
     }
 
     @GetMapping("/{id}")
