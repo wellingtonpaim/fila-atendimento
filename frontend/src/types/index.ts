@@ -69,6 +69,14 @@ export interface UsuarioCreateDTO {
   unidadesIds?: string[];
 }
 
+export interface ClienteCreateDTO {
+  cpf: string;
+  nome: string;
+  email?: string;
+  telefones?: Telefone[];
+  endereco?: Endereco;
+}
+
 // DTOs de resposta
 export interface SetorResponseDTO {
   id: string;
@@ -97,6 +105,15 @@ export interface FilaResponseDTO {
   unidade: UnidadeAtendimentoResponseDTO;
 }
 
+export interface ClienteResponseDTO {
+  id: string;
+  cpf: string;
+  nome: string;
+  email?: string;
+  telefones?: Telefone[];
+  endereco?: Endereco;
+}
+
 // DTOs de atualização
 export interface FilaUpdateDTO {
   nome?: string;
@@ -121,6 +138,14 @@ export interface UsuarioUpdateDTO {
   unidadesIds?: string[];
 }
 
+export interface ClienteUpdateDTO {
+  cpf?: string;
+  nome?: string;
+  email?: string;
+  telefones?: Telefone[];
+  endereco?: Endereco;
+}
+
 // API Response wrapper
 export interface ApiResponse<T> {
   success: boolean;
@@ -131,14 +156,6 @@ export interface ApiResponse<T> {
 }
 
 // Outros tipos que podem existir
-export interface ClienteResponseDTO {
-  id: string;
-  cpf: string;
-  nome: string;
-  email?: string;
-  telefones?: Telefone[];
-  endereco?: Endereco;
-}
 
 export interface EntradaFilaResponseDTO {
   id: string;

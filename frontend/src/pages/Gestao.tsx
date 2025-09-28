@@ -25,6 +25,7 @@ import { filaService } from '@/services/filaService';
 import { setorService } from '@/services/setorService';
 import { unidadeService } from '@/services/unidadeService';
 import { usuarioService } from '@/services/usuarioService';
+import { clienteService } from '@/services/clienteService';
 
 // Types
 import {
@@ -42,7 +43,10 @@ import {
   CategoriaUsuario,
   TipoTelefone,
   UF,
-  Telefone
+  Telefone,
+  ClienteCreateDTO,
+  ClienteResponseDTO,
+  ClienteUpdateDTO
 } from '@/types';
 
 interface FormErrors {
@@ -57,6 +61,7 @@ const Gestao = () => {
   const [setores, setSetores] = useState<SetorResponseDTO[]>([]);
   const [unidades, setUnidades] = useState<UnidadeAtendimentoResponseDTO[]>([]);
   const [usuarios, setUsuarios] = useState<UsuarioResponseDTO[]>([]);
+  const [clientes, setClientes] = useState<ClienteResponseDTO[]>([]);
 
   // Estados para loading
   const [loading, setLoading] = useState(false);
@@ -66,12 +71,14 @@ const Gestao = () => {
   const [setorModalOpen, setSetorModalOpen] = useState(false);
   const [unidadeModalOpen, setUnidadeModalOpen] = useState(false);
   const [usuarioModalOpen, setUsuarioModalOpen] = useState(false);
+  const [clienteModalOpen, setClienteModalOpen] = useState(false);
 
   // Estados para edição
   const [editingFila, setEditingFila] = useState<FilaResponseDTO | null>(null);
   const [editingSetor, setEditingSetor] = useState<SetorResponseDTO | null>(null);
   const [editingUnidade, setEditingUnidade] = useState<UnidadeAtendimentoResponseDTO | null>(null);
   const [editingUsuario, setEditingUsuario] = useState<UsuarioResponseDTO | null>(null);
+  const [editingCliente, setEditingCliente] = useState<ClienteResponseDTO | null>(null);
 
   // Estados para formulários
   const [filaForm, setFilaForm] = useState<FilaCreateDTO>({
@@ -105,10 +112,30 @@ const Gestao = () => {
     categoria: CategoriaUsuario.USUARIO,
     unidadesIds: []
   });
+  const [clienteForm, setClienteForm] = useState<ClienteCreateDTO>({
+    cpf: '',
+    nome: '',
+    email: '',
+    telefones: [],
+    endereco: {
+      logradouro: '',
+      numero: '',
+      complemento: '',
+      bairro: '',
+      cidade: '',
+      cep: '',
+      uf: undefined
+    }
+  });
 
   // Estados para telefones temporários na unidade
   const [telefoneTemp, setTelefoneTemp] = useState<Telefone>({
     tipo: TipoTelefone.FIXO,
+    ddd: 11,
+    numero: 0
+  });
+  const [telefoneClienteTemp, setTelefoneClienteTemp] = useState<Telefone>({
+    tipo: TipoTelefone.CELULAR,
     ddd: 11,
     numero: 0
   });
@@ -124,16 +151,18 @@ const Gestao = () => {
   const carregarDados = async () => {
     setLoading(true);
     try {
-      // Primeiro carregamos setores, unidades e usuários
-      const [setoresRes, unidadesRes, usuariosRes] = await Promise.all([
+      // Primeiro carregamos setores, unidades, usuários e clientes
+      const [setoresRes, unidadesRes, usuariosRes, clientesRes] = await Promise.all([
         setorService.listarTodos(),
         unidadeService.listarTodas(),
-        usuarioService.listarTodos()
+        usuarioService.listarTodos(),
+        clienteService.listarTodos()
       ]);
 
       setSetores(setoresRes.data || []);
       setUnidades(unidadesRes.data || []);
       setUsuarios(usuariosRes.data || []);
+      setClientes(clientesRes.data || []);
 
       // Depois carregamos as filas se há unidades disponíveis
       if (unidadesRes.data && unidadesRes.data.length > 0) {
@@ -159,6 +188,7 @@ const Gestao = () => {
       setSetores([]);
       setUnidades([]);
       setUsuarios([]);
+      setClientes([]);
     } finally {
       setLoading(false);
     }
@@ -211,6 +241,18 @@ const Gestao = () => {
     }
     if (!editingUsuario && (!form.senha || form.senha.length < 6)) {
       errors.senha = 'Senha deve ter pelo menos 6 caracteres';
+    }
+    return errors;
+  };
+
+  const validarClienteForm = (form: ClienteCreateDTO): FormErrors => {
+    const errors: FormErrors = {};
+    if (!form.cpf || !form.cpf.trim()) errors.cpf = 'CPF é obrigatório';
+    if (!form.nome || form.nome.length < 3 || form.nome.length > 100) errors.nome = 'Nome deve ter entre 3 e 100 caracteres';
+    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errors.email = 'Email inválido';
+    if (form.endereco) {
+      if (form.endereco.logradouro !== undefined && !form.endereco.logradouro.trim()) errors.logradouro = 'Logradouro não pode ser vazio';
+      if (form.endereco.numero !== undefined && !form.endereco.numero.trim()) errors.numero = 'Número não pode ser vazio';
     }
     return errors;
   };
@@ -471,8 +513,25 @@ const Gestao = () => {
     }
   };
 
+  const adicionarTelefoneCliente = () => {
+    if (telefoneClienteTemp.ddd && telefoneClienteTemp.numero) {
+      setClienteForm(prev => ({
+        ...prev,
+        telefones: [...(prev.telefones || []), telefoneClienteTemp]
+      }));
+      setTelefoneClienteTemp({ tipo: TipoTelefone.CELULAR, ddd: 11, numero: 0 });
+    }
+  };
+
   const removerTelefone = (index: number) => {
     setUnidadeForm(prev => ({
+      ...prev,
+      telefones: prev.telefones?.filter((_, i) => i !== index) || []
+    }));
+  };
+
+  const removerTelefoneCliente = (index: number) => {
+    setClienteForm(prev => ({
       ...prev,
       telefones: prev.telefones?.filter((_, i) => i !== index) || []
     }));
@@ -581,6 +640,72 @@ const Gestao = () => {
     setErrors({});
   };
 
+  const resetClienteForm = () => {
+    setClienteForm({
+      cpf: '',
+      nome: '',
+      email: '',
+      telefones: [],
+      endereco: { logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', cep: '', uf: undefined }
+    });
+    setEditingCliente(null);
+    setErrors({});
+  };
+
+  // Funções para manipular clientes
+  const handleSalvarCliente = async () => {
+    const validationErrors = validarClienteForm(clienteForm);
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
+      return;
+    }
+    try {
+      if (editingCliente) {
+        const updateData: ClienteUpdateDTO = {
+          cpf: clienteForm.cpf,
+          nome: clienteForm.nome,
+          email: clienteForm.email,
+          telefones: clienteForm.telefones,
+          endereco: clienteForm.endereco
+        };
+        await clienteService.atualizarParcialmente(editingCliente.id, updateData);
+        toast({ title: 'Sucesso', description: 'Cliente atualizado com sucesso' });
+      } else {
+        await clienteService.criar(clienteForm);
+        toast({ title: 'Sucesso', description: 'Cliente criado com sucesso' });
+      }
+      setClienteModalOpen(false);
+      resetClienteForm();
+      carregarDados();
+    } catch (err) {
+      toast({ title: 'Erro', description: 'Erro ao salvar cliente', variant: 'destructive' });
+    }
+  };
+
+  const handleEditarCliente = (cliente: ClienteResponseDTO) => {
+    setEditingCliente(cliente);
+    setClienteForm({
+      cpf: cliente.cpf || '',
+      nome: cliente.nome || '',
+      email: cliente.email || '',
+      telefones: cliente.telefones || [],
+      endereco: cliente.endereco || { logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', cep: '', uf: undefined }
+    });
+    setClienteModalOpen(true);
+  };
+
+  const handleExcluirCliente = async (id: string) => {
+    if (confirm('Tem certeza que deseja excluir este cliente?')) {
+      try {
+        await clienteService.desativar(id);
+        toast({ title: 'Sucesso', description: 'Cliente excluído com sucesso' });
+        carregarDados();
+      } catch (err) {
+        toast({ title: 'Erro', description: 'Erro ao excluir cliente', variant: 'destructive' });
+      }
+    }
+  };
+
   return (
     <div className="container mx-auto p-6">
       <div className="flex justify-between items-center mb-6">
@@ -593,11 +718,12 @@ const Gestao = () => {
         </div>
       ) : (
         <Tabs defaultValue="filas" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="filas">Filas</TabsTrigger>
             <TabsTrigger value="setores">Setores</TabsTrigger>
             <TabsTrigger value="unidades">Unidades</TabsTrigger>
             <TabsTrigger value="usuarios">Usuários</TabsTrigger>
+            <TabsTrigger value="clientes">Clientes</TabsTrigger>
           </TabsList>
 
           {/* Tab Filas */}
@@ -699,7 +825,7 @@ const Gestao = () => {
                       <TableHead>Nome</TableHead>
                       <TableHead>Setor</TableHead>
                       <TableHead>Unidade</TableHead>
-                      <TableHead>Ações</TableHead>
+                      <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -708,8 +834,8 @@ const Gestao = () => {
                         <TableCell>{fila.nome}</TableCell>
                         <TableCell>{fila.setor.nome}</TableCell>
                         <TableCell>{fila.unidade.nome}</TableCell>
-                        <TableCell>
-                          <div className="flex gap-2">
+                        <TableCell className="text-right">
+                          <div className="flex gap-2 justify-end">
                             <Button
                               variant="outline"
                               size="sm"
@@ -791,15 +917,15 @@ const Gestao = () => {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Nome</TableHead>
-                      <TableHead>Ações</TableHead>
+                      <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {setores.map((setor) => (
                       <TableRow key={setor.id}>
                         <TableCell>{setor.nome}</TableCell>
-                        <TableCell>
-                          <div className="flex gap-2">
+                        <TableCell className="text-right">
+                          <div className="flex gap-2 justify-end">
                             <Button
                               variant="outline"
                               size="sm"
@@ -1004,14 +1130,16 @@ const Gestao = () => {
                             <Input
                               type="number"
                               value={telefoneTemp.ddd || ''}
-                              onChange={(e) => setTelefoneTemp(prev => ({ ...prev, ddd: parseInt(e.target.value) || 0 }))}
+                              onChange={(e) => setTelefoneTemp(prev => ({ ...prev, ddd: parseInt(e.target.value) || 0 }))
+                              }
                               placeholder="DDD"
                             />
 
                             <Input
                               type="number"
                               value={telefoneTemp.numero || ''}
-                              onChange={(e) => setTelefoneTemp(prev => ({ ...prev, numero: parseInt(e.target.value) || 0 }))}
+                              onChange={(e) => setTelefoneTemp(prev => ({ ...prev, numero: parseInt(e.target.value) || 0 }))
+                              }
                               placeholder="Número"
                             />
 
@@ -1060,7 +1188,7 @@ const Gestao = () => {
                       <TableHead>Nome</TableHead>
                       <TableHead>Endereço</TableHead>
                       <TableHead>Telefones</TableHead>
-                      <TableHead>Ações</TableHead>
+                      <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1079,8 +1207,8 @@ const Gestao = () => {
                             </div>
                           )) || 'Nenhum'}
                         </TableCell>
-                        <TableCell>
-                          <div className="flex gap-2">
+                        <TableCell className="text-right">
+                          <div className="flex gap-2 justify-end">
                             <Button
                               variant="outline"
                               size="sm"
@@ -1238,7 +1366,7 @@ const Gestao = () => {
                       <TableHead>Email</TableHead>
                       <TableHead>Categoria</TableHead>
                       <TableHead>Unidades</TableHead>
-                      <TableHead>Ações</TableHead>
+                      <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1258,8 +1386,8 @@ const Gestao = () => {
                         <TableCell>
                           {usuario.unidadesIds?.length || 0} unidade(s)
                         </TableCell>
-                        <TableCell>
-                          <div className="flex gap-2">
+                        <TableCell className="text-right">
+                          <div className="flex gap-2 justify-end">
                             <Button
                               variant="outline"
                               size="sm"
@@ -1281,6 +1409,195 @@ const Gestao = () => {
                               size="sm"
                               onClick={() => handleExcluirUsuario(usuario.id)}
                             >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Tab Clientes */}
+          <TabsContent value="clientes">
+            <Card>
+              <CardHeader>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <CardTitle>Gerenciar Clientes</CardTitle>
+                    <CardDescription>Cadastre e edite clientes</CardDescription>
+                  </div>
+                  <Dialog open={clienteModalOpen} onOpenChange={setClienteModalOpen}>
+                    <DialogTrigger asChild>
+                      <Button onClick={resetClienteForm}>
+                        <Plus className="w-4 h-4 mr-2" />
+                        Novo Cliente
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
+                      <DialogHeader>
+                        <DialogTitle>{editingCliente ? 'Editar Cliente' : 'Novo Cliente'}</DialogTitle>
+                        <DialogDescription>
+                          {editingCliente ? 'Edite os dados do cliente' : 'Preencha os dados do novo cliente'}
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="grid gap-4 py-4">
+                        <div className="grid gap-2">
+                          <Label htmlFor="cliente-cpf">CPF *</Label>
+                          <Input id="cliente-cpf" value={clienteForm.cpf}
+                            onChange={(e)=> setClienteForm(prev=>({...prev, cpf: e.target.value}))}
+                            placeholder="000.000.000-00" className={errors.cpf ? 'border-red-500' : ''}/>
+                          {errors.cpf && <p className="text-sm text-red-500">{errors.cpf}</p>}
+                        </div>
+                        <div className="grid gap-2">
+                          <Label htmlFor="cliente-nome">Nome *</Label>
+                          <Input id="cliente-nome" value={clienteForm.nome}
+                            onChange={(e)=> setClienteForm(prev=>({...prev, nome: e.target.value}))}
+                            placeholder="Nome completo" className={errors.nome ? 'border-red-500' : ''}/>
+                          {errors.nome && <p className="text-sm text-red-500">{errors.nome}</p>}
+                        </div>
+                        <div className="grid gap-2">
+                          <Label htmlFor="cliente-email">Email</Label>
+                          <Input id="cliente-email" type="email" value={clienteForm.email || ''}
+                            onChange={(e)=> setClienteForm(prev=>({...prev, email: e.target.value}))}
+                            placeholder="cliente@email.com" className={errors.email ? 'border-red-500' : ''}/>
+                          {errors.email && <p className="text-sm text-red-500">{errors.email}</p>}
+                        </div>
+
+                        {/* Endereço do Cliente */}
+                        <div className="space-y-4">
+                          <h4 className="font-medium flex items-center gap-2"><MapPin className="w-4 h-4" />Endereço</h4>
+                          <div className="grid gap-2">
+                            <Label htmlFor="cliente-cep">CEP</Label>
+                            <Input id="cliente-cep" value={clienteForm.endereco?.cep || ''}
+                              onChange={(e)=> setClienteForm(prev=>({...prev, endereco:{...prev.endereco!, cep: e.target.value}}))}
+                              placeholder="00000-000"/>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="grid gap-2">
+                              <Label htmlFor="cliente-logradouro">Logradouro</Label>
+                              <Input id="cliente-logradouro" value={clienteForm.endereco?.logradouro || ''}
+                                onChange={(e)=> setClienteForm(prev=>({...prev, endereco:{...prev.endereco!, logradouro: e.target.value}}))}
+                                placeholder="Rua, Avenida, etc." className={errors.logradouro ? 'border-red-500' : ''}/>
+                              {errors.logradouro && <p className="text-sm text-red-500">{errors.logradouro}</p>}
+                            </div>
+                            <div className="grid gap-2">
+                              <Label htmlFor="cliente-numero">Número</Label>
+                              <Input id="cliente-numero" value={clienteForm.endereco?.numero || ''}
+                                onChange={(e)=> setClienteForm(prev=>({...prev, endereco:{...prev.endereco!, numero: e.target.value}}))}
+                                placeholder="123" className={errors.numero ? 'border-red-500' : ''}/>
+                              {errors.numero && <p className="text-sm text-red-500">{errors.numero}</p>}
+                            </div>
+                          </div>
+                          <div className="grid gap-2">
+                            <Label htmlFor="cliente-complemento">Complemento</Label>
+                            <Input id="cliente-complemento" value={clienteForm.endereco?.complemento || ''}
+                              onChange={(e)=> setClienteForm(prev=>({...prev, endereco:{...prev.endereco!, complemento: e.target.value}}))}
+                              placeholder="Apartamento, sala, etc."/>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="grid gap-2">
+                              <Label htmlFor="cliente-bairro">Bairro</Label>
+                              <Input id="cliente-bairro" value={clienteForm.endereco?.bairro || ''}
+                                onChange={(e)=> setClienteForm(prev=>({...prev, endereco:{...prev.endereco!, bairro: e.target.value}}))}
+                                placeholder="Bairro"/>
+                            </div>
+                            <div className="grid gap-2">
+                              <Label htmlFor="cliente-cidade">Cidade</Label>
+                              <Input id="cliente-cidade" value={clienteForm.endereco?.cidade || ''}
+                                onChange={(e)=> setClienteForm(prev=>({...prev, endereco:{...prev.endereco!, cidade: e.target.value}}))}
+                                placeholder="Cidade"/>
+                            </div>
+                          </div>
+                          <div className="grid gap-2">
+                            <Label htmlFor="cliente-uf">UF</Label>
+                            <Select value={clienteForm.endereco?.uf || ''}
+                              onValueChange={(value)=> setClienteForm(prev=>({...prev, endereco:{...prev.endereco!, uf: value as UF}}))}>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Selecione o estado" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {Object.values(UF).map(uf=> (<SelectItem key={uf} value={uf}>{uf}</SelectItem>))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+
+                        {/* Telefones do Cliente */}
+                        <div className="space-y-4">
+                          <h4 className="font-medium flex items-center gap-2"><Phone className="w-4 h-4" />Telefones</h4>
+                          <div className="grid grid-cols-4 gap-2">
+                            <Select value={telefoneClienteTemp.tipo}
+                              onValueChange={(value)=> setTelefoneClienteTemp(prev=>({...prev, tipo: value as TipoTelefone}))}>
+                              <SelectTrigger><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value={TipoTelefone.FIXO}>Fixo</SelectItem>
+                                <SelectItem value={TipoTelefone.CELULAR}>Celular</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <Input type="number" value={telefoneClienteTemp.ddd || ''} placeholder="DDD"
+                              onChange={(e)=> setTelefoneClienteTemp(prev=>({...prev, ddd: parseInt(e.target.value)||0}))}/>
+                            <Input type="number" value={telefoneClienteTemp.numero || ''} placeholder="Número"
+                              onChange={(e)=> setTelefoneClienteTemp(prev=>({...prev, numero: parseInt(e.target.value)||0}))}/>
+                            <Button type="button" onClick={adicionarTelefoneCliente}><Plus className="w-4 h-4" /></Button>
+                          </div>
+                          {clienteForm.telefones && clienteForm.telefones.length > 0 && (
+                            <div className="space-y-2">
+                              {clienteForm.telefones.map((tel, idx)=> (
+                                <div key={idx} className="flex items-center justify-between p-2 border rounded">
+                                  <span>{tel.tipo} - ({tel.ddd}) {tel.numero}</span>
+                                  <Button type="button" variant="outline" size="sm" onClick={()=> removerTelefoneCliente(idx)}>
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <DialogFooter>
+                        <Button variant="outline" onClick={()=> setClienteModalOpen(false)}>Cancelar</Button>
+                        <Button onClick={handleSalvarCliente}>{editingCliente ? 'Atualizar' : 'Criar'}</Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Nome</TableHead>
+                      <TableHead>CPF</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Telefones</TableHead>
+                      <TableHead className="text-right">Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {clientes.map((cliente)=> (
+                      <TableRow key={cliente.id}>
+                        <TableCell>{cliente.nome}</TableCell>
+                        <TableCell>{cliente.cpf}</TableCell>
+                        <TableCell>{cliente.email || '-'}</TableCell>
+                        <TableCell>
+                          {cliente.telefones && cliente.telefones.length>0 ? (
+                            <div className="space-y-1">
+                              {cliente.telefones.map((t, i)=> (
+                                <div key={i} className="text-sm">{t.tipo}: ({t.ddd}) {t.numero}</div>
+                              ))}
+                            </div>
+                          ) : 'Nenhum'}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex gap-2 justify-end">
+                            <Button variant="outline" size="sm" onClick={()=> handleEditarCliente(cliente)}>
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                            <Button variant="outline" size="sm" onClick={()=> handleExcluirCliente(cliente.id)}>
                               <Trash2 className="w-4 h-4" />
                             </Button>
                           </div>
