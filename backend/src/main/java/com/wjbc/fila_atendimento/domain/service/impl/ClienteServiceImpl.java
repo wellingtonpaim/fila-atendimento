@@ -29,7 +29,7 @@ public class ClienteServiceImpl implements ClienteService {
     @Override
     @Transactional
     public ClienteResponseDTO criar(ClienteCreateDTO clienteDTO) {
-        validarCpfEEmail(clienteDTO.cpf(), clienteDTO.email(), null);
+        validarCpf(clienteDTO.cpf(), null);
 
         Cliente cliente = clienteMapper.toEntity(clienteDTO);
         cliente.setAtivo(true);
@@ -42,7 +42,7 @@ public class ClienteServiceImpl implements ClienteService {
     @Transactional
     public ClienteResponseDTO substituir(UUID id, ClienteCreateDTO clienteDTO) {
         Cliente clienteExistente = findClienteById(id);
-        validarCpfEEmail(clienteDTO.cpf(), clienteDTO.email(), id);
+        validarCpf(clienteDTO.cpf(), id);
 
         clienteExistente.setCpf(clienteDTO.cpf());
         clienteExistente.setNome(clienteDTO.nome());
@@ -58,20 +58,8 @@ public class ClienteServiceImpl implements ClienteService {
     @Transactional
     public ClienteResponseDTO atualizarParcialmente(UUID id, ClienteUpdateDTO clienteDTO) {
         Cliente clienteExistente = findClienteById(id);
-
-        // Verifica se o e-mail está sendo alterado e se já existe para outro cliente
-        if (clienteDTO.email() != null && !clienteDTO.email().equals(clienteExistente.getEmail())) {
-            clienteRepository.findByEmail(clienteDTO.email()).ifPresent(cliente -> {
-                if (!cliente.getId().equals(id)) {
-                    throw new com.wjbc.fila_atendimento.exception.EmailDuplicadoException("E-mail '" + clienteDTO.email() + "' já está cadastrado para outro cliente.");
-                }
-            });
-        }
-
         clienteMapper.applyPatchToEntity(clienteDTO, clienteExistente);
-
-        validarCpfEEmail(clienteExistente.getCpf(), clienteExistente.getEmail(), id);
-
+        validarCpf(clienteExistente.getCpf(), id);
         Cliente clienteAtualizado = clienteRepository.save(clienteExistente);
         return clienteMapper.toResponseDTO(clienteAtualizado);
     }
@@ -126,16 +114,10 @@ public class ClienteServiceImpl implements ClienteService {
         clienteRepository.delete(cliente);
     }
 
-    private void validarCpfEEmail(String cpf, String email, UUID idExcluido) {
+    private void validarCpf(String cpf, UUID idExcluido) {
         clienteRepository.findByCpf(cpf).ifPresent(cliente -> {
             if (idExcluido == null || !cliente.getId().equals(idExcluido)) {
                 throw new BusinessException("CPF " + cpf + " já cadastrado no sistema.");
-            }
-        });
-
-        clienteRepository.findByEmail(email).ifPresent(cliente -> {
-            if (idExcluido == null || !cliente.getId().equals(idExcluido)) {
-                throw new com.wjbc.fila_atendimento.exception.EmailDuplicadoException("Email " + email + " já cadastrado no sistema.");
             }
         });
     }

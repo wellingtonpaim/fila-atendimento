@@ -13,8 +13,8 @@ import java.util.UUID;
 @Data
 @EqualsAndHashCode(of = "id")
 @Entity
-@Table(name = "cliente")
-@SQLDelete(sql = "UPDATE cliente SET ativo = false WHERE id = ?")
+@Table(name = "cliente", schema = "fila_atendimento")
+@SQLDelete(sql = "UPDATE fila_atendimento.cliente SET ativo = false WHERE id = ?")
 @Where(clause = "ativo = true")
 public class Cliente {
 

@@ -14,8 +14,8 @@ import java.util.UUID;
 @Data
 @EqualsAndHashCode(of = "id")
 @Entity
-@Table(name = "unidade_atendimento")
-@SQLDelete(sql = "UPDATE unidade_atendimento SET ativo = false WHERE id = ?")
+@Table(name = "unidade_atendimento", schema = "fila_atendimento")
+@SQLDelete(sql = "UPDATE fila_atendimento.unidade_atendimento SET ativo = false WHERE id = ?")
 @Where(clause = "ativo = true")
 public class UnidadeAtendimento {
 

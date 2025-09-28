@@ -26,7 +26,7 @@ public class AuthController {
     private final JWTTokenService jwtTokenService;
     private final AuthService authService;
 
-    @PostMapping("/login")
+    @PostMapping(value = "/login")
     public ResponseEntity<ApiResponse<String>> login(
             @RequestParam String username,
             @RequestParam String password,
@@ -51,16 +51,16 @@ public class AuthController {
             }
 
             String token = jwtTokenService.generateToken(username, unidadeAtendimentoId);
-            ResponseEntity<ApiResponse<String>> teste = ResponseEntity.ok(new ApiResponse<>(true, "Login realizado com sucesso", token));
-            return teste;
+            ResponseEntity<ApiResponse<String>> loginResponse = ResponseEntity.ok(new ApiResponse<>(true, "Login realizado com sucesso", token));
+            return loginResponse;
         } catch (AuthenticationException e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new ApiResponse<>(false, "Credenciais inválidas, verifique e tente novamente.", null));
         }
     }
 
-    @PostMapping("/register")
-    public ResponseEntity<ApiResponse<Void>> register(@Valid @RequestBody UsuarioCreateDTO dto) {
+    @PostMapping(value = "/register")
+    public ResponseEntity<ApiResponse<String>> register(@Valid @RequestBody UsuarioCreateDTO dto) {
         try {
             authService.register(dto);
             return ResponseEntity.ok(new ApiResponse<>(true, "E-mail de confirmação enviado com sucesso!", null));
@@ -68,16 +68,6 @@ public class AuthController {
             return ResponseEntity.badRequest().body(new ApiResponse<>(false, e.getMessage(), null));
         } catch (Exception e) {
             return ResponseEntity.internalServerError().body(new ApiResponse<>(false, "Erro ao registrar usuário!", null));
-        }
-    }
-
-    @GetMapping("/confirmar")
-    public ResponseEntity<ApiResponse<Void>> confirmEmail(@RequestParam String token) {
-        try {
-            authService.confirmEmail(token);
-            return ResponseEntity.ok(new ApiResponse<>(true, "E-mail confirmado com sucesso!", null));
-        } catch (IllegalArgumentException | IllegalStateException e) {
-            return ResponseEntity.badRequest().body(new ApiResponse<>(false, e.getMessage(), null));
         }
     }
 

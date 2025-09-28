@@ -6,7 +6,6 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.SQLDelete;
-import org.hibernate.annotations.Where;
 
 import java.util.List;
 import java.util.UUID;
@@ -14,9 +13,8 @@ import java.util.UUID;
 @Data
 @EqualsAndHashCode(of = "id")
 @Entity
-@Table(name = "usuario")
-@SQLDelete(sql = "UPDATE usuario SET ativo = false WHERE id = ?")
-@Where(clause = "ativo = true")
+@Table(name = "usuario", schema = "fila_atendimento")
+@SQLDelete(sql = "UPDATE fila_atendimento.usuario SET ativo = false WHERE id = ?")
 public class Usuario {
 
     @Id

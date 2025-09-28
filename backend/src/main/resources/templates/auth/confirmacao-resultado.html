@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Q-Manager • Confirmação de cadastro</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/qmanager.css" />
+  <style>
+    .container { max-width: 720px; margin: 6rem auto; padding: 2rem; background: #0b1220; border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.35); }
+    .brand { display: flex; align-items: center; gap: .75rem; margin-bottom: 1.25rem; }
+    .brand-badge { width: 40px; height: 40px; border-radius: 10px; background: linear-gradient(135deg, #00E1C6, #4F46E5); display: grid; place-items: center; color: #0b1220; font-weight: 800; letter-spacing: .5px; }
+    h1 { margin: .25rem 0 0; font-weight: 700; font-size: 1.35rem; color: #E2E8F0; }
+    .status { display: inline-flex; align-items: center; gap: .5rem; padding: .5rem .75rem; border-radius: 999px; font-size: .85rem; font-weight: 600; }
+    .status.ok { background: rgba(0, 225, 198, .12); color: #00E1C6; border: 1px solid rgba(0, 225, 198, .35); }
+    .status.err { background: rgba(255, 84, 84, .1); color: #FF5454; border: 1px solid rgba(255, 84, 84, .35); }
+    .card { margin-top: 1.25rem; background: #0f172a; border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; padding: 1.25rem; }
+    .message { color: #cbd5e1; line-height: 1.7; font-size: 1rem; }
+    .details { display: grid; grid-template-columns: 1fr; gap: .75rem; margin-top: 1rem; font-size: .9rem; color: #94a3b8; }
+    .actions { margin-top: 1.25rem; display: flex; gap: .75rem; flex-wrap: wrap; }
+    .btn { padding: .65rem 1rem; border-radius: 10px; font-weight: 600; text-decoration: none; white-space: nowrap; }
+    .btn-primary { background: linear-gradient(135deg, #00E1C6, #4F46E5); color: #0b1220; }
+    .btn-outline { border: 1px solid rgba(148,163,184,.35); color: #cbd5e1; }
+    footer { margin-top: 2rem; font-size: .85rem; color: #748094; text-align: center; }
+  </style>
+</head>
+<body class="qm-bg">
+  <main class="container">
+    <div class="brand">
+      <div class="brand-badge">QM</div>
+      <div>
+        <div class="caption">Q-Manager</div>
+        <h1>Confirmação de cadastro</h1>
+      </div>
+    </div>
+
+    <span th:class="${success} ? 'status ok' : 'status err'" th:text="${success} ? 'Tudo certo' : 'Não foi possível confirmar'"></span>
+
+    <section class="card">
+      <p class="message" th:text="${message}">Mensagem ao usuário</p>
+      <div class="details">
+        <div><strong>Status:</strong> <span th:text="${success} ? 'Confirmado' : 'Erro'">Confirmado</span></div>
+        <div><strong>Data/Hora:</strong> <span th:text="${timestamp}">2025-01-01 12:00</span></div>
+      </div>
+      <div class="actions">
+        <a class="btn btn-primary" th:href="${qmanagerTargetUrl}" th:text="${buttonText}" rel="noopener">Ir para Q-Manager</a>
+      </div>
+    </section>
+
+    <footer>
+      © <span th:text="${year}">2025</span> • Q-Manager — Sistema de gerenciamento de filas
+    </footer>
+  </main>
+</body>
+</html>

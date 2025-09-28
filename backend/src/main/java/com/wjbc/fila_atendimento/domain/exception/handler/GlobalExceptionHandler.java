@@ -150,4 +150,91 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(resposta);
     }
 
+    @ExceptionHandler(com.wjbc.fila_atendimento.domain.exception.BusinessException.class)
+    public ResponseEntity<ApiResponse<Void>> handleBusinessException(com.wjbc.fila_atendimento.domain.exception.BusinessException ex) {
+        List<String> erros = List.of(ex.getMessage());
+        ApiResponse<Void> resposta = new ApiResponse<>(
+                false,
+                ex.getMessage(),
+                null,
+                erros,
+                new Date()
+        );
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(resposta);
+    }
+
+    @ExceptionHandler(com.wjbc.fila_atendimento.domain.exception.ResourceNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleResourceNotFoundException(com.wjbc.fila_atendimento.domain.exception.ResourceNotFoundException ex) {
+        List<String> erros = List.of(ex.getMessage());
+        ApiResponse<Void> resposta = new ApiResponse<>(
+                false,
+                ex.getMessage(),
+                null,
+                erros,
+                new Date()
+        );
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(resposta);
+    }
+
+    // Handler genérico para capturar todas as exceções não tratadas especificamente
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ApiResponse<Void>> handleGenericException(Exception ex) {
+        // Log da exceção completa para debug
+        System.err.println("Exceção não tratada capturada pelo handler genérico:");
+        ex.printStackTrace();
+
+        String mensagemErro = ex.getMessage() != null ? ex.getMessage() : "Erro interno do servidor";
+        String tipoExcecao = ex.getClass().getSimpleName();
+
+        List<String> erros = List.of(
+                "Tipo da exceção: " + tipoExcecao,
+                "Mensagem: " + mensagemErro,
+                "Esta exceção não possui um handler específico"
+        );
+
+        ApiResponse<Void> resposta = new ApiResponse<>(
+                false,
+                "Erro interno do servidor - " + tipoExcecao,
+                null,
+                erros,
+                new Date()
+        );
+
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(resposta);
+    }
+
+    // Handler específico para exceções de acesso a dados (SQL, Hibernate, etc.)
+    @ExceptionHandler(org.springframework.dao.DataAccessException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDataAccessException(org.springframework.dao.DataAccessException ex) {
+        String mensagemOriginal = ex.getMessage();
+        String mensagemSimplificada = "Erro ao acessar o banco de dados";
+
+        // Tenta extrair uma mensagem mais clara para erros comuns
+        if (mensagemOriginal != null) {
+            if (mensagemOriginal.contains("relation") && mensagemOriginal.contains("does not exist")) {
+                mensagemSimplificada = "Tabela ou campo não encontrado no banco de dados";
+            } else if (mensagemOriginal.contains("constraint")) {
+                mensagemSimplificada = "Violação de restrição do banco de dados";
+            } else if (mensagemOriginal.contains("duplicate")) {
+                mensagemSimplificada = "Dados duplicados encontrados";
+            }
+        }
+
+        List<String> erros = List.of(
+                "Erro de acesso a dados",
+                "Mensagem original: " + mensagemOriginal,
+                "Verifique se as tabelas e relacionamentos estão corretos"
+        );
+
+        ApiResponse<Void> resposta = new ApiResponse<>(
+                false,
+                mensagemSimplificada,
+                null,
+                erros,
+                new Date()
+        );
+
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(resposta);
+    }
+
 }

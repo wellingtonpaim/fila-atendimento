@@ -13,8 +13,8 @@ import java.util.UUID;
 @Data
 @EqualsAndHashCode(of = "id")
 @Entity
-@Table(name = "entrada_fila")
-@SQLDelete(sql = "UPDATE entrada_fila SET status = 'CANCELADO', data_hora_saida = CURRENT_TIMESTAMP WHERE id = ?")
+@Table(name = "entrada_fila", schema = "fila_atendimento")
+@SQLDelete(sql = "UPDATE fila_atendimento.entrada_fila SET status = 'CANCELADO', data_hora_saida = CURRENT_TIMESTAMP WHERE id = ?")
 public class EntradaFila {
 
     @Id
