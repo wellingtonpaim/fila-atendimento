@@ -5,6 +5,7 @@ import com.wjbc.fila_atendimento.domain.dto.PainelCreateDTO;
 import com.wjbc.fila_atendimento.domain.dto.PainelUpdateDTO;
 import com.wjbc.fila_atendimento.domain.dto.PainelResponseDTO;
 import com.wjbc.fila_atendimento.domain.service.PainelService;
+import com.wjbc.fila_atendimento.controller.util.PaginationUtil;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -40,15 +41,23 @@ public class PainelController {
     }
 
     @GetMapping
-    public ResponseEntity<ApiResponse<List<PainelResponseDTO>>> listarTodos(@RequestParam UUID unidadeAtendimentoId) {
+    public ResponseEntity<ApiResponse<List<PainelResponseDTO>>> listarTodos(
+            @RequestParam UUID unidadeAtendimentoId,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
+    ) {
         List<PainelResponseDTO> lista = painelService.listarTodos(unidadeAtendimentoId);
-        return ResponseEntity.ok(new ApiResponse<>(true, "Painéis listados com sucesso", lista));
+        return PaginationUtil.build(lista, page, size, "Painéis listados com sucesso");
     }
 
     @GetMapping("/unidade/{unidadeId}")
-    public ResponseEntity<ApiResponse<List<PainelResponseDTO>>> listarPorUnidade(@PathVariable UUID unidadeId) {
+    public ResponseEntity<ApiResponse<List<PainelResponseDTO>>> listarPorUnidade(
+            @PathVariable UUID unidadeId,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
+    ) {
         List<PainelResponseDTO> lista = painelService.listarPorUnidade(unidadeId);
-        return ResponseEntity.ok(new ApiResponse<>(true, "Painéis encontrados por unidade", lista));
+        return PaginationUtil.build(lista, page, size, "Painéis encontrados por unidade");
     }
 
     @DeleteMapping("/{id}")

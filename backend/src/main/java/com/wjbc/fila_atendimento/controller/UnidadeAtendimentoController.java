@@ -6,6 +6,7 @@ import com.wjbc.fila_atendimento.domain.dto.UnidadeAtendimentoUpdateDTO;
 import com.wjbc.fila_atendimento.domain.dto.UnidadeAtendimentoResponseDTO;
 import com.wjbc.fila_atendimento.domain.dto.UnidadeAtendimentoPublicDTO;
 import com.wjbc.fila_atendimento.domain.service.UnidadeAtendimentoService;
+import com.wjbc.fila_atendimento.controller.util.PaginationUtil;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
@@ -21,9 +22,12 @@ public class UnidadeAtendimentoController {
     }
 
     @GetMapping
-    public ResponseEntity<ApiResponse<List<UnidadeAtendimentoResponseDTO>>> listarTodas() {
+    public ResponseEntity<ApiResponse<List<UnidadeAtendimentoResponseDTO>>> listarTodas(
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
+    ) {
         List<UnidadeAtendimentoResponseDTO> unidades = unidadeAtendimentoService.listarTodas();
-        return ResponseEntity.ok(new ApiResponse<>(true, "Unidades de atendimento listadas com sucesso", unidades));
+        return PaginationUtil.build(unidades, page, size, "Unidades de atendimento listadas com sucesso");
     }
 
     @GetMapping("/{id}")
@@ -33,9 +37,13 @@ public class UnidadeAtendimentoController {
     }
 
     @GetMapping("/nome/{nome}")
-    public ResponseEntity<ApiResponse<List<UnidadeAtendimentoResponseDTO>>> buscarPorNomeContendo(@PathVariable String nome) {
+    public ResponseEntity<ApiResponse<List<UnidadeAtendimentoResponseDTO>>> buscarPorNomeContendo(
+            @PathVariable String nome,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
+    ) {
         List<UnidadeAtendimentoResponseDTO> unidades = unidadeAtendimentoService.buscarPorNomeContendo(nome);
-        return ResponseEntity.ok(new ApiResponse<>(true, "Unidades encontradas por nome", unidades));
+        return PaginationUtil.build(unidades, page, size, "Unidades encontradas por nome");
     }
 
     @PostMapping
@@ -63,8 +71,11 @@ public class UnidadeAtendimentoController {
     }
 
     @GetMapping("/public/login")
-    public ResponseEntity<ApiResponse<List<UnidadeAtendimentoPublicDTO>>> listarUnidadesParaLogin() {
+    public ResponseEntity<ApiResponse<List<UnidadeAtendimentoPublicDTO>>> listarUnidadesParaLogin(
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
+    ) {
         List<UnidadeAtendimentoPublicDTO> unidades = unidadeAtendimentoService.listarUnidadesParaLogin();
-        return ResponseEntity.ok(new ApiResponse<>(true, "Unidades disponíveis para login listadas com sucesso", unidades));
+        return PaginationUtil.build(unidades, page, size, "Unidades disponíveis para login listadas com sucesso");
     }
 }

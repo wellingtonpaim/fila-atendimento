@@ -5,6 +5,7 @@ import com.wjbc.fila_atendimento.domain.dto.SetorCreateDTO;
 import com.wjbc.fila_atendimento.domain.dto.SetorUpdateDTO;
 import com.wjbc.fila_atendimento.domain.dto.SetorResponseDTO;
 import com.wjbc.fila_atendimento.domain.service.SetorService;
+import com.wjbc.fila_atendimento.controller.util.PaginationUtil;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -23,9 +24,12 @@ public class SetorController {
     }
 
     @GetMapping
-    public ResponseEntity<ApiResponse<List<SetorResponseDTO>>> listarTodos() {
+    public ResponseEntity<ApiResponse<List<SetorResponseDTO>>> listarTodos(
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
+    ) {
         List<SetorResponseDTO> setores = setorService.listarTodos();
-        return ResponseEntity.ok(new ApiResponse<>(true, "Setores listados com sucesso", setores));
+        return PaginationUtil.build(setores, page, size, "Setores listados com sucesso");
     }
 
     @GetMapping("/{id}")
@@ -35,9 +39,13 @@ public class SetorController {
     }
 
     @GetMapping("/nome/{nome}")
-    public ResponseEntity<ApiResponse<List<SetorResponseDTO>>> buscarPorNomeContendo(@PathVariable String nome) {
+    public ResponseEntity<ApiResponse<List<SetorResponseDTO>>> buscarPorNomeContendo(
+            @PathVariable String nome,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
+    ) {
         List<SetorResponseDTO> setores = setorService.buscarPorNomeContendo(nome);
-        return ResponseEntity.ok(new ApiResponse<>(true, "Setores encontrados por nome", setores));
+        return PaginationUtil.build(setores, page, size, "Setores encontrados por nome");
     }
 
     @PostMapping

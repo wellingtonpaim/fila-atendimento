@@ -4,6 +4,7 @@ import com.wjbc.fila_atendimento.domain.dto.ApiResponse;
 import com.wjbc.fila_atendimento.domain.dto.EntradaFilaResponseDTO;
 import com.wjbc.fila_atendimento.domain.dto.EntradaFilaCreateDTO;
 import com.wjbc.fila_atendimento.domain.service.EntradaFilaService;
+import com.wjbc.fila_atendimento.controller.util.PaginationUtil;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
@@ -49,8 +50,12 @@ public class EntradaFilaController {
     }
 
     @GetMapping("/aguardando/{filaId}")
-    public ResponseEntity<ApiResponse<List<EntradaFilaResponseDTO>>> listarAguardandoPorFila(@PathVariable UUID filaId) {
+    public ResponseEntity<ApiResponse<List<EntradaFilaResponseDTO>>> listarAguardandoPorFila(
+            @PathVariable UUID filaId,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
+    ) {
         List<EntradaFilaResponseDTO> lista = entradaFilaService.listarAguardandoPorFila(filaId);
-        return ResponseEntity.ok(new ApiResponse<>(true, "Clientes aguardando listados com sucesso", lista));
+        return PaginationUtil.build(lista, page, size, "Clientes aguardando listados com sucesso");
     }
 }

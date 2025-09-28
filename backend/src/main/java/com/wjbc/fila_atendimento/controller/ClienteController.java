@@ -5,6 +5,7 @@ import com.wjbc.fila_atendimento.domain.dto.ClienteCreateDTO;
 import com.wjbc.fila_atendimento.domain.dto.ClienteUpdateDTO;
 import com.wjbc.fila_atendimento.domain.dto.ClienteResponseDTO;
 import com.wjbc.fila_atendimento.domain.service.ClienteService;
+import com.wjbc.fila_atendimento.controller.util.PaginationUtil;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
@@ -20,9 +21,12 @@ public class ClienteController {
     }
 
     @GetMapping
-    public ResponseEntity<ApiResponse<List<ClienteResponseDTO>>> listarTodos() {
+    public ResponseEntity<ApiResponse<List<ClienteResponseDTO>>> listarTodos(
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
+    ) {
         List<ClienteResponseDTO> clientes = clienteService.listarTodos();
-        return ResponseEntity.ok(new ApiResponse<>(true, "Clientes listados com sucesso", clientes));
+        return PaginationUtil.build(clientes, page, size, "Clientes listados com sucesso");
     }
 
     @GetMapping("/{id}")
@@ -38,9 +42,13 @@ public class ClienteController {
     }
 
     @GetMapping("/nome/{nome}")
-    public ResponseEntity<ApiResponse<List<ClienteResponseDTO>>> buscarPorNomeSemelhante(@PathVariable String nome) {
+    public ResponseEntity<ApiResponse<List<ClienteResponseDTO>>> buscarPorNomeSemelhante(
+            @PathVariable String nome,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
+    ) {
         List<ClienteResponseDTO> clientes = clienteService.buscarPorNomeSemelhante(nome);
-        return ResponseEntity.ok(new ApiResponse<>(true, "Clientes encontrados por nome", clientes));
+        return PaginationUtil.build(clientes, page, size, "Clientes encontrados por nome");
     }
 
     @PostMapping
