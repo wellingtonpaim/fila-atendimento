@@ -1,9 +1,31 @@
-import { ApiResponse, UnidadeAtendimentoCreateDTO, UnidadeAtendimentoResponseDTO, UnidadeAtendimentoUpdateDTO } from '@/types';
+import { ApiResponse, UnidadeAtendimentoCreateDTO, UnidadeAtendimentoResponseDTO, UnidadeAtendimentoUpdateDTO, UnidadeAtendimentoPublicDTO } from '@/types';
 import { authService } from './authService';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8899';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || 'http://localhost:8899';
 
 export const unidadeService = {
+  // Listar unidades públicas para tela de login (endpoint sem autenticação)
+  async listarParaLogin(): Promise<UnidadeAtendimentoPublicDTO[]> {
+    const response = await fetch(`${API_BASE_URL}/api/unidades-atendimento/public/login`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Erro ao listar unidades para login: ${response.status} ${response.statusText}`);
+    }
+
+    const result: ApiResponse<UnidadeAtendimentoPublicDTO[]> = await response.json();
+
+    if (result?.success === false) {
+      throw new Error(result.message || 'Falha ao carregar unidades para login');
+    }
+
+    return result.data || [];
+  },
+
   // Criar uma nova unidade de atendimento
   async criar(unidade: UnidadeAtendimentoCreateDTO): Promise<ApiResponse<UnidadeAtendimentoResponseDTO>> {
     const response = await fetch(`${API_BASE_URL}/api/unidades-atendimento`, {

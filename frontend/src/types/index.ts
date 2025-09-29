@@ -191,6 +191,20 @@ export interface ChamadaWebSocket {
     timestamp: string; // ISO DateTime
 }
 
+// ====== TIPOS NOVOS (públicos/auxiliares) ======
+// Unidade pública para tela de login (endpoint público)
+export interface UnidadeAtendimentoPublicDTO {
+  id: string; // UUID
+  nome: string;
+}
+
+// Payload de login, conforme backend (/auth/login com query params)
+export interface LoginRequest {
+  username: string;
+  password: string;
+  unidadeAtendimentoId: string; // UUID
+}
+
 // ====== TIPOS LEGADOS (para compatibilidade) ======
 // Mantendo para não quebrar código existente, mas marcados como deprecated
 /** @deprecated Use UsuarioResponseDTO instead */
