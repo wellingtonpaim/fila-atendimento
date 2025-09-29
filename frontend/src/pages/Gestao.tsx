@@ -53,6 +53,14 @@ interface PaginationMeta {
 const Gestao = () => {
   const { toast } = useToast();
 
+  // Controle da aba ativa (persistida)
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    const saved = typeof window !== 'undefined' ? localStorage.getItem('gestao_active_tab') : null;
+    const allowed = new Set(['filas','setores','unidades','usuarios','clientes']);
+    return saved && allowed.has(saved) ? saved : 'filas';
+  });
+  useEffect(() => { try { localStorage.setItem('gestao_active_tab', activeTab); } catch {} }, [activeTab]);
+
   // ===== Dados =====
   const [filas, setFilas] = useState<FilaResponseDTO[]>([]);
   const [setores, setSetores] = useState<SetorResponseDTO[]>([]);
@@ -350,9 +358,10 @@ const Gestao = () => {
     if (!form.cpf || !form.cpf.trim()) e.cpf = 'CPF é obrigatório';
     if (!form.nome || form.nome.length < 3 || form.nome.length > 100) e.nome = 'Nome deve ter entre 3 e 100 caracteres';
     if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = 'Email inválido';
+    // Endereço é opcional; só validar campos se preenchidos
     if (form.endereco) {
-      if (form.endereco.logradouro !== undefined && !form.endereco.logradouro.trim()) e.logradouro = 'Logradouro não pode ser vazio';
-      if (form.endereco.numero !== undefined && !form.endereco.numero.trim()) e.numero = 'Número não pode ser vazio';
+      if (form.endereco.logradouro && !form.endereco.logradouro.trim()) e.logradouro = 'Logradouro não pode ser vazio';
+      if (form.endereco.numero && !form.endereco.numero.trim()) e.numero = 'Número não pode ser vazio';
     }
     return e;
   };
@@ -471,20 +480,38 @@ const Gestao = () => {
   };
 
   const handleSalvarCliente = async () => {
-    const errs = validarClienteForm(clienteForm);
+    // Sanitização: enviar apenas campos realmente preenchidos
+    const end = (clienteForm.endereco || {});
+    const enderecoSan: any = {};
+    if (end.logradouro?.trim()) enderecoSan.logradouro = end.logradouro.trim();
+    if (end.numero?.trim()) enderecoSan.numero = end.numero.trim();
+    if (end.complemento?.trim()) enderecoSan.complemento = end.complemento.trim();
+    if (end.bairro?.trim()) enderecoSan.bairro = end.bairro.trim();
+    if (end.cidade?.trim()) enderecoSan.cidade = end.cidade.trim();
+    if (end.cep?.trim()) enderecoSan.cep = end.cep.replace(/[^0-9]/g, '');
+    if (end.uf) enderecoSan.uf = end.uf;
+
+    const telsSan = (clienteForm.telefones || [])
+      .filter(t => Number(t.ddd) > 0 && Number(t.numero) > 0)
+      .map(t => ({ tipo: t.tipo, ddd: Number(t.ddd), numero: Number(t.numero) }));
+
+    const payload: ClienteCreateDTO = {
+      cpf: clienteForm.cpf.trim(),
+      nome: clienteForm.nome.trim(),
+      email: clienteForm.email?.trim() || undefined,
+      endereco: Object.keys(enderecoSan).length ? enderecoSan : undefined,
+      telefones: telsSan.length ? telsSan : undefined,
+    } as ClienteCreateDTO;
+
+    const errs = validarClienteForm(payload);
     if (Object.keys(errs).length) { setErrors(errs); return; }
+
     try {
       if (editingCliente) {
-        await clienteService.atualizarParcialmente(editingCliente.id, {
-          cpf: clienteForm.cpf,
-          nome: clienteForm.nome,
-          email: clienteForm.email,
-          telefones: clienteForm.telefones,
-          endereco: clienteForm.endereco
-        });
+        await clienteService.atualizarParcialmente(editingCliente.id, payload as any);
         toast({ title: 'Sucesso', description: 'Cliente atualizado com sucesso' });
       } else {
-        await clienteService.criar(clienteForm);
+        await clienteService.criar(payload);
         toast({ title: 'Sucesso', description: 'Cliente criado com sucesso' });
       }
       setClienteModalOpen(false);
@@ -564,7 +591,7 @@ const Gestao = () => {
       {loading ? (
         <div className="flex justify-center items-center h-64"><p>Carregando...</p></div>
       ) : (
-        <Tabs defaultValue="filas" className="space-y-4">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
           <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="filas">Filas</TabsTrigger>
             <TabsTrigger value="setores">Setores</TabsTrigger>
