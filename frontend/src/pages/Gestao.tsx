@@ -158,18 +158,53 @@ const Gestao = () => {
     return { current: Math.min(current, total), total };
   };
 
-  async function getPaginated<T>(path: string, params?: Record<string, string|number>): Promise<{ data: T; meta: PaginationMeta | null; }> {
+  // Helpers de formatação e paginação
+  const formatCepMask = (value: string): string => {
+    const digits = (value || '').replace(/\D/g, '').slice(0, 8);
+    if (digits.length <= 5) return digits;
+    return `${digits.slice(0,5)}-${digits.slice(5)}`;
+  };
+
+  function clientPaginate<T>(allItems: T[], page: number, size: number) {
+    const totalCount = allItems.length;
+    const totalPages = Math.max(1, Math.ceil(totalCount / size));
+    const safePage = Math.min(Math.max(0, page), totalPages - 1);
+    const slice = allItems.slice(safePage * size, safePage * size + size);
+    return { slice, meta: { totalCount, totalPages, page: safePage, pageSize: size as number } };
+  }
+
+  async function fetchPageData<T>(path: string, page: number, size: number): Promise<T[]> {
     const url = new URL(`${API_BASE_URL}${path}`);
-    if (params) Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, String(v)));
+    url.searchParams.set('page', String(page));
+    url.searchParams.set('size', String(size));
     const res = await fetch(url.toString(), { headers: authService.getAuthHeaders() });
     if (!res.ok) throw new Error(res.statusText);
-    const totalCount = Number(res.headers.get('X-Total-Count'));
-    const totalPages = Number(res.headers.get('X-Total-Pages'));
-    const page = Number(res.headers.get('X-Page'));
-    const pageSize = Number(res.headers.get('X-Page-Size'));
-    const meta = [totalCount,totalPages,page,pageSize].every(Number.isFinite) ? { totalCount, totalPages, page, pageSize } : null;
     const body = await res.json();
-    return { data: body.data as T, meta };
+    return (body?.data || []) as T[];
+  }
+
+  async function getAllItems<T extends { id?: string }>(path: string, fetchSize = 200, maxLoops = 50): Promise<T[]> {
+    const all: T[] = [];
+    const seen = new Set<string>();
+    let page = 0;
+    let lastFirstId: string | null = null;
+    while (page < maxLoops) {
+      const batch = await fetchPageData<T>(path, page, fetchSize);
+      if (!Array.isArray(batch) || batch.length === 0) break;
+      // Se servidor ignorar paginação e devolver sempre tudo, evite loop infinito
+      const firstId = (batch[0] as any)?.id || `${JSON.stringify(batch[0])}`;
+      if (page > 0 && firstId && firstId === lastFirstId) break;
+      lastFirstId = firstId || null;
+
+      for (const item of batch) {
+        const id = (item as any)?.id ? String((item as any).id) : JSON.stringify(item);
+        if (!seen.has(id)) { seen.add(id); all.push(item); }
+      }
+
+      if (batch.length < fetchSize) break;
+      page += 1;
+    }
+    return all;
   }
 
   // Agregador para buscar filas por nome/setor dentro da unidade
@@ -205,44 +240,51 @@ const Gestao = () => {
   // ===== Loaders =====
   const loadFilasPage = async (page = filasPage, size = filasSize, unidadeIdParam?: string) => {
     const unidadeId = unidadeIdParam ?? filasUnidadeId;
-    if (filasSearchType === 'unidade') {
-      if (!unidadeId) { setFilas([]); setFilasMeta({ totalCount: 0, totalPages: 1, page: 0, pageSize: size }); return; }
-      try {
-        const { data, meta } = await getPaginated<FilaResponseDTO[]>(`/api/filas/unidade/${unidadeId}`, { page, size });
-        setFilas(data || []);
-        setFilasMeta(meta ?? { totalCount: data?.length || 0, totalPages: 1, page, pageSize: size });
-        setFilasPage(meta?.page ?? page);
-        setFilasSize(meta?.pageSize ?? size);
-      } catch { setFilas([]); setFilasMeta({ totalCount: 0, totalPages: 1, page: 0, pageSize: size }); }
-    } else if (filasSearchType === 'nome') {
-      await loadFilasByNomeOuSetor({ page, size, unidadeId, nome: filasSearchValue });
-    } else {
-      await loadFilasByNomeOuSetor({ page, size, unidadeId, setorId: filasSetorId });
-    }
+    try {
+      let all: FilaResponseDTO[] = [];
+      if (!unidadeId && filasSearchType === 'unidade') {
+        setFilas([]); setFilasMeta({ totalCount: 0, totalPages: 1, page: 0, pageSize: size }); return;
+      }
+      if (filasSearchType === 'unidade') {
+        all = await getAllItems<FilaResponseDTO>(`/api/filas/unidade/${unidadeId}`);
+      } else {
+        // Carrega todas as filas de todas unidades e filtra (se necessário)
+        all = await getAllItems<FilaResponseDTO>(`/api/filas`);
+        if (filasSearchType === 'nome' && filasSearchValue.trim()) {
+          all = all.filter(f => f.nome?.toLowerCase().includes(filasSearchValue.toLowerCase()));
+        }
+        if (filasSearchType === 'setor' && filasSetorId.trim()) {
+          all = all.filter(f => f.setor?.id === filasSetorId);
+        }
+        if (unidadeId) {
+          all = all.filter(f => f.unidade?.id === unidadeId);
+        }
+      }
+      const { slice, meta } = clientPaginate(all, page, size);
+      setFilas(slice); setFilasMeta(meta); setFilasPage(meta.page); setFilasSize(meta.pageSize);
+    } catch { setFilas([]); setFilasMeta({ totalCount: 0, totalPages: 1, page: 0, pageSize: size }); }
   };
 
   const loadSetoresPage = async (page = setoresPage, size = setoresSize) => {
     try {
-      if (setoresSearchType === 'nome' && setoresSearchValue.trim()) {
-        const { data, meta } = await getPaginated<SetorResponseDTO[]>(`/api/setores/nome/${encodeURIComponent(setoresSearchValue)}`, { page, size });
-        setSetores(data || []); setSetoresMeta(meta); setSetoresPage(meta?.page ?? page); setSetoresSize(meta?.pageSize ?? size);
-      } else {
-        const { data, meta } = await getPaginated<SetorResponseDTO[]>(`/api/setores`, { page, size });
-        setSetores(data || []); setSetoresMeta(meta); setSetoresPage(meta?.page ?? page); setSetoresSize(meta?.pageSize ?? size);
-      }
-    } catch { setSetores([]); setSetoresMeta(null); }
+      const all = await getAllItems<SetorResponseDTO>('/api/setores');
+      const filtered = (setoresSearchType === 'nome' && setoresSearchValue.trim())
+        ? all.filter(s => s.nome?.toLowerCase().includes(setoresSearchValue.toLowerCase()))
+        : all;
+      const { slice, meta } = clientPaginate(filtered, page, size);
+      setSetores(slice); setSetoresMeta(meta); setSetoresPage(meta.page); setSetoresSize(meta.pageSize);
+    } catch { setSetores([]); setSetoresMeta({ totalCount: 0, totalPages: 1, page: 0, pageSize: size }); }
   };
 
   const loadUnidadesPage = async (page = unidadesPage, size = unidadesSize) => {
     try {
-      if (unidadesSearchType === 'nome' && unidadesSearchValue.trim()) {
-        const { data, meta } = await getPaginated<UnidadeAtendimentoResponseDTO[]>(`/api/unidades-atendimento/nome/${encodeURIComponent(unidadesSearchValue)}`, { page, size });
-        setUnidades(data || []); setUnidadesMeta(meta); setUnidadesPage(meta?.page ?? page); setUnidadesSize(meta?.pageSize ?? size);
-      } else {
-        const { data, meta } = await getPaginated<UnidadeAtendimentoResponseDTO[]>(`/api/unidades-atendimento`, { page, size });
-        setUnidades(data || []); setUnidadesMeta(meta); setUnidadesPage(meta?.page ?? page); setUnidadesSize(meta?.pageSize ?? size);
-      }
-    } catch { setUnidades([]); setUnidadesMeta(null); }
+      const all = await getAllItems<UnidadeAtendimentoResponseDTO>('/api/unidades-atendimento');
+      const filtered = (unidadesSearchType === 'nome' && unidadesSearchValue.trim())
+        ? all.filter(u => u.nome?.toLowerCase().includes(unidadesSearchValue.toLowerCase()))
+        : all;
+      const { slice, meta } = clientPaginate(filtered, page, size);
+      setUnidades(slice); setUnidadesMeta(meta); setUnidadesPage(meta.page); setUnidadesSize(meta.pageSize);
+    } catch { setUnidades([]); setUnidadesMeta({ totalCount: 0, totalPages: 1, page: 0, pageSize: size }); }
   };
 
   const loadUsuariosPage = async (page = usuariosPage, size = usuariosSize) => {
@@ -256,37 +298,20 @@ const Gestao = () => {
           setUsuariosMeta({ totalCount: item ? 1 : 0, totalPages: 1, page: 0, pageSize: 1 });
           setUsuariosPage(0); setUsuariosSize(1);
         } else { setUsuarios([]); setUsuariosMeta({ totalCount: 0, totalPages: 1, page: 0, pageSize: size }); }
-      } else if (usuariosSearchType === 'nome' && usuariosSearchValue.trim()) {
-        const url = `${API_BASE_URL}/api/usuarios/nome/${encodeURIComponent(usuariosSearchValue)}?page=${page}&size=${size}`;
-        const res = await fetch(url, { headers: authService.getAuthHeaders() });
-        if (res.ok) {
-          const totalCount = Number(res.headers.get('X-Total-Count'));
-          const totalPages = Number(res.headers.get('X-Total-Pages'));
-          const xpage = Number(res.headers.get('X-Page'));
-          const pageSize = Number(res.headers.get('X-Page-Size'));
-          const meta = [totalCount,totalPages,xpage,pageSize].every(Number.isFinite) ? { totalCount, totalPages, page: xpage, pageSize } : null;
-          const body = await res.json();
-          setUsuarios((body.data as UsuarioResponseDTO[]) || []);
-          setUsuariosMeta(meta);
-          setUsuariosPage(meta?.page ?? page);
-          setUsuariosSize(meta?.pageSize ?? size);
-        } else {
-          // Backend pode não suportar busca por nome de usuários
-          setUsuarios([]); setUsuariosMeta({ totalCount: 0, totalPages: 1, page: 0, pageSize: size });
-        }
       } else {
-        const { data, meta } = await getPaginated<UsuarioResponseDTO[]>(`/api/usuarios`, { page, size });
-        setUsuarios(data || []); setUsuariosMeta(meta); setUsuariosPage(meta?.page ?? page); setUsuariosSize(meta?.pageSize ?? size);
+        const all = await getAllItems<UsuarioResponseDTO>('/api/usuarios');
+        const filtered = (usuariosSearchType === 'nome' && usuariosSearchValue.trim())
+          ? all.filter(u => u.nomeUsuario?.toLowerCase().includes(usuariosSearchValue.toLowerCase()))
+          : all;
+        const { slice, meta } = clientPaginate(filtered, page, size);
+        setUsuarios(slice); setUsuariosMeta(meta); setUsuariosPage(meta.page); setUsuariosSize(meta.pageSize);
       }
-    } catch { setUsuarios([]); setUsuariosMeta(null); }
+    } catch { setUsuarios([]); setUsuariosMeta({ totalCount: 0, totalPages: 1, page: 0, pageSize: size }); }
   };
 
   const loadClientesPage = async (page = clientesPage, size = clientesSize) => {
     try {
-      if (clientesSearchType === 'nome' && clientesSearchValue.trim()) {
-        const { data, meta } = await getPaginated<ClienteResponseDTO[]>(`/api/clientes/nome/${encodeURIComponent(clientesSearchValue)}`, { page, size });
-        setClientes(data || []); setClientesMeta(meta); setClientesPage(meta?.page ?? page); setClientesSize(meta?.pageSize ?? size);
-      } else if (clientesSearchType === 'cpf' && clientesSearchValue.trim()) {
+      if (clientesSearchType === 'cpf' && clientesSearchValue.trim()) {
         const res = await fetch(`${API_BASE_URL}/api/clientes/cpf/${encodeURIComponent(clientesSearchValue)}`, { headers: authService.getAuthHeaders() });
         if (res.ok) {
           const body = await res.json();
@@ -296,10 +321,14 @@ const Gestao = () => {
           setClientesPage(0); setClientesSize(1);
         } else { setClientes([]); setClientesMeta({ totalCount: 0, totalPages: 1, page: 0, pageSize: size }); }
       } else {
-        const { data, meta } = await getPaginated<ClienteResponseDTO[]>(`/api/clientes`, { page, size });
-        setClientes(data || []); setClientesMeta(meta); setClientesPage(meta?.page ?? page); setClientesSize(meta?.pageSize ?? size);
+        const all = await getAllItems<ClienteResponseDTO>('/api/clientes');
+        const filtered = (clientesSearchType === 'nome' && clientesSearchValue.trim())
+          ? all.filter(c => c.nome?.toLowerCase().includes(clientesSearchValue.toLowerCase()))
+          : all;
+        const { slice, meta } = clientPaginate(filtered, page, size);
+        setClientes(slice); setClientesMeta(meta); setClientesPage(meta.page); setClientesSize(meta.pageSize);
       }
-    } catch { setClientes([]); setClientesMeta(null); }
+    } catch { setClientes([]); setClientesMeta({ totalCount: 0, totalPages: 1, page: 0, pageSize: size }); }
   };
 
   // ===== Inicialização =====
@@ -394,8 +423,11 @@ const Gestao = () => {
   const handleSalvarUnidade = async () => {
     const errs = validarUnidadeForm(unidadeForm); if (Object.keys(errs).length) { setErrors(errs); return; }
     try {
-      if (editingUnidade) { await unidadeService.atualizarParcialmente(editingUnidade.id, { nome: unidadeForm.nome, endereco: unidadeForm.endereco, telefones: unidadeForm.telefones }); toast({ title: 'Sucesso', description: 'Unidade atualizada com sucesso' }); }
-      else { await unidadeService.criar(unidadeForm); toast({ title: 'Sucesso', description: 'Unidade criada com sucesso' }); }
+      const enderecoSan: any = { ...unidadeForm.endereco };
+      if (enderecoSan?.cep) enderecoSan.cep = String(enderecoSan.cep).replace(/\D/g, '');
+      const payload = { ...unidadeForm, endereco: enderecoSan };
+      if (editingUnidade) { await unidadeService.atualizarParcialmente(editingUnidade.id, payload); toast({ title: 'Sucesso', description: 'Unidade atualizada com sucesso' }); }
+      else { await unidadeService.criar(payload); toast({ title: 'Sucesso', description: 'Unidade criada com sucesso' }); }
       setUnidadeModalOpen(false); setErrors({}); setEditingUnidade(null);
       setUnidadeForm({ nome: '', endereco: { logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', cep: '', uf: undefined }, telefones: [] });
       carregarDados();
@@ -733,10 +765,18 @@ const Gestao = () => {
 
                 {(() => { const d = pageDisplay(filasMeta, filasPage); return (
                   <div className="flex items-center justify-between mb-3 text-sm text-muted-foreground">
-                    <div>Página {d.current} de {d.total}</div>
                     <div className="flex items-center gap-2">
+                      <span>Página {d.current} de {d.total}</span>
+                      <Input type="number" min={1} max={d.total} value={d.current} onChange={(e)=>{
+                        const n = Math.min(Math.max(1, Number(e.target.value)||1), d.total);
+                        const zero = n-1; setFilasPage(zero); loadFilasPage(zero);
+                      }} className="w-20 h-8" />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button variant="outline" size="sm" onClick={()=> { setFilasPage(0); loadFilasPage(0); }} disabled={d.current<=1}>Primeira</Button>
                       <Button variant="outline" size="sm" onClick={()=> {const p=Math.max(0,(filasMeta?.page ?? filasPage)-1); setFilasPage(p); loadFilasPage(p);}} disabled={(filasMeta?.page ?? filasPage) <= 0}>Anterior</Button>
-                      <Button variant="outline" size="sm" onClick={()=> {const next=(filasMeta?.page ?? filasPage)+1; const total=d.total; if (next+1>total) return; setFilasPage(next); loadFilasPage(next);}} disabled={((filasMeta?.page ?? filasPage)+1) >= d.total}>Próxima</Button>
+                      <Button variant="outline" size="sm" onClick={()=> {const next=(filasMeta?.page ?? filasPage)+1; if (next+1>d.total) return; setFilasPage(next); loadFilasPage(next);}} disabled={((filasMeta?.page ?? filasPage)+1) >= d.total}>Próxima</Button>
+                      <Button variant="outline" size="sm" onClick={()=> { const last = d.total-1; setFilasPage(last); loadFilasPage(last); }} disabled={d.current>=d.total}>Última</Button>
                     </div>
                   </div>
                 ); })()}
@@ -834,10 +874,15 @@ const Gestao = () => {
                 </div>
                 {(() => { const d = pageDisplay(setoresMeta, setoresPage); return (
                   <div className="flex items-center justify-between mb-3 text-sm text-muted-foreground">
-                    <div>Página {d.current} de {d.total}</div>
                     <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm" onClick={()=> {const p=Math.max(0,(setoresMeta?.page ?? setoresPage)-1); setSetoresPage(p); loadSetoresPage(p);}} disabled={(setoresMeta?.page ?? setoresPage) <= 0}>Anterior</Button>
-                      <Button variant="outline" size="sm" onClick={()=> {const next=(setoresMeta?.page ?? setoresPage)+1; if (next+1>d.total) return; setSetoresPage(next); loadSetoresPage(next);}} disabled={((setoresMeta?.page ?? setoresPage)+1)>=d.total}>Próxima</Button>
+                      <span>Página {d.current} de {d.total}</span>
+                      <Input type="number" min={1} max={d.total} value={d.current} onChange={(e)=>{ const n=Math.min(Math.max(1,Number(e.target.value)||1),d.total); const zero=n-1; setSetoresPage(zero); loadSetoresPage(zero); }} className="w-20 h-8"/>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button variant="outline" size="sm" onClick={()=> { setSetoresPage(0); loadSetoresPage(0); }} disabled={d.current<=1}>Primeira</Button>
+                      <Button variant="outline" size="sm" onClick={()=> { const p=Math.max(0,(setoresMeta?.page ?? setoresPage)-1); setSetoresPage(p); loadSetoresPage(p); }} disabled={(setoresMeta?.page ?? setoresPage) <= 0}>Anterior</Button>
+                      <Button variant="outline" size="sm" onClick={()=> { const next=(setoresMeta?.page ?? setoresPage)+1; if (next+1>d.total) return; setSetoresPage(next); loadSetoresPage(next); }} disabled={((setoresMeta?.page ?? setoresPage)+1)>=d.total}>Próxima</Button>
+                      <Button variant="outline" size="sm" onClick={()=> { const last=d.total-1; setSetoresPage(last); loadSetoresPage(last); }} disabled={d.current>=d.total}>Última</Button>
                     </div>
                   </div>
                 ); })()}
@@ -877,7 +922,7 @@ const Gestao = () => {
                   </div>
                   <Dialog open={unidadeModalOpen} onOpenChange={setUnidadeModalOpen}>
                     <DialogTrigger asChild>
-                      <Button onClick={()=> { setEditingUnidade(null); setErrors({}); setUnidadeForm({ nome: '', endereco: { logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', cep: '', uf: undefined }, telefones: [] }); }}>
+                      <Button onClick={() => { setEditingUnidade(null); setErrors({}); setUnidadeForm({ nome: '', endereco: { logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', cep: '', uf: undefined }, telefones: [] }); }}>
                         <Plus className="w-4 h-4 mr-2" /> Nova Unidade
                       </Button>
                     </DialogTrigger>
@@ -923,7 +968,7 @@ const Gestao = () => {
                           </div>
                           <div>
                             <Label htmlFor="unidade-cep">CEP</Label>
-                            <Input id="unidade-cep" value={unidadeForm.endereco.cep} onChange={(e)=> setUnidadeForm(p=>({ ...p, endereco: { ...p.endereco, cep: e.target.value } }))} placeholder="Digite o CEP" />
+                            <Input id="unidade-cep" value={unidadeForm.endereco.cep} onChange={(e)=> setUnidadeForm(p=>({ ...p, endereco: { ...p.endereco, cep: formatCepMask(e.target.value) } }))} placeholder="Ex.: 14460-098" />
                           </div>
                         </div>
 
@@ -941,9 +986,11 @@ const Gestao = () => {
                                 </Select>
                                 <Input value={t.ddd} onChange={e => setUnidadeForm(p => ({ ...p, telefones: (p.telefones || []).map((tel, idx) => idx === i ? { ...tel, ddd: parseInt(e.target.value || '0', 10) } : tel) }))} placeholder="DDD" className="w-16" />
                                 <Input value={t.numero} onChange={e => setUnidadeForm(p => ({ ...p, telefones: (p.telefones || []).map((tel, idx) => idx === i ? { ...tel, numero: parseInt(e.target.value || '0', 10) } : tel) }))} placeholder="Número" className="flex-1" />
-                                <Button variant="destructive" onClick={() => setUnidadeForm(p => ({ ...p, telefones: p.telefones?.filter((_, idx) => idx !== i) }))}>
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
+                                {(unidadeForm.telefones.length > 1 || (Number(t.ddd) > 0 || Number(t.numero) > 0)) && (
+                                  <Button variant="destructive" onClick={() => setUnidadeForm(p => ({ ...p, telefones: p.telefones?.filter((_, idx) => idx !== i) }))}>
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                )}
                               </div>
                             ))}
                             <Button variant="outline" onClick={adicionarTelefone}>
@@ -989,10 +1036,15 @@ const Gestao = () => {
                 </div>
                 {(() => { const d = pageDisplay(unidadesMeta, unidadesPage); return (
                   <div className="flex items-center justify-between mb-3 text-sm text-muted-foreground">
-                    <div>Página {d.current} de {d.total}</div>
                     <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm" onClick={()=> {const p=Math.max(0,(unidadesMeta?.page ?? unidadesPage)-1); setUnidadesPage(p); loadUnidadesPage(p);}} disabled={(unidadesMeta?.page ?? unidadesPage) <= 0}>Anterior</Button>
-                      <Button variant="outline" size="sm" onClick={()=> {const next=(unidadesMeta?.page ?? unidadesPage)+1; if (next+1>d.total) return; setUnidadesPage(next); loadUnidadesPage(next);}} disabled={((unidadesMeta?.page ?? unidadesPage)+1)>=d.total}>Próxima</Button>
+                      <span>Página {d.current} de {d.total}</span>
+                      <Input type="number" min={1} max={d.total} value={d.current} onChange={(e)=>{ const n=Math.min(Math.max(1,Number(e.target.value)||1),d.total); const zero=n-1; setUnidadesPage(zero); loadUnidadesPage(zero); }} className="w-20 h-8"/>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button variant="outline" size="sm" onClick={()=> { setUnidadesPage(0); loadUnidadesPage(0); }} disabled={d.current<=1}>Primeira</Button>
+                      <Button variant="outline" size="sm" onClick={()=> { const p=Math.max(0,(unidadesMeta?.page ?? unidadesPage)-1); setUnidadesPage(p); loadUnidadesPage(p); }} disabled={(unidadesMeta?.page ?? unidadesPage) <= 0}>Anterior</Button>
+                      <Button variant="outline" size="sm" onClick={()=> { const next=(unidadesMeta?.page ?? unidadesPage)+1; if (next+1>d.total) return; setUnidadesPage(next); loadUnidadesPage(next); }} disabled={((unidadesMeta?.page ?? unidadesPage)+1)>=d.total}>Próxima</Button>
+                      <Button variant="outline" size="sm" onClick={()=> { const last=d.total-1; setUnidadesPage(last); loadUnidadesPage(last); }} disabled={d.current>=d.total}>Última</Button>
                     </div>
                   </div>
                 ); })()}
@@ -1036,7 +1088,7 @@ const Gestao = () => {
                   </div>
                   <Dialog open={usuarioModalOpen} onOpenChange={setUsuarioModalOpen}>
                     <DialogTrigger asChild>
-                      <Button onClick={()=> { setEditingUsuario(null); setErrors({}); setUsuarioForm({ nomeUsuario: '', email: '', senha: '', categoria: CategoriaUsuario.USUARIO, unidadesIds: [] }); }}>
+                      <Button onClick={() => { setEditingUsuario(null); setErrors({}); setUsuarioForm({ nomeUsuario: '', email: '', senha: '', categoria: CategoriaUsuario.USUARIO, unidadesIds: [] }); }}>
                         <Plus className="w-4 h-4 mr-2" /> Novo Usuário
                       </Button>
                     </DialogTrigger>
@@ -1134,10 +1186,15 @@ const Gestao = () => {
 
                 {(() => { const d = pageDisplay(usuariosMeta, usuariosPage); return (
                   <div className="flex items-center justify-between mb-3 text-sm text-muted-foreground">
-                    <div>Página {d.current} de {d.total}</div>
                     <div className="flex items-center gap-2">
+                      <span>Página {d.current} de {d.total}</span>
+                      <Input type="number" min={1} max={d.total} value={d.current} onChange={(e)=>{ const n=Math.min(Math.max(1,Number(e.target.value)||1),d.total); const zero=n-1; setUsuariosPage(zero); loadUsuariosPage(zero); }} className="w-20 h-8"/>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button variant="outline" size="sm" onClick={()=> { setUsuariosPage(0); loadUsuariosPage(0); }} disabled={d.current<=1}>Primeira</Button>
                       <Button variant="outline" size="sm" onClick={()=> { const p=Math.max(0,(usuariosMeta?.page ?? usuariosPage)-1); setUsuariosPage(p); loadUsuariosPage(p); }} disabled={(usuariosMeta?.page ?? usuariosPage)<=0}>Anterior</Button>
                       <Button variant="outline" size="sm" onClick={()=> { const next=(usuariosMeta?.page ?? usuariosPage)+1; if (next+1>d.total) return; setUsuariosPage(next); loadUsuariosPage(next); }} disabled={((usuariosMeta?.page ?? usuariosPage)+1)>=d.total}>Próxima</Button>
+                      <Button variant="outline" size="sm" onClick={()=> { const last=d.total-1; setUsuariosPage(last); loadUsuariosPage(last); }} disabled={d.current>=d.total}>Última</Button>
                     </div>
                   </div>
                 ); })()}
@@ -1159,7 +1216,7 @@ const Gestao = () => {
                         <TableCell>{usuario.email}</TableCell>
                         <TableCell>
                           <Badge variant={usuario.categoria === CategoriaUsuario.ADMINISTRADOR ? 'default' : 'secondary'}>
-                            {usuario.categoria === CategoriaUsuario.ADMINISTRADOR ? (<><ShieldCheck className="w-3 h-3 mr-1"/>Admin</>) : (<><Shield className="w-3 h-3 mr-1"/>Usuário</>)}
+                            {usuario.categoria === CategoriaUsuario.ADMINISTRADOR ? (<>Admin</>) : (<>Usuário</>)}
                           </Badge>
                         </TableCell>
                         <TableCell>
@@ -1230,7 +1287,6 @@ const Gestao = () => {
                           <Label htmlFor="cliente-endereco">Endereço</Label>
                           <Input id="cliente-endereco" value={clienteForm.endereco.logradouro} onChange={(e)=> setClienteForm(p=>({ ...p, endereco: { ...p.endereco, logradouro: e.target.value } }))} placeholder="Digite o logradouro" />
                         </div>
-                        {/* Número + Complemento: número curto (até 6 dígitos) e complemento expandido */}
                         <div className="flex gap-2">
                           <div className="shrink-0">
                             <Label htmlFor="cliente-numero">Número</Label>
@@ -1254,7 +1310,6 @@ const Gestao = () => {
                           <Label htmlFor="cliente-bairro">Bairro</Label>
                           <Input id="cliente-bairro" value={clienteForm.endereco.bairro} onChange={(e)=> setClienteForm(p=>({ ...p, endereco: { ...p.endereco, bairro: e.target.value } }))} placeholder="Digite o bairro" />
                         </div>
-                        {/* Cidade + CEP: CEP curto e cidade expandida */}
                         <div className="flex gap-2">
                           <div className="flex-1">
                             <Label htmlFor="cliente-cidade">Cidade</Label>
@@ -1265,11 +1320,11 @@ const Gestao = () => {
                             <Input
                               id="cliente-cep"
                               value={clienteForm.endereco.cep}
-                              onChange={(e)=> setClienteForm(p=>({ ...p, endereco: { ...p.endereco, cep: e.target.value } }))}
-                              placeholder="Ex.: 14460098"
-                              maxLength={8}
+                              onChange={(e)=> setClienteForm(p=>({ ...p, endereco: { ...p.endereco, cep: formatCepMask(e.target.value) } }))}
+                              placeholder="Ex.: 14460-098"
+                              maxLength={9}
                               inputMode="numeric"
-                              pattern="\\d*"
+                              pattern="\\d{5}-?\\d{0,3}"
                               className="w-32"
                             />
                           </div>
@@ -1305,12 +1360,14 @@ const Gestao = () => {
                                   inputMode="numeric"
                                   pattern="\\d*"
                                 />
-                                <Button variant="destructive" onClick={() => setClienteForm(p => ({ ...p, telefones: p.telefones?.filter((_, idx) => idx !== i) }))}>
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
+                                {(clienteForm.telefones.length > 1 || (Number(t.ddd) > 0 || Number(t.numero) > 0)) && (
+                                  <Button variant="destructive" onClick={() => setClienteForm(p => ({ ...p, telefones: p.telefones?.filter((_, idx) => idx !== i) }))}>
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                )}
                               </div>
                             ))}
-                            <Button variant="outline" onClick={()=> setClienteForm(p => ({ ...p, telefones: [...(p.telefones || []), { tipo: TipoTelefone.CELULAR, ddd: 16, numero: 0 }] }))}>
+                            <Button variant="outline" onClick={()=> setClienteForm(p => ({ ...p, telefones: [...(p.telefones || []), { tipo: TipoTelefone.CELULAR, ddd: 0, numero: 0 }] }))}>
                               <Plus className="w-4 h-4 mr-2" /> Adicionar Telefone
                             </Button>
                           </div>
@@ -1355,10 +1412,15 @@ const Gestao = () => {
 
                 {(() => { const d = pageDisplay(clientesMeta, clientesPage); return (
                   <div className="flex items-center justify-between mb-3 text-sm text-muted-foreground">
-                    <div>Página {d.current} de {d.total}</div>
                     <div className="flex items-center gap-2">
+                      <span>Página {d.current} de {d.total}</span>
+                      <Input type="number" min={1} max={d.total} value={d.current} onChange={(e)=>{ const n=Math.min(Math.max(1,Number(e.target.value)||1),d.total); const zero=n-1; setClientesPage(zero); loadClientesPage(zero); }} className="w-20 h-8"/>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button variant="outline" size="sm" onClick={()=> { setClientesPage(0); loadClientesPage(0); }} disabled={d.current<=1}>Primeira</Button>
                       <Button variant="outline" size="sm" onClick={()=> {const p=Math.max(0,(clientesMeta?.page ?? clientesPage)-1); setClientesPage(p); loadClientesPage(p);}} disabled={(clientesMeta?.page ?? clientesPage) <= 0}>Anterior</Button>
-                      <Button variant="outline" size="sm" onClick={()=> {const next=(clientesMeta?.page ?? clientesPage)+1; if (next+1>d.total) return; setClientesPage(next); loadClientesPage(next);}} disabled={((clientesMeta?.page ?? clientesPage)+1)>=d.total}>Próxima</Button>
+                      <Button variant="outline" size="sm" onClick={()=> {const next=(clientesMeta?.page ?? clientesPage)+1; if (next+1>d.total) return; setClientesPage(next); loadClientesPage(next);}} disabled={((clientesMeta?.page ?? clientesPage)+1) >= d.total}>Próxima</Button>
+                      <Button variant="outline" size="sm" onClick={()=> { const last = d.total-1; setClientesPage(last); loadClientesPage(last); }} disabled={d.current>=d.total}>Última</Button>
                     </div>
                   </div>
                 ); })()}
