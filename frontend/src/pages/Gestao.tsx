@@ -873,7 +873,12 @@ const Gestao = () => {
                         <div className="grid gap-2 grid-cols-2">
                           <div>
                             <Label htmlFor="unidade-numero">Número</Label>
-                            <Input id="unidade-numero" value={unidadeForm.endereco.numero} onChange={(e)=> setUnidadeForm(p=>({ ...p, endereco: { ...p.endereco, numero: e.target.value } }))} placeholder="Digite o número" />
+                            <Input
+                              id="unidade-numero"
+                              value={unidadeForm.endereco.numero}
+                              onChange={(e)=> setUnidadeForm(p=>({ ...p, endereco: { ...p.endereco, numero: e.target.value } }))}
+                              placeholder="Digite o número"
+                            />
                           </div>
                           <div>
                             <Label htmlFor="unidade-complemento">Complemento</Label>
@@ -1168,7 +1173,7 @@ const Gestao = () => {
                   </div>
                   <Dialog open={clienteModalOpen} onOpenChange={setClienteModalOpen}>
                     <DialogTrigger asChild>
-                      <Button onClick={()=> { setEditingCliente(null); setErrors({}); setClienteForm({ cpf: '', nome: '', email: '', telefones: [], endereco: { logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', cep: '', uf: undefined } }); }}>
+                      <Button onClick={()=> { setEditingCliente(null); setErrors({}); setClienteForm({ cpf: '', nome: '', email: '', telefones: [ { tipo: TipoTelefone.CELULAR, ddd: 16, numero: 0 } ], endereco: { logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', cep: '', uf: undefined } }); }}>
                         <Plus className="w-4 h-4 mr-2" /> Novo Cliente
                       </Button>
                     </DialogTrigger>
@@ -1198,28 +1203,48 @@ const Gestao = () => {
                           <Label htmlFor="cliente-endereco">Endereço</Label>
                           <Input id="cliente-endereco" value={clienteForm.endereco.logradouro} onChange={(e)=> setClienteForm(p=>({ ...p, endereco: { ...p.endereco, logradouro: e.target.value } }))} placeholder="Digite o logradouro" />
                         </div>
-                        <div className="grid gap-2 grid-cols-2">
-                          <div>
+                        {/* Número + Complemento: número curto (até 6 dígitos) e complemento expandido */}
+                        <div className="flex gap-2">
+                          <div className="shrink-0">
                             <Label htmlFor="cliente-numero">Número</Label>
-                            <Input id="cliente-numero" value={clienteForm.endereco.numero} onChange={(e)=> setClienteForm(p=>({ ...p, endereco: { ...p.endereco, numero: e.target.value } }))} placeholder="Digite o número" />
+                            <Input
+                              id="cliente-numero"
+                              value={clienteForm.endereco.numero}
+                              onChange={(e)=> setClienteForm(p=>({ ...p, endereco: { ...p.endereco, numero: e.target.value.replace(/[^0-9]/g,'').slice(0,6) } }))}
+                              placeholder="Ex.: 123456"
+                              maxLength={6}
+                              inputMode="numeric"
+                              pattern="\\d*"
+                              className="w-28"
+                            />
                           </div>
-                          <div>
+                          <div className="flex-1">
                             <Label htmlFor="cliente-complemento">Complemento</Label>
-                            <Input id="cliente-complemento" value={clienteForm.endereco.complemento} onChange={(e)=> setClienteForm(p=>({ ...p, endereco: { ...p.endereco, complemento: e.target.value } }))} placeholder="Digite o complemento" />
+                            <Input id="cliente-complemento" value={clienteForm.endereco.complemento} onChange={(e)=> setClienteForm(p=>({ ...p, endereco: { ...p.endereco, complemento: e.target.value } }))} placeholder="Ex.: Apto 12, Bloco B" />
                           </div>
                         </div>
                         <div className="grid gap-2">
                           <Label htmlFor="cliente-bairro">Bairro</Label>
                           <Input id="cliente-bairro" value={clienteForm.endereco.bairro} onChange={(e)=> setClienteForm(p=>({ ...p, endereco: { ...p.endereco, bairro: e.target.value } }))} placeholder="Digite o bairro" />
                         </div>
-                        <div className="grid gap-2 grid-cols-2">
-                          <div>
+                        {/* Cidade + CEP: CEP curto e cidade expandida */}
+                        <div className="flex gap-2">
+                          <div className="flex-1">
                             <Label htmlFor="cliente-cidade">Cidade</Label>
-                            <Input id="cliente-cidade" value={clienteForm.endereco.cidade} onChange={(e)=> setClienteForm(p=>({ ...p, endereco: { ...p.endereco, cidade: e.target.value } }))} placeholder="Digite a cidade" />
+                            <Input id="cliente-cidade" value={clienteForm.endereco.cidade} onChange={(e)=> setClienteForm(p=>({ ...p, endereco: { ...p.endereco, cidade: e.target.value } }))} placeholder="Ex.: Cristais Paulista" />
                           </div>
-                          <div>
+                          <div className="shrink-0">
                             <Label htmlFor="cliente-cep">CEP</Label>
-                            <Input id="cliente-cep" value={clienteForm.endereco.cep} onChange={(e)=> setClienteForm(p=>({ ...p, endereco: { ...p.endereco, cep: e.target.value } }))} placeholder="Digite o CEP" />
+                            <Input
+                              id="cliente-cep"
+                              value={clienteForm.endereco.cep}
+                              onChange={(e)=> setClienteForm(p=>({ ...p, endereco: { ...p.endereco, cep: e.target.value } }))}
+                              placeholder="Ex.: 14460098"
+                              maxLength={8}
+                              inputMode="numeric"
+                              pattern="\\d*"
+                              className="w-32"
+                            />
                           </div>
                         </div>
 
@@ -1229,20 +1254,36 @@ const Gestao = () => {
                             {clienteForm.telefones?.map((t, i) => (
                               <div key={i} className="flex gap-2 items-center">
                                 <Select value={t.tipo} onValueChange={(v) => setClienteForm(p => ({ ...p, telefones: (p.telefones || []).map((tel, idx) => idx === i ? { ...tel, tipo: v as TipoTelefone } : tel) }))}>
-                                  <SelectTrigger><SelectValue placeholder="Selecione o tipo"/></SelectTrigger>
+                                  <SelectTrigger className="w-28"><SelectValue placeholder="Tipo"/></SelectTrigger>
                                   <SelectContent>
                                     <SelectItem value={TipoTelefone.FIXO}>Fixo</SelectItem>
                                     <SelectItem value={TipoTelefone.CELULAR}>Celular</SelectItem>
                                   </SelectContent>
                                 </Select>
-                                <Input value={t.ddd} onChange={e => setClienteForm(p => ({ ...p, telefones: (p.telefones || []).map((tel, idx) => idx === i ? { ...tel, ddd: parseInt(e.target.value || '0', 10) } : tel) }))} placeholder="DDD" className="w-16" />
-                                <Input value={t.numero} onChange={e => setClienteForm(p => ({ ...p, telefones: (p.telefones || []).map((tel, idx) => idx === i ? { ...tel, numero: parseInt(e.target.value || '0', 10) } : tel) }))} placeholder="Número" className="flex-1" />
+                                <Input
+                                  value={String(t.ddd ?? '')}
+                                  onChange={e => setClienteForm(p => ({ ...p, telefones: (p.telefones || []).map((tel, idx) => idx === i ? { ...tel, ddd: parseInt(e.target.value.replace(/[^0-9]/g,'').slice(0,2) || '0', 10) } : tel) }))}
+                                  placeholder="DDD (ex.: 16)"
+                                  className="w-16"
+                                  maxLength={2}
+                                  inputMode="numeric"
+                                  pattern="\\d*"
+                                />
+                                <Input
+                                  value={String(t.numero ?? '')}
+                                  onChange={e => setClienteForm(p => ({ ...p, telefones: (p.telefones || []).map((tel, idx) => idx === i ? { ...tel, numero: parseInt(e.target.value.replace(/[^0-9]/g,'').slice(0,11) || '0', 10) } : tel) }))}
+                                  placeholder="Número (ex.: 98836-2410)"
+                                  className="flex-1"
+                                  maxLength={11}
+                                  inputMode="numeric"
+                                  pattern="\\d*"
+                                />
                                 <Button variant="destructive" onClick={() => setClienteForm(p => ({ ...p, telefones: p.telefones?.filter((_, idx) => idx !== i) }))}>
                                   <Trash2 className="w-4 h-4" />
                                 </Button>
                               </div>
                             ))}
-                            <Button variant="outline" onClick={adicionarTelefoneCliente}>
+                            <Button variant="outline" onClick={()=> setClienteForm(p => ({ ...p, telefones: [...(p.telefones || []), { tipo: TipoTelefone.CELULAR, ddd: 16, numero: 0 }] }))}>
                               <Plus className="w-4 h-4 mr-2" /> Adicionar Telefone
                             </Button>
                           </div>
