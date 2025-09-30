@@ -32,6 +32,7 @@ import {
     FilaResponseDTO,
     EntradaFilaCreateDTO
 } from "@/types";
+import { useAuth } from "@/contexts/AuthContext";
 
 const EntradaFila = () => {
     const [clientes, setClientes] = useState<ClienteResponseDTO[]>([]);
@@ -48,9 +49,11 @@ const EntradaFila = () => {
         nome: '',
         email: ''
     });
+    const [error, setError] = useState<string | null>(null);
 
     const { toast } = useToast();
     const currentUser = authService.getUsuario();
+    const { selectedUnitId } = useAuth();
 
     useEffect(() => {
         loadData();
@@ -59,25 +62,20 @@ const EntradaFila = () => {
     const loadData = async () => {
         try {
             setLoading(true);
-            
-            // Buscar clientes e filas da unidade atual
+            setError(null);
+
+            // Buscar clientes e filas da unidade ativa
             const [clientesData, filasData] = await Promise.all([
                 clienteService.listarTodos(),
-                // Usar a primeira unidade das unidades do usuário
-                currentUser?.unidadesIds?.[0] ? filaService.listarPorUnidade(currentUser.unidadesIds[0]) : []
+                selectedUnitId ? filaService.listarPorUnidade(selectedUnitId) : []
             ]);
 
-            setClientes(clientesData);
-            setFilas(Array.isArray(filasData) ? filasData : []);
-            
-            console.log('✅ Dados carregados - Clientes:', clientesData.length, 'Filas:', filasData.length);
-        } catch (error: any) {
-            console.error('❌ Erro ao carregar dados:', error);
-            toast({
-                title: 'Erro ao carregar dados',
-                description: error.message,
-                variant: 'destructive',
-            });
+            setClientes(Array.isArray(clientesData) ? clientesData : clientesData?.data ?? []);
+            setFilas(Array.isArray(filasData) ? filasData : filasData?.data ?? []);
+
+            console.log('✅ Dados carregados - Clientes:', clientesData.length, 'Filas:', Array.isArray(filasData) ? filasData.length : filasData?.data?.length ?? 0);
+        } catch (err: any) {
+            setError('Erro ao carregar dados. Tente novamente mais tarde.');
         } finally {
             setLoading(false);
         }
@@ -176,6 +174,29 @@ const EntradaFila = () => {
                 <div className="text-center space-y-4">
                     <Loader2 className="h-12 w-12 animate-spin mx-auto text-primary" />
                     <p className="text-muted-foreground">Carregando dados...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="flex items-center justify-center min-h-[400px]">
+                <div className="text-center space-y-4">
+                    <AlertCircle className="h-12 w-12 mx-auto text-destructive" />
+                    <p className="text-destructive">{error}</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (filas.length === 0) {
+        return (
+            <div className="flex items-center justify-center min-h-[400px]">
+                <div className="text-center space-y-4">
+                    <Users className="h-12 w-12 mx-auto text-muted-foreground opacity-50" />
+                    <h3 className="text-lg font-semibold">Nenhuma fila ativa</h3>
+                    <p className="text-muted-foreground">Configure filas para permitir entrada de clientes.</p>
                 </div>
             </div>
         );
