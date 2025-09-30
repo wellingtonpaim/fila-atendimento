@@ -20,6 +20,15 @@ public class FilaController {
         this.filaService = filaService;
     }
 
+    @GetMapping
+    public ResponseEntity<ApiResponse<List<FilaResponseDTO>>> listarTodas(
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
+    ) {
+        List<FilaResponseDTO> filas = filaService.listarTodas();
+        return PaginationUtil.build(filas, page, size, "Filas listadas com sucesso");
+    }
+
     @GetMapping("/unidade/{unidadeId}")
     public ResponseEntity<ApiResponse<List<FilaResponseDTO>>> listarPorUnidade(
             @PathVariable UUID unidadeId,

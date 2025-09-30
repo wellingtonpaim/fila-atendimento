@@ -155,6 +155,7 @@ Endpoints com paginação:
 - `GET /api/unidades-atendimento/public/login`
 - `GET /painel?unidadeAtendimentoId={id}`
 - `GET /painel/unidade/{unidadeId}`
+- `GET /api/filas`              
 - `GET /api/filas/unidade/{unidadeId}`
 - `GET /api/entrada-fila/aguardando/{filaId}`
 
@@ -197,6 +198,7 @@ curl -i "http://localhost:8899/api/clientes/nome/Ana?page=1&size=25"
 - `DELETE /api/setores/{id}` – Desativar
 
 ### Filas (/api/filas)
+- `GET /api/filas` – Listar todas (paginação opcional)
 - `GET /api/filas/unidade/{unidadeId}` – Listar por unidade (paginação opcional)
 - `GET /api/filas/{id}` – Buscar por ID
 - `POST /api/filas` – Criar
@@ -347,6 +349,7 @@ Endpoints com paginação
 - GET /api/unidades-atendimento/public/login
 - GET /painel?unidadeAtendimentoId={id}
 - GET /painel/unidade/{unidadeId}
+- GET /api/filas
 - GET /api/filas/unidade/{unidadeId}
 - GET /api/entrada-fila/aguardando/{filaId}
 
