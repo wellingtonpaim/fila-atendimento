@@ -187,7 +187,7 @@ class AuthService {
     }
 
     /**
-     * Obtém ID da unidade selecionada
+     * Recupera o ID da unidade selecionada
      */
     getSelectedUnitId(): string | null {
         return localStorage.getItem(this.UNIT_KEY);

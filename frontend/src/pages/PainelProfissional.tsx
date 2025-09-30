@@ -104,6 +104,10 @@ const PainelProfissional = () => {
     const { toast } = useToast();
     const { user, selectedUnitId } = useAuth();
 
+    // Log de depuração para verificar valores do contexto
+    console.log('PainelProfissional - selectedUnitId:', selectedUnitId);
+    console.log('PainelProfissional - user:', user);
+
     useEffect(() => {
         loadData();
     }, [selectedUnitId]);
@@ -171,7 +175,6 @@ const PainelProfissional = () => {
     const loadData = async () => {
         try {
             setLoading(true);
-            
             if (!selectedUnitId) {
                 toast({
                     title: 'Erro',
@@ -180,12 +183,10 @@ const PainelProfissional = () => {
                 });
                 return;
             }
-
             // Carregar filas da unidade
-            const filasData = await filaService.listarPorUnidade(selectedUnitId);
-            setFilasDisponiveis(filasData);
-
-            console.log('✅ Filas carregadas:', filasData.length);
+            const response = await filaService.listarPorUnidade(selectedUnitId);
+            setFilasDisponiveis(Array.isArray(response.data) ? response.data : []);
+            console.log('✅ Filas carregadas:', response.data?.length);
         } catch (error: any) {
             console.error('❌ Erro ao carregar dados:', error);
             toast({
@@ -493,7 +494,7 @@ const PainelProfissional = () => {
                                     <SelectValue placeholder="Selecione sua fila" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {filasDisponiveis.map((fila) => (
+                                    {Array.isArray(filasDisponiveis) ? filasDisponiveis.map((fila) => (
                                         <SelectItem key={fila.id} value={fila.id}>
                                             <div className="flex flex-col">
                                                 <span>{fila.nome}</span>
@@ -502,7 +503,7 @@ const PainelProfissional = () => {
                                                 </span>
                                             </div>
                                         </SelectItem>
-                                    ))}
+                                    )) : null}
                                 </SelectContent>
                             </Select>
                         </div>
