@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Edit, Trash2, UserPlus, Shield, ShieldCheck } from 'lucide-react';
+import { Plus, Edit, Trash2, UserPlus } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 // Services
@@ -34,7 +34,8 @@ import {
   TipoTelefone,
   Telefone,
   ClienteCreateDTO,
-  ClienteResponseDTO
+  ClienteResponseDTO,
+  Endereco
 } from '@/types';
 
 interface FormErrors { [key: string]: string }
@@ -49,6 +50,15 @@ interface PaginationMeta {
   page: number; // 0-based vindo do backend
   pageSize: number;
 }
+
+// Ordenação genérica
+type SortState = { field: string; dir: 'asc' | 'desc' };
+
+// Util: máscara de CEP 00000-000
+const formatCepMask = (value: string): string => {
+  const digits = String(value || '').replace(/\D/g, '').slice(0, 8);
+  return digits.replace(/(\d{5})(\d)/, '$1-$2');
+};
 
 const Gestao = () => {
   const { toast } = useToast();
@@ -151,26 +161,29 @@ const Gestao = () => {
   const [unidadeOptions, setUnidadeOptions] = useState<UnidadeAtendimentoResponseDTO[]>([]);
   const [setorOptions, setSetorOptions] = useState<SetorResponseDTO[]>([]);
 
-  // ===== Helpers =====
-  const pageDisplay = (meta: PaginationMeta | null, statePage: number) => {
-    const current = (meta?.page ?? statePage) + 1; // 1-based
-    const total = Math.max(1, meta?.totalPages ?? 1);
-    return { current: Math.min(current, total), total };
+  // ===== Ordenação por aba =====
+  const [filasSort, setFilasSort] = useState<SortState>({ field: 'nome', dir: 'asc' });
+  const [setoresSort, setSetoresSort] = useState<SortState>({ field: 'nome', dir: 'asc' });
+  const [unidadesSort, setUnidadesSort] = useState<SortState>({ field: 'nome', dir: 'asc' });
+  const [usuariosSort, setUsuariosSort] = useState<SortState>({ field: 'nomeUsuario', dir: 'asc' });
+  const [clientesSort, setClientesSort] = useState<SortState>({ field: 'nome', dir: 'asc' });
+
+  const toggleSort = (current: SortState, field: string, setter: (s: SortState)=>void) => {
+    if (current.field !== field) setter({ field, dir: 'asc' });
+    else setter({ field, dir: current.dir === 'asc' ? 'desc' : 'asc' });
   };
 
-  // Helpers de formatação e paginação
-  const formatCepMask = (value: string): string => {
-    const digits = (value || '').replace(/\D/g, '').slice(0, 8);
-    if (digits.length <= 5) return digits;
-    return `${digits.slice(0,5)}-${digits.slice(5)}`;
-  };
-
-  function clientPaginate<T>(allItems: T[], page: number, size: number) {
-    const totalCount = allItems.length;
-    const totalPages = Math.max(1, Math.ceil(totalCount / size));
-    const safePage = Math.min(Math.max(0, page), totalPages - 1);
-    const slice = allItems.slice(safePage * size, safePage * size + size);
-    return { slice, meta: { totalCount, totalPages, page: safePage, pageSize: size as number } };
+  function applySort<T>(items: T[], sort: SortState, getter: (item: T, field: string)=>any): T[] {
+    const arr = [...items];
+    const dir = sort.dir === 'asc' ? 1 : -1;
+    arr.sort((a,b) => {
+      const va = getter(a, sort.field);
+      const vb = getter(b, sort.field);
+      const sa = (va ?? '').toString().toLowerCase();
+      const sb = (vb ?? '').toString().toLowerCase();
+      if (sa < sb) return -1*dir; if (sa > sb) return 1*dir; return 0;
+    });
+    return arr;
   }
 
   async function fetchPageData<T>(path: string, page: number, size: number): Promise<T[]> {
@@ -241,49 +254,47 @@ const Gestao = () => {
   const loadFilasPage = async (page = filasPage, size = filasSize, unidadeIdParam?: string) => {
     const unidadeId = unidadeIdParam ?? filasUnidadeId;
     try {
-      let all: FilaResponseDTO[] = [];
-      if (!unidadeId && filasSearchType === 'unidade') {
-        setFilas([]); setFilasMeta({ totalCount: 0, totalPages: 1, page: 0, pageSize: size }); return;
-      }
       if (filasSearchType === 'unidade') {
-        all = await getAllItems<FilaResponseDTO>(`/api/filas/unidade/${unidadeId}`);
+        if (!unidadeId) { setFilas([]); setFilasMeta({ totalCount: 0, totalPages: 1, page: 0, pageSize: size }); return; }
+        const { data, meta } = await getPaginated<FilaResponseDTO[]>(`/api/filas/unidade/${unidadeId}`, { page, size });
+        const sorted = applySort(data || [], filasSort, (it: FilaResponseDTO, f) => f==='nome'?it.nome: f==='setor'?it.setor?.nome: f==='unidade'?it.unidade?.nome:'' );
+        setFilas(sorted); setFilasMeta(meta ?? { totalCount: data?.length||0, totalPages: 1, page, pageSize: size }); setFilasPage(meta?.page ?? page); setFilasSize(meta?.pageSize ?? size);
+      } else if (filasSearchType === 'nome') {
+        // Sem endpoint específico: filtra no cliente (carrega todas dentro da unidade)
+        await loadFilasByNomeOuSetor({ page, size, unidadeId, nome: filasSearchValue });
+        setFilas(p=> applySort(p, filasSort, (it: FilaResponseDTO, f)=> f==='nome'?it.nome: f==='setor'?it.setor?.nome: it.unidade?.nome));
       } else {
-        // Carrega todas as filas de todas unidades e filtra (se necessário)
-        all = await getAllItems<FilaResponseDTO>(`/api/filas`);
-        if (filasSearchType === 'nome' && filasSearchValue.trim()) {
-          all = all.filter(f => f.nome?.toLowerCase().includes(filasSearchValue.toLowerCase()));
-        }
-        if (filasSearchType === 'setor' && filasSetorId.trim()) {
-          all = all.filter(f => f.setor?.id === filasSetorId);
-        }
-        if (unidadeId) {
-          all = all.filter(f => f.unidade?.id === unidadeId);
-        }
+        await loadFilasByNomeOuSetor({ page, size, unidadeId, setorId: filasSetorId });
+        setFilas(p=> applySort(p, filasSort, (it: FilaResponseDTO, f)=> f==='nome'?it.nome: f==='setor'?it.setor?.nome: it.unidade?.nome));
       }
-      const { slice, meta } = clientPaginate(all, page, size);
-      setFilas(slice); setFilasMeta(meta); setFilasPage(meta.page); setFilasSize(meta.pageSize);
     } catch { setFilas([]); setFilasMeta({ totalCount: 0, totalPages: 1, page: 0, pageSize: size }); }
   };
 
   const loadSetoresPage = async (page = setoresPage, size = setoresSize) => {
     try {
-      const all = await getAllItems<SetorResponseDTO>('/api/setores');
-      const filtered = (setoresSearchType === 'nome' && setoresSearchValue.trim())
-        ? all.filter(s => s.nome?.toLowerCase().includes(setoresSearchValue.toLowerCase()))
-        : all;
-      const { slice, meta } = clientPaginate(filtered, page, size);
-      setSetores(slice); setSetoresMeta(meta); setSetoresPage(meta.page); setSetoresSize(meta.pageSize);
+      if (setoresSearchType === 'nome' && setoresSearchValue.trim()) {
+        const { data, meta } = await getPaginated<SetorResponseDTO[]>(`/api/setores/nome/${encodeURIComponent(setoresSearchValue)}`, { page, size });
+        const sorted = applySort(data||[], setoresSort, (s: SetorResponseDTO, _f)=> s.nome);
+        setSetores(sorted); setSetoresMeta(meta ?? { totalCount: data?.length||0, totalPages: 1, page, pageSize: size }); setSetoresPage(meta?.page ?? page); setSetoresSize(meta?.pageSize ?? size);
+      } else {
+        const { data, meta } = await getPaginated<SetorResponseDTO[]>(`/api/setores`, { page, size });
+        const sorted = applySort(data||[], setoresSort, (s: SetorResponseDTO, _f)=> s.nome);
+        setSetores(sorted); setSetoresMeta(meta ?? { totalCount: data?.length||0, totalPages: 1, page, pageSize: size }); setSetoresPage(meta?.page ?? page); setSetoresSize(meta?.pageSize ?? size);
+      }
     } catch { setSetores([]); setSetoresMeta({ totalCount: 0, totalPages: 1, page: 0, pageSize: size }); }
   };
 
   const loadUnidadesPage = async (page = unidadesPage, size = unidadesSize) => {
     try {
-      const all = await getAllItems<UnidadeAtendimentoResponseDTO>('/api/unidades-atendimento');
-      const filtered = (unidadesSearchType === 'nome' && unidadesSearchValue.trim())
-        ? all.filter(u => u.nome?.toLowerCase().includes(unidadesSearchValue.toLowerCase()))
-        : all;
-      const { slice, meta } = clientPaginate(filtered, page, size);
-      setUnidades(slice); setUnidadesMeta(meta); setUnidadesPage(meta.page); setUnidadesSize(meta.pageSize);
+      if (unidadesSearchType === 'nome' && unidadesSearchValue.trim()) {
+        const { data, meta } = await getPaginated<UnidadeAtendimentoResponseDTO[]>(`/api/unidades-atendimento/nome/${encodeURIComponent(unidadesSearchValue)}`, { page, size });
+        const sorted = applySort(data||[], unidadesSort, (u: UnidadeAtendimentoResponseDTO, f)=> f==='nome'?u.nome: (u.endereco?.enderecoFormatado || `${u.endereco?.logradouro}, ${u.endereco?.numero}` || ''));
+        setUnidades(sorted); setUnidadesMeta(meta ?? { totalCount: data?.length||0, totalPages: 1, page, pageSize: size }); setUnidadesPage(meta?.page ?? page); setUnidadesSize(meta?.pageSize ?? size);
+      } else {
+        const { data, meta } = await getPaginated<UnidadeAtendimentoResponseDTO[]>(`/api/unidades-atendimento`, { page, size });
+        const sorted = applySort(data||[], unidadesSort, (u: UnidadeAtendimentoResponseDTO, f)=> f==='nome'?u.nome: (u.endereco?.enderecoFormatado || `${u.endereco?.logradouro}, ${u.endereco?.numero}` || ''));
+        setUnidades(sorted); setUnidadesMeta(meta ?? { totalCount: data?.length||0, totalPages: 1, page, pageSize: size }); setUnidadesPage(meta?.page ?? page); setUnidadesSize(meta?.pageSize ?? size);
+      }
     } catch { setUnidades([]); setUnidadesMeta({ totalCount: 0, totalPages: 1, page: 0, pageSize: size }); }
   };
 
@@ -294,45 +305,175 @@ const Gestao = () => {
         if (res.ok) {
           const body = await res.json();
           const item = body.data as UsuarioResponseDTO;
-          setUsuarios(item ? [item] : []);
-          setUsuariosMeta({ totalCount: item ? 1 : 0, totalPages: 1, page: 0, pageSize: 1 });
-          setUsuariosPage(0); setUsuariosSize(1);
+          const data = item ? [item] : [];
+          const meta = { totalCount: data.length, totalPages: 1, page: 0, pageSize: data.length || 1 } as PaginationMeta;
+          const sorted = applySort(data, usuariosSort, (u: UsuarioResponseDTO, f)=> f==='nomeUsuario'?u.nomeUsuario: f==='email'?u.email: u.categoria);
+          setUsuarios(sorted); setUsuariosMeta(meta); setUsuariosPage(0); setUsuariosSize(meta.pageSize);
         } else { setUsuarios([]); setUsuariosMeta({ totalCount: 0, totalPages: 1, page: 0, pageSize: size }); }
+      } else if (usuariosSearchType === 'nome' && usuariosSearchValue.trim()) {
+        // Tenta endpoint específico (se existir). Caso não, usa fallback paginado geral e filtra no cliente.
+        const res = await fetch(`${API_BASE_URL}/api/usuarios/nome/${encodeURIComponent(usuariosSearchValue)}?page=${page}&size=${size}`, { headers: authService.getAuthHeaders() });
+        if (res.ok) {
+          const totalCount = Number(res.headers.get('X-Total-Count'));
+          const totalPages = Number(res.headers.get('X-Total-Pages'));
+          const xpage = Number(res.headers.get('X-Page'));
+          const pageSize = Number(res.headers.get('X-Page-Size'));
+          const meta = [totalCount,totalPages,xpage,pageSize].every(Number.isFinite) ? { totalCount, totalPages, page: xpage, pageSize } : { totalCount: 0, totalPages: 1, page, pageSize: size } as PaginationMeta;
+          const body = await res.json();
+          const data = (body.data as UsuarioResponseDTO[]) || [];
+          const sorted = applySort(data, usuariosSort, (u: UsuarioResponseDTO, f)=> f==='nomeUsuario'?u.nomeUsuario: f==='email'?u.email: u.categoria);
+          setUsuarios(sorted); setUsuariosMeta(meta); setUsuariosPage(meta.page); setUsuariosSize(meta.pageSize);
+        } else {
+          // Fallback simples: usa /api/usuarios paginado e filtra no cliente nesta página
+          const { data, meta } = await getPaginated<UsuarioResponseDTO[]>(`/api/usuarios`, { page, size });
+          const filtered = (data||[]).filter(u=> u.nomeUsuario?.toLowerCase().includes(usuariosSearchValue.toLowerCase()));
+          const sorted = applySort(filtered, usuariosSort, (u: UsuarioResponseDTO, f)=> f==='nomeUsuario'?u.nomeUsuario: f==='email'?u.email: u.categoria);
+          setUsuarios(sorted); setUsuariosMeta(meta ?? { totalCount: sorted.length, totalPages: 1, page, pageSize: size }); setUsuariosPage(meta?.page ?? page); setUsuariosSize(meta?.pageSize ?? size);
+        }
       } else {
-        const all = await getAllItems<UsuarioResponseDTO>('/api/usuarios');
-        const filtered = (usuariosSearchType === 'nome' && usuariosSearchValue.trim())
-          ? all.filter(u => u.nomeUsuario?.toLowerCase().includes(usuariosSearchValue.toLowerCase()))
-          : all;
-        const { slice, meta } = clientPaginate(filtered, page, size);
-        setUsuarios(slice); setUsuariosMeta(meta); setUsuariosPage(meta.page); setUsuariosSize(meta.pageSize);
+        const { data, meta } = await getPaginated<UsuarioResponseDTO[]>(`/api/usuarios`, { page, size });
+        const sorted = applySort(data||[], usuariosSort, (u: UsuarioResponseDTO, f)=> f==='nomeUsuario'?u.nomeUsuario: f==='email'?u.email: u.categoria);
+        setUsuarios(sorted); setUsuariosMeta(meta ?? { totalCount: data?.length||0, totalPages: 1, page, pageSize: size }); setUsuariosPage(meta?.page ?? page); setUsuariosSize(meta?.pageSize ?? size);
       }
     } catch { setUsuarios([]); setUsuariosMeta({ totalCount: 0, totalPages: 1, page: 0, pageSize: size }); }
   };
 
   const loadClientesPage = async (page = clientesPage, size = clientesSize) => {
     try {
-      if (clientesSearchType === 'cpf' && clientesSearchValue.trim()) {
+      if (clientesSearchType === 'nome' && clientesSearchValue.trim()) {
+        const { data, meta } = await getPaginated<ClienteResponseDTO[]>(`/api/clientes/nome/${encodeURIComponent(clientesSearchValue)}`, { page, size });
+        const sorted = applySort(data||[], clientesSort, (c: ClienteResponseDTO, f)=> f==='nome'?c.nome: f==='cpf'?c.cpf: c.email);
+        setClientes(sorted); setClientesMeta(meta ?? { totalCount: data?.length||0, totalPages: 1, page, pageSize: size }); setClientesPage(meta?.page ?? page); setClientesSize(meta?.pageSize ?? size);
+      } else if (clientesSearchType === 'cpf' && clientesSearchValue.trim()) {
         const res = await fetch(`${API_BASE_URL}/api/clientes/cpf/${encodeURIComponent(clientesSearchValue)}`, { headers: authService.getAuthHeaders() });
         if (res.ok) {
           const body = await res.json();
           const item = body.data as ClienteResponseDTO;
-          setClientes(item ? [item] : []);
-          setClientesMeta({ totalCount: item ? 1 : 0, totalPages: 1, page: 0, pageSize: 1 });
-          setClientesPage(0); setClientesSize(1);
+          const data = item ? [item] : [];
+          const meta = { totalCount: data.length, totalPages: 1, page: 0, pageSize: data.length || 1 } as PaginationMeta;
+          const sorted = applySort(data, clientesSort, (c: ClienteResponseDTO, f)=> f==='nome'?c.nome: f==='cpf'?c.cpf: c.email);
+          setClientes(sorted); setClientesMeta(meta); setClientesPage(0); setClientesSize(meta.pageSize);
         } else { setClientes([]); setClientesMeta({ totalCount: 0, totalPages: 1, page: 0, pageSize: size }); }
       } else {
-        const all = await getAllItems<ClienteResponseDTO>('/api/clientes');
-        const filtered = (clientesSearchType === 'nome' && clientesSearchValue.trim())
-          ? all.filter(c => c.nome?.toLowerCase().includes(clientesSearchValue.toLowerCase()))
-          : all;
-        const { slice, meta } = clientPaginate(filtered, page, size);
-        setClientes(slice); setClientesMeta(meta); setClientesPage(meta.page); setClientesSize(meta.pageSize);
+        const { data, meta } = await getPaginated<ClienteResponseDTO[]>(`/api/clientes`, { page, size });
+        const sorted = applySort(data||[], clientesSort, (c: ClienteResponseDTO, f)=> f==='nome'?c.nome: f==='cpf'?c.cpf: c.email);
+        setClientes(sorted); setClientesMeta(meta ?? { totalCount: data?.length||0, totalPages: 1, page, pageSize: size }); setClientesPage(meta?.page ?? page); setClientesSize(meta?.pageSize ?? size);
       }
     } catch { setClientes([]); setClientesMeta({ totalCount: 0, totalPages: 1, page: 0, pageSize: size }); }
   };
 
+  // ===== Helpers =====
+  const pageDisplay = (meta: PaginationMeta | null, statePage: number) => {
+    const current = (meta?.page ?? statePage) + 1; // 1-based
+    const total = Math.max(1, meta?.totalPages ?? 1);
+    return { current: Math.min(current, total), total };
+  };
+
+  // Helper para requests paginados (lendo headers)
+  async function getPaginated<T>(path: string, params?: Record<string, string|number>): Promise<{ data: T; meta: PaginationMeta | null; }> {
+    const url = new URL(`${API_BASE_URL}${path}`);
+    if (params) Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, String(v)));
+    const res = await fetch(url.toString(), { headers: authService.getAuthHeaders() });
+    if (!res.ok) throw new Error(res.statusText);
+
+    // Tenta ler headers de paginação (checa presença real e depois faz parse)
+    const hTotalCount = res.headers.get('X-Total-Count');
+    const hTotalPages = res.headers.get('X-Total-Pages');
+    const hPage = res.headers.get('X-Page');
+    const hPageSize = res.headers.get('X-Page-Size');
+
+    const body = await res.json();
+    let data = (body?.data as T) ?? ([] as unknown as T);
+
+    const sizeNum = Number(params?.size ?? 10) || 10;
+    const pageNum = Number(params?.page ?? 0) || 0;
+
+    let meta: PaginationMeta | null = null;
+
+    // 1) Headers X-Total-* expostos
+    if (hTotalCount !== null && hTotalPages !== null && hPage !== null && hPageSize !== null) {
+      const totalCount = Number(hTotalCount);
+      const totalPages = Number(hTotalPages);
+      const page = Number(hPage);
+      const pageSize = Number(hPageSize);
+      if ([totalCount, totalPages, page, pageSize].every((n) => Number.isFinite(n)) && totalPages > 0 && pageSize > 0) {
+        meta = { totalCount, totalPages, page, pageSize };
+      }
+    }
+
+    // 2) Header Content-Range: items start-end/total (end inclusivo)
+    if (!meta) {
+      const contentRange = res.headers.get('Content-Range');
+      if (contentRange) {
+        const match = /items\s+(\d+)-(\d+)\/(\d+)/i.exec(contentRange);
+        if (match) {
+          const totalCount = Number(match[3]);
+          const totalPages = Math.max(1, Math.ceil(totalCount / sizeNum));
+          const page = Math.min(pageNum, totalPages - 1);
+          const pageSize = sizeNum;
+          if (Number.isFinite(totalCount) && totalCount >= 0) {
+            meta = { totalCount, totalPages, page, pageSize };
+          }
+        }
+      }
+    }
+
+    // 3) Fallback: chamada sem paginação (API retorna lista completa)
+    if (!meta) {
+      try {
+        const urlAll = new URL(`${API_BASE_URL}${path}`);
+        const resAll = await fetch(urlAll.toString(), { headers: authService.getAuthHeaders() });
+        if (resAll.ok) {
+          const bodyAll = await resAll.json();
+          const all = (bodyAll?.data as any[]) || [];
+          const totalCount = all.length;
+          const totalPages = Math.max(1, Math.ceil(totalCount / sizeNum));
+          const page = Math.min(pageNum, totalPages - 1);
+          const pageSize = sizeNum;
+          meta = { totalCount, totalPages, page, pageSize };
+        }
+      } catch { /* ignora e tenta próximo fallback */ }
+    }
+
+    // 4) Fallback: varrer páginas até o fim (caso o backend só responda paginado mas sem expor headers)
+    if (!meta) {
+      try {
+        let p = 0; let count = 0; let loops = 0; const maxLoops = 200;
+        while (loops < maxLoops) {
+          const pageUrl = new URL(`${API_BASE_URL}${path}`);
+          pageUrl.searchParams.set('page', String(p));
+          pageUrl.searchParams.set('size', String(sizeNum));
+          const r = await fetch(pageUrl.toString(), { headers: authService.getAuthHeaders() });
+          if (!r.ok) break;
+          const b = await r.json();
+          const arr = (b?.data as any[]) || [];
+          count += arr.length;
+          p += 1; loops += 1;
+          if (arr.length < sizeNum) break;
+        }
+        const totalCount = count;
+        const totalPages = Math.max(1, Math.ceil(totalCount / sizeNum));
+        const page = Math.min(pageNum, totalPages - 1);
+        const pageSize = sizeNum;
+        meta = { totalCount, totalPages, page, pageSize };
+      } catch { meta = null; }
+    }
+
+    return { data, meta };
+  }
+
   // ===== Inicialização =====
   useEffect(() => { carregarDados() }, []);
+
+  // Carregar primeira página (ordenada por nome) ao trocar de aba
+  useEffect(() => {
+    if (activeTab === 'filas') { setFilasSort({ field: 'nome', dir: 'asc' }); loadFilasPage(0, filasSize); }
+    if (activeTab === 'setores') { setSetoresSort({ field: 'nome', dir: 'asc' }); loadSetoresPage(0, setoresSize); }
+    if (activeTab === 'unidades') { setUnidadesSort({ field: 'nome', dir: 'asc' }); loadUnidadesPage(0, unidadesSize); }
+    if (activeTab === 'usuarios') { setUsuariosSort({ field: 'nomeUsuario', dir: 'asc' }); loadUsuariosPage(0, usuariosSize); }
+    if (activeTab === 'clientes') { setClientesSort({ field: 'nome', dir: 'asc' }); loadClientesPage(0, clientesSize); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
 
   const carregarDados = async () => {
     setLoading(true);
@@ -513,7 +654,7 @@ const Gestao = () => {
 
   const handleSalvarCliente = async () => {
     // Sanitização: enviar apenas campos realmente preenchidos
-    const end = (clienteForm.endereco || {});
+    const end: Partial<Endereco> = (clienteForm.endereco || {});
     const enderecoSan: any = {};
     if (end.logradouro?.trim()) enderecoSan.logradouro = end.logradouro.trim();
     if (end.numero?.trim()) enderecoSan.numero = end.numero.trim();
@@ -747,8 +888,8 @@ const Gestao = () => {
 
                     <div className="flex flex-col min-w-[130px]">
                       <Label className="mb-1">Itens por página</Label>
-                      <Select value={String(filasSize)} onValueChange={(v)=> { const s=Number(v); setFilasSize(s); setFilasPage(0); }}>
-                        <SelectTrigger><SelectValue placeholder="Selecione"/></SelectTrigger>
+                      <Select value={String(filasSize)} defaultValue="10" onValueChange={(v)=> { const s=Number(v); setFilasSize(s); setFilasPage(0); }}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="10">10</SelectItem>
                           <SelectItem value="25">25</SelectItem>
@@ -784,9 +925,30 @@ const Gestao = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Nome</TableHead>
-                      <TableHead>Setor</TableHead>
-                      <TableHead>Unidade</TableHead>
+                      <TableHead>
+                        <div className="flex items-center gap-1">
+                          <span>Nome</span>
+                          <button aria-label="Ordenar" onClick={()=> { toggleSort(filasSort, 'nome', setFilasSort); loadFilasPage(filasMeta?.page ?? filasPage, filasMeta?.pageSize ?? filasSize); }} className="p-0.5">
+                            {filasSort.field==='nome' && filasSort.dir==='asc' ? '▲' : '▼'}
+                          </button>
+                        </div>
+                      </TableHead>
+                      <TableHead>
+                        <div className="flex items-center gap-1">
+                          <span>Setor</span>
+                          <button aria-label="Ordenar" onClick={()=> { toggleSort(filasSort, 'setor', setFilasSort); loadFilasPage(filasMeta?.page ?? filasPage, filasMeta?.pageSize ?? filasSize); }} className="p-0.5">
+                            {filasSort.field==='setor' && filasSort.dir==='asc' ? '▲' : '▼'}
+                          </button>
+                        </div>
+                      </TableHead>
+                      <TableHead>
+                        <div className="flex items-center gap-1">
+                          <span>Unidade</span>
+                          <button aria-label="Ordenar" onClick={()=> { toggleSort(filasSort, 'unidade', setFilasSort); loadFilasPage(filasMeta?.page ?? filasPage, filasMeta?.pageSize ?? filasSize); }} className="p-0.5">
+                            {filasSort.field==='unidade' && filasSort.dir==='asc' ? '▲' : '▼'}
+                          </button>
+                        </div>
+                      </TableHead>
                       <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -865,8 +1027,8 @@ const Gestao = () => {
                   )}
                   <div className="flex flex-col min-w-[130px]">
                     <Label className="mb-1">Itens por página</Label>
-                    <Select value={String(setoresSize)} onValueChange={(v)=> { const s=Number(v); setSetoresSize(s); setSetoresPage(0); }}>
-                      <SelectTrigger><SelectValue placeholder="Selecione"/></SelectTrigger>
+                    <Select value={String(setoresSize)} defaultValue="10" onValueChange={(v)=> { const s=Number(v); setSetoresSize(s); setSetoresPage(0); }}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent><SelectItem value="10">10</SelectItem><SelectItem value="25">25</SelectItem><SelectItem value="50">50</SelectItem></SelectContent>
                     </Select>
                   </div>
@@ -889,7 +1051,14 @@ const Gestao = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Nome</TableHead>
+                      <TableHead>
+                        <div className="flex items-center gap-1">
+                          <span>Nome</span>
+                          <button aria-label="Ordenar" onClick={()=> { toggleSort(setoresSort, 'nome', setSetoresSort); loadSetoresPage(setoresMeta?.page ?? setoresPage, setoresMeta?.pageSize ?? setoresSize); }} className="p-0.5">
+                            {setoresSort.field==='nome' && setoresSort.dir==='asc' ? '▲' : '▼'}
+                          </button>
+                        </div>
+                      </TableHead>
                       <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -1027,8 +1196,8 @@ const Gestao = () => {
                   )}
                   <div className="flex flex-col min-w-[130px]">
                     <Label className="mb-1">Itens por página</Label>
-                    <Select value={String(unidadesSize)} onValueChange={(v)=> { const s=Number(v); setUnidadesSize(s); setUnidadesPage(0); }}>
-                      <SelectTrigger><SelectValue placeholder="Selecione"/></SelectTrigger>
+                    <Select value={String(unidadesSize)} defaultValue="10" onValueChange={(v)=> { const s=Number(v); setUnidadesSize(s); setUnidadesPage(0); }}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent><SelectItem value="10">10</SelectItem><SelectItem value="25">25</SelectItem><SelectItem value="50">50</SelectItem></SelectContent>
                     </Select>
                   </div>
@@ -1051,8 +1220,22 @@ const Gestao = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Nome</TableHead>
-                      <TableHead>Endereço</TableHead>
+                      <TableHead>
+                        <div className="flex items-center gap-1">
+                          <span>Nome</span>
+                          <button aria-label="Ordenar" onClick={()=> { toggleSort(unidadesSort, 'nome', setUnidadesSort); loadUnidadesPage(unidadesMeta?.page ?? unidadesPage, unidadesMeta?.pageSize ?? unidadesSize); }} className="p-0.5">
+                            {unidadesSort.field==='nome' && unidadesSort.dir==='asc' ? '▲' : '▼'}
+                          </button>
+                        </div>
+                      </TableHead>
+                      <TableHead>
+                        <div className="flex items-center gap-1">
+                          <span>Endereço</span>
+                          <button aria-label="Ordenar" onClick={()=> { toggleSort(unidadesSort, 'endereco', setUnidadesSort); loadUnidadesPage(unidadesMeta?.page ?? unidadesPage, unidadesMeta?.pageSize ?? unidadesSize); }} className="p-0.5">
+                            {unidadesSort.field==='endereco' && unidadesSort.dir==='asc' ? '▲' : '▼'}
+                          </button>
+                        </div>
+                      </TableHead>
                       <TableHead>Telefones</TableHead>
                       <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
@@ -1176,8 +1359,8 @@ const Gestao = () => {
                   )}
                   <div className="flex flex-col min-w-[130px]">
                     <Label className="mb-1">Itens por página</Label>
-                    <Select value={String(usuariosSize)} onValueChange={(v)=> { const s=Number(v); setUsuariosSize(s); setUsuariosPage(0); }}>
-                      <SelectTrigger><SelectValue placeholder="Selecione"/></SelectTrigger>
+                    <Select value={String(usuariosSize)} defaultValue="10" onValueChange={(v)=> { const s=Number(v); setUsuariosSize(s); setUsuariosPage(0); }}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent><SelectItem value="10">10</SelectItem><SelectItem value="25">25</SelectItem><SelectItem value="50">50</SelectItem></SelectContent>
                     </Select>
                   </div>
@@ -1193,8 +1376,8 @@ const Gestao = () => {
                     <div className="flex items-center gap-2">
                       <Button variant="outline" size="sm" onClick={()=> { setUsuariosPage(0); loadUsuariosPage(0); }} disabled={d.current<=1}>Primeira</Button>
                       <Button variant="outline" size="sm" onClick={()=> { const p=Math.max(0,(usuariosMeta?.page ?? usuariosPage)-1); setUsuariosPage(p); loadUsuariosPage(p); }} disabled={(usuariosMeta?.page ?? usuariosPage)<=0}>Anterior</Button>
-                      <Button variant="outline" size="sm" onClick={()=> { const next=(usuariosMeta?.page ?? usuariosPage)+1; if (next+1>d.total) return; setUsuariosPage(next); loadUsuariosPage(next); }} disabled={((usuariosMeta?.page ?? usuariosPage)+1)>=d.total}>Próxima</Button>
-                      <Button variant="outline" size="sm" onClick={()=> { const last=d.total-1; setUsuariosPage(last); loadUsuariosPage(last); }} disabled={d.current>=d.total}>Última</Button>
+                      <Button variant="outline" size="sm" onClick={()=> { const next=(usuariosMeta?.page ?? usuariosPage)+1; if (next+1>d.total) return; setUsuariosPage(next); loadUsuariosPage(next); }} disabled={((usuariosMeta?.page ?? usuariosPage)+1) >= d.total}>Próxima</Button>
+                      <Button variant="outline" size="sm" onClick={()=> { const last = d.total-1; setUsuariosPage(last); loadUsuariosPage(last); }} disabled={d.current>=d.total}>Última</Button>
                     </div>
                   </div>
                 ); })()}
@@ -1202,10 +1385,35 @@ const Gestao = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Nome</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Categoria</TableHead>
-                      <TableHead>Unidades</TableHead>
+                      <TableHead>
+                        <div className="flex items-center gap-1">
+                          <span>Nome</span>
+                          <button aria-label="Ordenar" onClick={()=> { toggleSort(usuariosSort, 'nomeUsuario', setUsuariosSort); loadUsuariosPage(usuariosMeta?.page ?? usuariosPage, usuariosMeta?.pageSize ?? usuariosSize); }} className="p-0.5">
+                            {usuariosSort.field==='nomeUsuario' && usuariosSort.dir==='asc' ? '▲' : '▼'}
+                          </button>
+                        </div>
+                      </TableHead>
+                      <TableHead>
+                        <div className="flex items-center gap-1">
+                          <span>Email</span>
+                          <button aria-label="Ordenar" onClick={()=> { toggleSort(usuariosSort, 'email', setUsuariosSort); loadUsuariosPage(usuariosMeta?.page ?? usuariosPage, usuariosMeta?.pageSize ?? usuariosSize); }} className="p-0.5">
+                            {usuariosSort.field==='email' && usuariosSort.dir==='asc' ? '▲' : '▼'}
+                          </button>
+                        </div>
+                      </TableHead>
+                      <TableHead>
+                        <div className="flex items-center gap-1">
+                          <span>Categoria</span>
+                          <button aria-label="Ordenar" onClick={()=> { toggleSort(usuariosSort, 'categoria', setUsuariosSort); loadUsuariosPage(usuariosMeta?.page ?? usuariosPage, usuariosMeta?.pageSize ?? usuariosSize); }} className="p-0.5">
+                            {usuariosSort.field==='categoria' && usuariosSort.dir==='asc' ? '▲' : '▼'}
+                          </button>
+                        </div>
+                      </TableHead>
+                      <TableHead>
+                        <div className="flex items-center gap-1">
+                          <span>Unidades</span>
+                        </div>
+                      </TableHead>
                       <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -1402,8 +1610,8 @@ const Gestao = () => {
                   )}
                   <div className="flex flex-col min-w-[130px]">
                     <Label className="mb-1">Itens por página</Label>
-                    <Select value={String(clientesSize)} onValueChange={(v)=> { const s=Number(v); setClientesSize(s); setClientesPage(0); }}>
-                      <SelectTrigger><SelectValue placeholder="Selecione"/></SelectTrigger>
+                    <Select value={String(clientesSize)} defaultValue="10" onValueChange={(v)=> { const s=Number(v); setClientesSize(s); setClientesPage(0); }}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent><SelectItem value="10">10</SelectItem><SelectItem value="25">25</SelectItem><SelectItem value="50">50</SelectItem></SelectContent>
                     </Select>
                   </div>
@@ -1428,9 +1636,30 @@ const Gestao = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Nome</TableHead>
-                      <TableHead>CPF</TableHead>
-                      <TableHead>Email</TableHead>
+                      <TableHead>
+                        <div className="flex items-center gap-1">
+                          <span>Nome</span>
+                          <button aria-label="Ordenar" onClick={()=> { toggleSort(clientesSort, 'nome', setClientesSort); loadClientesPage(clientesMeta?.page ?? clientesPage, clientesMeta?.pageSize ?? clientesSize); }} className="p-0.5">
+                            {clientesSort.field==='nome' && clientesSort.dir==='asc' ? '▲' : '▼'}
+                          </button>
+                        </div>
+                      </TableHead>
+                      <TableHead>
+                        <div className="flex items-center gap-1">
+                          <span>CPF</span>
+                          <button aria-label="Ordenar" onClick={()=> { toggleSort(clientesSort, 'cpf', setClientesSort); loadClientesPage(clientesMeta?.page ?? clientesPage, clientesMeta?.pageSize ?? clientesSize); }} className="p-0.5">
+                            {clientesSort.field==='cpf' && clientesSort.dir==='asc' ? '▲' : '▼'}
+                          </button>
+                        </div>
+                      </TableHead>
+                      <TableHead>
+                        <div className="flex items-center gap-1">
+                          <span>Email</span>
+                          <button aria-label="Ordenar" onClick={()=> { toggleSort(clientesSort, 'email', setClientesSort); loadClientesPage(clientesMeta?.page ?? clientesPage, clientesMeta?.pageSize ?? clientesSize); }} className="p-0.5">
+                            {clientesSort.field==='email' && clientesSort.dir==='asc' ? '▲' : '▼'}
+                          </button>
+                        </div>
+                      </TableHead>
                       <TableHead>Telefones</TableHead>
                       <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
