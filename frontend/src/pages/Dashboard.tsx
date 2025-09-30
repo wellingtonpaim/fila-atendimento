@@ -68,46 +68,67 @@ const Dashboard = () => {
                 setLoading(true);
             }
 
-            console.log('🔄 Carregando dados do dashboard...');
-
-            // Tentar carregar unidades primeiro
+            // Buscar unidade selecionada
             let unidadeData: UnidadeAtendimentoResponseDTO | null = null;
             let filasData: FilaResponseDTO[] = [];
-
-            try {
-                // Carregar todas as unidades se não há uma específica selecionada
+            if (selectedUnitId) {
+                // Buscar unidade atual
+                const unidadeResponse = await unidadeService.buscarPorId(selectedUnitId);
+                unidadeData = unidadeResponse.data || null;
+                setUnidadeAtual(unidadeData);
+                // Buscar filas da unidade
+                const filasResponse = await filaService.listarPorUnidade(selectedUnitId);
+                filasData = filasResponse.data || [];
+            } else {
+                // Buscar todas as unidades e usar a primeira
                 const unidadesResponse = await unidadeService.listarTodas();
                 const unidades = unidadesResponse.data || [];
-
                 if (unidades.length > 0) {
-                    unidadeData = unidades[0]; // Usar a primeira unidade como padrão
+                    unidadeData = unidades[0];
                     setUnidadeAtual(unidadeData);
-                    console.log('✅ Unidade carregada:', unidadeData.nome);
-
-                    // Tentar carregar filas para esta unidade
-                    try {
-                        const filasResponse = await filaService.listarPorUnidade(unidadeData.id);
-                        filasData = filasResponse.data || [];
-                        console.log('✅ Filas carregadas:', filasData.length);
-                    } catch (filaError) {
-                        console.warn('⚠️ Não foi possível carregar filas:', filaError);
-                        filasData = [];
-                    }
-                } else {
-                    console.warn('⚠️ Nenhuma unidade encontrada');
+                    const filasResponse = await filaService.listarPorUnidade(unidadeData.id);
+                    filasData = filasResponse.data || [];
                 }
-            } catch (unidadeError) {
-                console.warn('⚠️ Não foi possível carregar unidades:', unidadeError);
             }
 
-            // Criar métricas simuladas para as filas (já que não temos entrada-fila funcionando ainda)
-            const metricas: MetricasFila[] = filasData.map(fila => ({
-                fila,
-                aguardando: Math.floor(Math.random() * 10), // Dados simulados
-                prioritarios: Math.floor(Math.random() * 3),
-                tempoMedioEspera: Math.floor(Math.random() * 30)
-            }));
+            // Buscar tempo médio de espera por fila
+            let tempoMedioPorFila: Record<string, number> = {};
+            if (unidadeData) {
+                const hoje = new Date();
+                const inicio = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate(), 0, 0, 0).toISOString();
+                const fim = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate(), 23, 59, 59).toISOString();
+                try {
+                    const dashboardService = (await import('@/services/dashboardService')).DashboardService.getInstance();
+                    const tempos = await dashboardService.tempoMedioEspera(unidadeData.id, inicio, fim);
+                    tempos.forEach(t => {
+                        tempoMedioPorFila[t.filaId] = t.tempoMedioEspera;
+                    });
+                } catch (err) {
+                    tempoMedioPorFila = {};
+                }
+            }
 
+            // Buscar clientes aguardando por fila
+            const metricas: MetricasFila[] = [];
+            for (const fila of filasData) {
+                let aguardando = 0;
+                let prioritarios = 0;
+                try {
+                    const aguardandoResponse = await entradaFilaService.listarAguardandoPorFila(fila.id);
+                    const clientes = Array.isArray(aguardandoResponse) ? aguardandoResponse : aguardandoResponse?.data || [];
+                    aguardando = clientes.length;
+                    prioritarios = clientes.filter((c: any) => c.prioridade).length;
+                } catch (err) {
+                    aguardando = 0;
+                    prioritarios = 0;
+                }
+                metricas.push({
+                    fila,
+                    aguardando,
+                    prioritarios,
+                    tempoMedioEspera: tempoMedioPorFila[fila.id] || 0
+                });
+            }
             setMetricasFilas(metricas);
 
             // Calcular estatísticas gerais
@@ -116,20 +137,27 @@ const Dashboard = () => {
             const tempoMedioGeral = metricas.length > 0 
                 ? metricas.reduce((sum, m) => sum + m.tempoMedioEspera, 0) / metricas.length 
                 : 0;
-
+            let atendimentosHoje = 0;
+            if (unidadeData) {
+                try {
+                    const dashboardService = (await import('@/services/dashboardService')).DashboardService.getInstance();
+                    const hoje = new Date();
+                    const inicio = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate(), 0, 0, 0).toISOString();
+                    const fim = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate(), 23, 59, 59).toISOString();
+                    const produtividade = await dashboardService.produtividade(unidadeData.id, inicio, fim);
+                    atendimentosHoje = produtividade.reduce((sum, p) => sum + (p.atendimentosRealizados || 0), 0);
+                } catch (err) {
+                    atendimentosHoje = 0;
+                }
+            }
             setEstatisticas({
                 totalFilas: filasData.length,
                 totalAguardando,
                 totalPrioritarios,
                 tempoMedioGeral,
-                atendimentosHoje: Math.floor(Math.random() * 50) // Dados simulados
+                atendimentosHoje
             });
-
-            console.log('✅ Dashboard atualizado com sucesso');
         } catch (error: any) {
-            console.error('❌ Erro ao carregar dashboard:', error);
-
-            // Definir valores padrão em caso de erro
             setEstatisticas({
                 totalFilas: 0,
                 totalAguardando: 0,
@@ -138,7 +166,6 @@ const Dashboard = () => {
                 atendimentosHoje: 0
             });
             setMetricasFilas([]);
-
             toast({
                 title: 'Aviso',
                 description: 'Alguns dados podem não estar disponíveis. Configure filas para ver mais informações.',
