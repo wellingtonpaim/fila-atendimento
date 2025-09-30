@@ -104,6 +104,14 @@ public class FilaServiceImpl implements FilaService {
         return filaRepository.findBySetor(setor);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<FilaResponseDTO> listarTodas() {
+        return filaRepository.findAll().stream()
+                .map(filaMapper::toResponseDTO)
+                .collect(Collectors.toList());
+    }
+
     private void validarNomeUnico(String nome, UnidadeAtendimento unidade, UUID idExcluido) {
         filaRepository.findByNomeAndUnidadeAtendimento(nome, unidade).ifPresent(fila -> {
             if (idExcluido == null || !fila.getId().equals(idExcluido)) {
