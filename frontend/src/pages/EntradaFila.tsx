@@ -16,7 +16,8 @@ import {
     AlertCircle,
     Loader2,
     User,
-    FileText
+    FileText,
+    RefreshCw
 } from "lucide-react";
 
 // Importar serviços
@@ -283,60 +284,16 @@ const EntradaFila = () => {
                         Adicione clientes às filas de atendimento
                     </p>
                 </div>
-                <Dialog open={showNovoClienteModal} onOpenChange={setShowNovoClienteModal}>
-                    <DialogTrigger asChild>
-                        <Button>
-                            <UserPlus className="mr-2 h-4 w-4" />
-                            Novo Cliente
-                        </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                        <DialogHeader>
-                            <DialogTitle>Cadastrar Novo Cliente</DialogTitle>
-                            <DialogDescription>
-                                Preencha os dados do novo cliente
-                            </DialogDescription>
-                        </DialogHeader>
-                        <div className="grid gap-4 py-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="novo-nome">Nome Completo</Label>
-                                <Input
-                                    id="novo-nome"
-                                    value={novoCliente.nome}
-                                    onChange={(e) => setNovoCliente({...novoCliente, nome: e.target.value})}
-                                    placeholder="Digite o nome completo"
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="novo-cpf">CPF</Label>
-                                <Input
-                                    id="novo-cpf"
-                                    value={novoCliente.cpf}
-                                    onChange={(e) => setNovoCliente({...novoCliente, cpf: e.target.value})}
-                                    placeholder="000.000.000-00"
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="novo-email">Email</Label>
-                                <Input
-                                    id="novo-email"
-                                    type="email"
-                                    value={novoCliente.email}
-                                    onChange={(e) => setNovoCliente({...novoCliente, email: e.target.value})}
-                                    placeholder="email@exemplo.com"
-                                />
-                            </div>
-                        </div>
-                        <div className="flex justify-end gap-2">
-                            <Button variant="outline" onClick={() => setShowNovoClienteModal(false)}>
-                                Cancelar
-                            </Button>
-                            <Button onClick={handleCriarNovoCliente}>
-                                Criar Cliente
-                            </Button>
-                        </div>
-                    </DialogContent>
-                </Dialog>
+                {/* Botão de atualizar seguindo padrão Dashboard */}
+                <Button
+                    variant="outline"
+                    className="flex items-center gap-2"
+                    onClick={() => { setSearchTerm(''); setClientes([]); setClienteSelecionado(null); setPage(0); loadFilas(); }}
+                    aria-label="Atualizar"
+                >
+                    <RefreshCw className="h-5 w-5" />
+                    <span>Atualizar</span>
+                </Button>
             </div>
 
             <div className="grid gap-6 md:grid-cols-2">
@@ -357,7 +314,7 @@ const EntradaFila = () => {
                             <label className="text-sm font-medium">Buscar por:</label>
                             <select
                                 value={searchType}
-                                onChange={e => { setSearchType(e.target.value as any); setSearchTerm(''); setClientes([]); setPage(1); }}
+                                onChange={e => { setSearchType(e.target.value as any); setSearchTerm(''); setClientes([]); setPage(0); }}
                                 className="border rounded px-2 py-1 text-sm"
                             >
                                 <option value="nome">Nome</option>
@@ -396,7 +353,8 @@ const EntradaFila = () => {
                                     <p className="text-sm">Tente ajustar sua busca ou cadastre um novo cliente</p>
                                 </div>
                             )}
-                            {!buscando && clientes.length > 0 && clientes.map((cliente) => (
+                            {/* When a client is selected, clear search results and search term */}
+                            {!buscando && clientes.length > 0 && !clienteSelecionado && clientes.map((cliente) => (
                                 <div
                                     key={cliente.id}
                                     className={`p-3 border rounded-lg cursor-pointer transition-colors ${
@@ -404,7 +362,12 @@ const EntradaFila = () => {
                                             ? 'border-primary bg-primary/5'
                                             : 'hover:bg-muted'
                                     }`}
-                                    onClick={() => setClienteSelecionado(cliente)}
+                                    onClick={() => {
+                                        setClienteSelecionado(cliente);
+                                        setClientes([]);
+                                        setSearchTerm('');
+                                        setBuscaVazia(true);
+                                    }}
                                 >
                                     <div className="flex items-center justify-between">
                                         <div>
@@ -425,7 +388,7 @@ const EntradaFila = () => {
                             ))}
                         </div>
                         {/* Paginação */}
-                        {!buscando && !buscaVazia && totalPages > 1 && (
+                        {!buscando && !buscaVazia && totalPages > 1 && !clienteSelecionado && (
                             <div className="flex items-center justify-between mt-2">
                                 <div>
                                     <Button variant="outline" size="sm" disabled={page === 1} onClick={() => handlePageChange(page - 1)}>
