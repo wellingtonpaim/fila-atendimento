@@ -222,14 +222,23 @@ curl -i "http://localhost:8899/api/clientes/nome/Ana?page=1&size=25"
 - `DELETE /painel/{id}` – Desativar
 
 ### Clientes (/api/clientes)
-- `GET /api/clientes` – Listar (paginação opcional)
-- `GET /api/clientes/{id}` – Buscar por ID
-- `GET /api/clientes/cpf/{cpf}` – Buscar por CPF
-- `GET /api/clientes/nome/{nome}` – Buscar por nome (paginação opcional)
-- `POST /api/clientes` – Criar
-- `PUT /api/clientes/{id}` – Substituir
-- `PATCH /api/clientes/{id}` – Atualização parcial
-- `DELETE /api/clientes/{id}` – Desativar
+
+#### Listar todos os clientes
+`GET /api/clientes`
+- Retorna todos os clientes cadastrados.
+- Suporta paginação opcional via query params: `?page=0&size=20`
+
+#### Buscar clientes por e-mail (busca parcial)
+`GET /api/clientes/email/{email}`
+- Retorna uma lista de clientes cujo e-mail contenha o valor informado (busca parcial, case-insensitive).
+- Parâmetros opcionais de paginação: `?page=0&size=20`
+- Exemplo: `/api/clientes/email/jose?size=10&page=0` retorna todos os clientes com "jose" no e-mail.
+
+#### Buscar clientes por telefone (busca parcial)
+`GET /api/clientes/telefone/{telefone}`
+- Retorna uma lista de clientes cujo telefone contenha o valor informado (busca parcial).
+- Parâmetros opcionais de paginação: `?page=0&size=20`
+- Exemplo: `/api/clientes/telefone/98836?size=10&page=0` retorna todos os clientes com "98836" no telefone.
 
 ### Usuários (/api/usuarios)
 - `GET /api/usuarios` – Listar (paginação opcional)

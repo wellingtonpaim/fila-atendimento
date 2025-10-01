@@ -8,6 +8,8 @@ import com.wjbc.fila_atendimento.domain.service.ClienteService;
 import com.wjbc.fila_atendimento.controller.util.PaginationUtil;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import java.util.List;
 import java.util.UUID;
 
@@ -73,5 +75,25 @@ public class ClienteController {
     public ResponseEntity<ApiResponse<Void>> desativar(@PathVariable UUID id) {
         clienteService.desativar(id);
         return ResponseEntity.ok(new ApiResponse<>(true, "Cliente desativado com sucesso", null));
+    }
+
+    @GetMapping("/email/{email}")
+    public ResponseEntity<ApiResponse<List<ClienteResponseDTO>>> buscarPorEmail(
+            @PathVariable String email,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
+    ) {
+        List<ClienteResponseDTO> clientes = clienteService.buscarPorEmail(email, page, size);
+        return PaginationUtil.build(clientes, page, size, "Clientes encontrados por email");
+    }
+
+    @GetMapping("/telefone/{telefone}")
+    public ResponseEntity<ApiResponse<List<ClienteResponseDTO>>> buscarPorTelefone(
+            @PathVariable String telefone,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
+    ) {
+        List<ClienteResponseDTO> clientes = clienteService.buscarPorTelefone(telefone, page, size);
+        return PaginationUtil.build(clientes, page, size, "Clientes encontrados por telefone");
     }
 }

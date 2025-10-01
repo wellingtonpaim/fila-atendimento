@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,9 +32,12 @@ import {
     FilaResponseDTO,
     EntradaFilaCreateDTO
 } from "@/types";
+import { useAuth } from "@/contexts/AuthContext";
 
 const EntradaFila = () => {
     const [clientes, setClientes] = useState<ClienteResponseDTO[]>([]);
+    const [buscando, setBuscando] = useState(false);
+    const [buscaVazia, setBuscaVazia] = useState(true);
     const [filas, setFilas] = useState<FilaResponseDTO[]>([]);
     const [clienteSelecionado, setClienteSelecionado] = useState<ClienteResponseDTO | null>(null);
     const [filaSelecionada, setFilaSelecionada] = useState<string>('');
@@ -48,36 +51,35 @@ const EntradaFila = () => {
         nome: '',
         email: ''
     });
-
+    const [error, setError] = useState<string | null>(null);
+    const [page, setPage] = useState(0); // Corrigido para iniciar em 0
+    const [size, setSize] = useState(10);
+    const [totalPages, setTotalPages] = useState(1);
+    const [totalElements, setTotalElements] = useState(0);
+    const [searchType, setSearchType] = useState<'nome' | 'cpf' | 'email' | 'telefone'>('nome');
     const { toast } = useToast();
     const currentUser = authService.getUsuario();
+    const { selectedUnitId } = useAuth();
+    const debounceTimeout = useRef<NodeJS.Timeout | null>(null);
 
     useEffect(() => {
-        loadData();
+        loadFilas();
     }, []);
 
-    const loadData = async () => {
+    useEffect(() => {
+        if (searchTerm.trim() !== '') {
+            buscarClientesBackend(searchTerm, page, size);
+        }
+    }, [page, size]);
+
+    const loadFilas = async () => {
         try {
             setLoading(true);
-            
-            // Buscar clientes e filas da unidade atual
-            const [clientesData, filasData] = await Promise.all([
-                clienteService.listarTodos(),
-                // Usar a primeira unidade das unidades do usuário
-                currentUser?.unidadesIds?.[0] ? filaService.listarPorUnidade(currentUser.unidadesIds[0]) : []
-            ]);
-
-            setClientes(clientesData);
-            setFilas(Array.isArray(filasData) ? filasData : []);
-            
-            console.log('✅ Dados carregados - Clientes:', clientesData.length, 'Filas:', filasData.length);
-        } catch (error: any) {
-            console.error('❌ Erro ao carregar dados:', error);
-            toast({
-                title: 'Erro ao carregar dados',
-                description: error.message,
-                variant: 'destructive',
-            });
+            setError(null);
+            const filasData = selectedUnitId ? await filaService.listarPorUnidade(selectedUnitId) : [];
+            setFilas(Array.isArray(filasData) ? filasData : filasData?.data ?? []);
+        } catch (err: any) {
+            setError('Erro ao carregar filas. Tente novamente mais tarde.');
         } finally {
             setLoading(false);
         }
@@ -164,11 +166,78 @@ const EntradaFila = () => {
         }
     };
 
-    const clientesFiltrados = clientes.filter(cliente => 
-        cliente.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        cliente.cpf.includes(searchTerm) ||
-        cliente.email.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    // Busca dinâmica no backend com paginação
+    const buscarClientesBackend = async (termo: string, pageParam = 1, sizeParam = 10) => {
+        setBuscaVazia(termo.trim() === '');
+        if (termo.trim() === '') {
+            setClientes([]);
+            setBuscando(false);
+            setTotalPages(1);
+            setTotalElements(0);
+            return;
+        }
+        setBuscando(true);
+        try {
+            let response;
+            if (searchType === 'cpf') {
+                response = await clienteService.buscarPorCpf(termo);
+                setClientes(response?.data ? [response.data] : []);
+                setTotalPages(1);
+                setTotalElements(response?.data ? 1 : 0);
+            } else if (searchType === 'email') {
+                response = await clienteService.buscarPorEmail(termo, pageParam, sizeParam);
+                setClientes(Array.isArray(response?.data) ? response.data : []);
+                setTotalPages(response?.totalPages || 1);
+                setTotalElements(response?.totalElements || response?.data?.length || 0);
+            } else if (searchType === 'telefone') {
+                response = await clienteService.buscarPorTelefone(termo, pageParam, sizeParam);
+                setClientes(Array.isArray(response?.data) ? response.data : []);
+                setTotalPages(response?.totalPages || 1);
+                setTotalElements(response?.totalElements || response?.data?.length || 0);
+            } else {
+                // Nome
+                response = await clienteService.buscarPorNome(termo, pageParam, sizeParam);
+                setClientes(Array.isArray(response?.data) ? response.data : []);
+                setTotalPages(response?.totalPages || 1);
+                setTotalElements(response?.totalElements || response?.data?.length || 0);
+            }
+        } catch (err) {
+            setClientes([]);
+            setTotalPages(1);
+            setTotalElements(0);
+        } finally {
+            setBuscando(false);
+        }
+    };
+
+    const handleBuscarClientes = (termo: string) => {
+        setSearchTerm(termo);
+        setPage(0); // Corrigido para iniciar em 0
+        if (debounceTimeout.current) {
+            clearTimeout(debounceTimeout.current);
+        }
+        debounceTimeout.current = setTimeout(() => {
+            buscarClientesBackend(termo, 0, size); // Corrigido para iniciar em 0
+        }, 600);
+    };
+
+    const handleKeyDownBusca = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter') {
+            if (debounceTimeout.current) {
+                clearTimeout(debounceTimeout.current);
+            }
+            buscarClientesBackend(searchTerm, 0, size); // Corrigido para iniciar em 0
+        }
+    };
+
+    const handlePageChange = (newPage: number) => {
+        setPage(newPage);
+    };
+
+    const handleSizeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        setSize(Number(e.target.value));
+        setPage(1);
+    };
 
     if (loading) {
         return (
@@ -176,6 +245,29 @@ const EntradaFila = () => {
                 <div className="text-center space-y-4">
                     <Loader2 className="h-12 w-12 animate-spin mx-auto text-primary" />
                     <p className="text-muted-foreground">Carregando dados...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="flex items-center justify-center min-h-[400px]">
+                <div className="text-center space-y-4">
+                    <AlertCircle className="h-12 w-12 mx-auto text-destructive" />
+                    <p className="text-destructive">{error}</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (filas.length === 0) {
+        return (
+            <div className="flex items-center justify-center min-h-[400px]">
+                <div className="text-center space-y-4">
+                    <Users className="h-12 w-12 mx-auto text-muted-foreground opacity-50" />
+                    <h3 className="text-lg font-semibold">Nenhuma fila ativa</h3>
+                    <p className="text-muted-foreground">Configure filas para permitir entrada de clientes.</p>
                 </div>
             </div>
         );
@@ -261,19 +353,50 @@ const EntradaFila = () => {
                     </CardHeader>
                     <CardContent className="space-y-4">
                         {/* Busca */}
+                        <div className="flex items-center gap-2 mb-2">
+                            <label className="text-sm font-medium">Buscar por:</label>
+                            <select
+                                value={searchType}
+                                onChange={e => { setSearchType(e.target.value as any); setSearchTerm(''); setClientes([]); setPage(1); }}
+                                className="border rounded px-2 py-1 text-sm"
+                            >
+                                <option value="nome">Nome</option>
+                                <option value="cpf">CPF</option>
+                                <option value="email">Email</option>
+                                <option value="telefone">Telefone</option>
+                            </select>
+                        </div>
                         <div className="relative">
                             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                             <Input
-                                placeholder="Buscar por nome, CPF ou email..."
+                                placeholder={searchType === 'nome' ? 'Buscar por nome...' : searchType === 'cpf' ? 'Buscar por CPF...' : searchType === 'email' ? 'Buscar por email...' : 'Buscar por telefone...'}
                                 value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
+                                onChange={(e) => handleBuscarClientes(e.target.value)}
+                                onKeyDown={handleKeyDownBusca}
                                 className="pl-10"
                             />
                         </div>
-
-                        {/* Lista de Clientes */}
                         <div className="space-y-2 max-h-96 overflow-y-auto">
-                            {clientesFiltrados.map((cliente) => (
+                            {buscando && (
+                                <div className="text-center py-8 text-muted-foreground">
+                                    <Loader2 className="h-8 w-8 mx-auto mb-2 animate-spin" />
+                                    <p>Buscando clientes...</p>
+                                </div>
+                            )}
+                            {!buscando && buscaVazia && (
+                                <div className="text-center py-8 text-muted-foreground">
+                                    <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                                    <p>Digite para buscar clientes</p>
+                                </div>
+                            )}
+                            {!buscando && !buscaVazia && clientes.length === 0 && (
+                                <div className="text-center py-8 text-muted-foreground">
+                                    <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                                    <p>Nenhum cliente encontrado</p>
+                                    <p className="text-sm">Tente ajustar sua busca ou cadastre um novo cliente</p>
+                                </div>
+                            )}
+                            {!buscando && clientes.length > 0 && clientes.map((cliente) => (
                                 <div
                                     key={cliente.id}
                                     className={`p-3 border rounded-lg cursor-pointer transition-colors ${
@@ -288,6 +411,7 @@ const EntradaFila = () => {
                                             <p className="font-medium">{cliente.nome}</p>
                                             <p className="text-sm text-muted-foreground">{cliente.cpf}</p>
                                             <p className="text-sm text-muted-foreground">{cliente.email}</p>
+                                            <p className="text-sm text-muted-foreground">{cliente.telefone}</p>
                                         </div>
                                         {clienteSelecionado?.id === cliente.id && (
                                             <CheckCircle className="h-5 w-5 text-primary" />
@@ -296,12 +420,27 @@ const EntradaFila = () => {
                                 </div>
                             ))}
                         </div>
-
-                        {clientesFiltrados.length === 0 && (
-                            <div className="text-center py-8 text-muted-foreground">
-                                <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                                <p>Nenhum cliente encontrado</p>
-                                <p className="text-sm">Tente ajustar sua busca ou cadastre um novo cliente</p>
+                        {/* Paginação */}
+                        {!buscando && !buscaVazia && totalPages > 1 && (
+                            <div className="flex items-center justify-between mt-2">
+                                <div>
+                                    <Button variant="outline" size="sm" disabled={page === 1} onClick={() => handlePageChange(page - 1)}>
+                                        Anterior
+                                    </Button>
+                                    <span className="mx-2 text-sm">Página {page} de {totalPages}</span>
+                                    <Button variant="outline" size="sm" disabled={page === totalPages} onClick={() => handlePageChange(page + 1)}>
+                                        Próxima
+                                    </Button>
+                                </div>
+                                <div>
+                                    <label className="text-sm mr-2">Itens por página:</label>
+                                    <select value={size} onChange={handleSizeChange} className="border rounded px-2 py-1 text-sm">
+                                        <option value={5}>5</option>
+                                        <option value={10}>10</option>
+                                        <option value={20}>20</option>
+                                        <option value={50}>50</option>
+                                    </select>
+                                </div>
                             </div>
                         )}
                     </CardContent>

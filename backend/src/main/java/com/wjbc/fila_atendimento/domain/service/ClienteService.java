@@ -18,4 +18,6 @@ public interface ClienteService {
     List<ClienteResponseDTO> buscarPorNomeSemelhante(String nome);
     void desativar(UUID id);
     Cliente findClienteById(UUID id);
+    List<ClienteResponseDTO> buscarPorEmail(String email, Integer page, Integer size);
+    List<ClienteResponseDTO> buscarPorTelefone(String telefone, Integer page, Integer size);
 }

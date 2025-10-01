@@ -35,7 +35,7 @@ class ClienteControllerTest {
     void listarTodos_sucesso() {
         ClienteResponseDTO dto = new ClienteResponseDTO(UUID.randomUUID(), "12345678900", "Nome", "email@email.com", null, null);
         when(clienteService.listarTodos()).thenReturn(List.of(dto));
-        ResponseEntity<ApiResponse<List<ClienteResponseDTO>>> response = clienteController.listarTodos();
+        ResponseEntity<ApiResponse<List<ClienteResponseDTO>>> response = clienteController.listarTodos(null, null);
         assertEquals(HttpStatus.OK.value(), response.getStatusCode().value());
         assertNotNull(response.getBody());
         assertFalse(response.getBody().getData().isEmpty());
@@ -68,7 +68,7 @@ class ClienteControllerTest {
         String nome = "Nome";
         ClienteResponseDTO dto = new ClienteResponseDTO(UUID.randomUUID(), "12345678900", nome, "email@email.com", null, null);
         when(clienteService.buscarPorNomeSemelhante(nome)).thenReturn(List.of(dto));
-        ResponseEntity<ApiResponse<List<ClienteResponseDTO>>> response = clienteController.buscarPorNomeSemelhante(nome);
+        ResponseEntity<ApiResponse<List<ClienteResponseDTO>>> response = clienteController.buscarPorNomeSemelhante(nome, null, null);
         assertEquals(HttpStatus.OK.value(), response.getStatusCode().value());
         assertNotNull(response.getBody().getData());
         assertFalse(response.getBody().getData().isEmpty());

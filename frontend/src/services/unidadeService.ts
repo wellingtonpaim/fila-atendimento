@@ -7,10 +7,8 @@ export const unidadeService = {
   // Listar unidades públicas para tela de login (endpoint sem autenticação)
   async listarParaLogin(): Promise<UnidadeAtendimentoPublicDTO[]> {
     const response = await fetch(`${API_BASE_URL}/api/unidades-atendimento/public/login`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json'
-      }
+      method: 'GET'
+      // Não enviar Content-Type em GET para evitar preflight CORS desnecessário
     });
 
     if (!response.ok) {

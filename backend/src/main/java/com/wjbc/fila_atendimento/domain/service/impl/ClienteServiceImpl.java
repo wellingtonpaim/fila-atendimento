@@ -11,6 +11,9 @@ import com.wjbc.fila_atendimento.domain.repository.ClienteRepository;
 import com.wjbc.fila_atendimento.domain.repository.specification.ClienteSpecification;
 import com.wjbc.fila_atendimento.domain.service.ClienteService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -114,9 +117,25 @@ public class ClienteServiceImpl implements ClienteService {
         clienteRepository.delete(cliente);
     }
 
+    @Override
+    public List<ClienteResponseDTO> buscarPorEmail(String email, Integer page, Integer size) {
+        return clienteRepository.findByEmailContainingIgnoreCase(email)
+                .stream()
+                .map(clienteMapper::toResponseDTO)
+                .toList();
+    }
+
+    @Override
+    public List<ClienteResponseDTO> buscarPorTelefone(String telefone, Integer page, Integer size) {
+        return clienteRepository.searchByTelefoneContaining(telefone)
+                .stream()
+                .map(clienteMapper::toResponseDTO)
+                .toList();
+    }
+
     private void validarCpf(String cpf, UUID idExcluido) {
         clienteRepository.findByCpf(cpf).ifPresent(cliente -> {
-            if (idExcluido == null || !cliente.getId().equals(idExcluido)) {
+            if (idExcluido == null || !idExcluido.equals(cliente.getId())) {
                 throw new BusinessException("CPF " + cpf + " já cadastrado no sistema.");
             }
         });
