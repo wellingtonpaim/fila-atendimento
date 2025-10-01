@@ -163,9 +163,9 @@ const EntradaFila = () => {
     };
 
     const clientesFiltrados = clientes.filter(cliente => 
-        cliente.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        cliente.cpf.includes(searchTerm) ||
-        cliente.email.toLowerCase().includes(searchTerm.toLowerCase())
+        (cliente.nome ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (cliente.cpf ?? '').includes(searchTerm) ||
+        (cliente.email ?? '').toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     if (loading) {
