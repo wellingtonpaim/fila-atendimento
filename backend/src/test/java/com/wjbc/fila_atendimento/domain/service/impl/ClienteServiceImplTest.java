@@ -153,14 +153,6 @@ class ClienteServiceImplTest {
         assertThrows(RuntimeException.class, () -> service.criar(dto));
     }
 
-    @Test void criarCliente_emailDuplicado() {
-        ClienteCreateDTO dto = new ClienteCreateDTO("12345678900", "Nome", "email@email.com", new ArrayList<>(), null);
-        Cliente clienteExistente = new Cliente(); clienteExistente.setId(UUID.randomUUID()); clienteExistente.setCpf("99999999999"); clienteExistente.setEmail(dto.email());
-        when(clienteRepository.findByCpf(dto.cpf())).thenReturn(Optional.empty());
-        when(clienteRepository.findByEmail(dto.email())).thenReturn(Optional.of(clienteExistente));
-        assertThrows(RuntimeException.class, () -> service.criar(dto));
-    }
-
     @Test void atualizarParcialmente_cpfDuplicadoOutroCliente() {
         UUID id = UUID.randomUUID();
         ClienteUpdateDTO dto = new ClienteUpdateDTO("12345678900", "Nome", "email@email.com", new ArrayList<>(), null);
@@ -168,19 +160,6 @@ class ClienteServiceImplTest {
         Cliente clienteOutro = new Cliente(); clienteOutro.setId(UUID.randomUUID()); clienteOutro.setCpf("12345678900");
         when(clienteRepository.findById(id)).thenReturn(Optional.of(clienteExistente));
         when(clienteRepository.findByCpf("12345678900")).thenReturn(Optional.of(clienteOutro));
-        when(clienteRepository.findByEmail("email@email.com")).thenReturn(Optional.empty());
-        doNothing().when(clienteMapper).applyPatchToEntity(eq(dto), eq(clienteExistente));
-        assertThrows(RuntimeException.class, () -> service.atualizarParcialmente(id, dto));
-    }
-
-    @Test void atualizarParcialmente_emailDuplicadoOutroCliente() {
-        UUID id = UUID.randomUUID();
-        ClienteUpdateDTO dto = new ClienteUpdateDTO("12345678900", "Nome", "email@email.com", new ArrayList<>(), null);
-        Cliente clienteExistente = new Cliente(); clienteExistente.setId(id); clienteExistente.setCpf("12345678900"); clienteExistente.setEmail("email@email.com");
-        Cliente clienteOutro = new Cliente(); clienteOutro.setId(UUID.randomUUID()); clienteOutro.setEmail("email@email.com");
-        when(clienteRepository.findById(id)).thenReturn(Optional.of(clienteExistente));
-        when(clienteRepository.findByCpf("12345678900")).thenReturn(Optional.empty());
-        when(clienteRepository.findByEmail("email@email.com")).thenReturn(Optional.of(clienteOutro));
         doNothing().when(clienteMapper).applyPatchToEntity(eq(dto), eq(clienteExistente));
         assertThrows(RuntimeException.class, () -> service.atualizarParcialmente(id, dto));
     }
@@ -192,18 +171,6 @@ class ClienteServiceImplTest {
         Cliente clienteOutro = new Cliente(); clienteOutro.setId(UUID.randomUUID()); clienteOutro.setCpf("12345678900");
         when(clienteRepository.findById(id)).thenReturn(Optional.of(clienteExistente));
         when(clienteRepository.findByCpf("12345678900")).thenReturn(Optional.of(clienteOutro));
-        when(clienteRepository.findByEmail("email@email.com")).thenReturn(Optional.empty());
-        assertThrows(RuntimeException.class, () -> service.substituir(id, dto));
-    }
-
-    @Test void substituirCliente_emailDuplicadoOutroCliente() {
-        UUID id = UUID.randomUUID();
-        ClienteCreateDTO dto = new ClienteCreateDTO("12345678900", "Nome", "email@email.com", new ArrayList<>(), null);
-        Cliente clienteExistente = new Cliente(); clienteExistente.setId(id); clienteExistente.setCpf("12345678900"); clienteExistente.setEmail("email@email.com");
-        Cliente clienteOutro = new Cliente(); clienteOutro.setId(UUID.randomUUID()); clienteOutro.setEmail("email@email.com");
-        when(clienteRepository.findById(id)).thenReturn(Optional.of(clienteExistente));
-        when(clienteRepository.findByCpf("12345678900")).thenReturn(Optional.empty());
-        when(clienteRepository.findByEmail("email@email.com")).thenReturn(Optional.of(clienteOutro));
         assertThrows(RuntimeException.class, () -> service.substituir(id, dto));
     }
 
@@ -221,26 +188,24 @@ class ClienteServiceImplTest {
         assertTrue(result.isEmpty());
     }
 
-    @Test void atualizarParcialmente_cpfEmailMesmoCliente_naoLancaExcecao() {
+    @Test void atualizarParcialmente_cpfMesmoCliente_naoLancaExcecao() {
         UUID id = UUID.randomUUID();
         ClienteUpdateDTO dto = new ClienteUpdateDTO("12345678900", "Nome", "email@email.com", new ArrayList<>(), null);
         Cliente clienteExistente = new Cliente(); clienteExistente.setId(id); clienteExistente.setCpf("12345678900"); clienteExistente.setEmail("email@email.com");
         when(clienteRepository.findById(id)).thenReturn(Optional.of(clienteExistente));
         when(clienteRepository.findByCpf("12345678900")).thenReturn(Optional.of(clienteExistente));
-        when(clienteRepository.findByEmail("email@email.com")).thenReturn(Optional.of(clienteExistente));
         doNothing().when(clienteMapper).applyPatchToEntity(eq(dto), eq(clienteExistente));
         when(clienteRepository.save(any())).thenReturn(clienteExistente);
         when(clienteMapper.toResponseDTO(clienteExistente)).thenReturn(new ClienteResponseDTO(id, "12345678900", "Nome", "email@email.com", null, null));
         assertDoesNotThrow(() -> service.atualizarParcialmente(id, dto));
     }
 
-    @Test void substituirCliente_cpfEmailMesmoCliente_naoLancaExcecao() {
+    @Test void substituirCliente_cpfMesmoCliente_naoLancaExcecao() {
         UUID id = UUID.randomUUID();
         ClienteCreateDTO dto = new ClienteCreateDTO("12345678900", "Nome", "email@email.com", new ArrayList<>(), null);
         Cliente clienteExistente = new Cliente(); clienteExistente.setId(id); clienteExistente.setCpf("12345678900"); clienteExistente.setEmail("email@email.com");
         when(clienteRepository.findById(id)).thenReturn(Optional.of(clienteExistente));
         when(clienteRepository.findByCpf("12345678900")).thenReturn(Optional.of(clienteExistente));
-        when(clienteRepository.findByEmail("email@email.com")).thenReturn(Optional.of(clienteExistente));
         when(clienteRepository.save(any())).thenReturn(clienteExistente);
         when(clienteMapper.toResponseDTO(clienteExistente)).thenReturn(new ClienteResponseDTO(id, "12345678900", "Nome", "email@email.com", null, null));
         assertDoesNotThrow(() -> service.substituir(id, dto));

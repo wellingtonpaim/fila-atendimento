@@ -52,7 +52,11 @@ const EntradaFila = () => {
         email: ''
     });
     const [error, setError] = useState<string | null>(null);
-
+    const [page, setPage] = useState(0); // Corrigido para iniciar em 0
+    const [size, setSize] = useState(10);
+    const [totalPages, setTotalPages] = useState(1);
+    const [totalElements, setTotalElements] = useState(0);
+    const [searchType, setSearchType] = useState<'nome' | 'cpf' | 'email' | 'telefone'>('nome');
     const { toast } = useToast();
     const currentUser = authService.getUsuario();
     const { selectedUnitId } = useAuth();
@@ -61,6 +65,12 @@ const EntradaFila = () => {
     useEffect(() => {
         loadFilas();
     }, []);
+
+    useEffect(() => {
+        if (searchTerm.trim() !== '') {
+            buscarClientesBackend(searchTerm, page, size);
+        }
+    }, [page, size]);
 
     const loadFilas = async () => {
         try {
@@ -156,37 +166,45 @@ const EntradaFila = () => {
         }
     };
 
-    // Busca dinâmica no backend
-    const buscarClientesBackend = async (termo: string) => {
+    // Busca dinâmica no backend com paginação
+    const buscarClientesBackend = async (termo: string, pageParam = 1, sizeParam = 10) => {
         setBuscaVazia(termo.trim() === '');
         if (termo.trim() === '') {
             setClientes([]);
             setBuscando(false);
+            setTotalPages(1);
+            setTotalElements(0);
             return;
         }
         setBuscando(true);
         try {
-            let resultado: any = null;
-            // Detecta tipo de busca
-            if (/^\d{3}\.\d{3}\.\d{3}-\d{2}$/.test(termo) || /^\d{11}$/.test(termo)) {
-                // CPF
-                resultado = await clienteService.buscarPorCpf(termo);
-                setClientes(resultado?.data ? [resultado.data] : []);
-            } else if (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(termo)) {
-                // Email válido
-                if (clienteService.buscarPorEmail) {
-                    resultado = await clienteService.buscarPorEmail(termo);
-                    setClientes(resultado?.data ? [resultado.data] : []);
-                } else {
-                    setClientes([]);
-                }
+            let response;
+            if (searchType === 'cpf') {
+                response = await clienteService.buscarPorCpf(termo);
+                setClientes(response?.data ? [response.data] : []);
+                setTotalPages(1);
+                setTotalElements(response?.data ? 1 : 0);
+            } else if (searchType === 'email') {
+                response = await clienteService.buscarPorEmail(termo, pageParam, sizeParam);
+                setClientes(Array.isArray(response?.data) ? response.data : []);
+                setTotalPages(response?.totalPages || 1);
+                setTotalElements(response?.totalElements || response?.data?.length || 0);
+            } else if (searchType === 'telefone') {
+                response = await clienteService.buscarPorTelefone(termo, pageParam, sizeParam);
+                setClientes(Array.isArray(response?.data) ? response.data : []);
+                setTotalPages(response?.totalPages || 1);
+                setTotalElements(response?.totalElements || response?.data?.length || 0);
             } else {
                 // Nome
-                resultado = await clienteService.buscarPorNome(termo);
-                setClientes(Array.isArray(resultado?.data) ? resultado.data : []);
+                response = await clienteService.buscarPorNome(termo, pageParam, sizeParam);
+                setClientes(Array.isArray(response?.data) ? response.data : []);
+                setTotalPages(response?.totalPages || 1);
+                setTotalElements(response?.totalElements || response?.data?.length || 0);
             }
         } catch (err) {
             setClientes([]);
+            setTotalPages(1);
+            setTotalElements(0);
         } finally {
             setBuscando(false);
         }
@@ -194,12 +212,31 @@ const EntradaFila = () => {
 
     const handleBuscarClientes = (termo: string) => {
         setSearchTerm(termo);
+        setPage(0); // Corrigido para iniciar em 0
         if (debounceTimeout.current) {
             clearTimeout(debounceTimeout.current);
         }
         debounceTimeout.current = setTimeout(() => {
-            buscarClientesBackend(termo);
-        }, 400);
+            buscarClientesBackend(termo, 0, size); // Corrigido para iniciar em 0
+        }, 600);
+    };
+
+    const handleKeyDownBusca = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter') {
+            if (debounceTimeout.current) {
+                clearTimeout(debounceTimeout.current);
+            }
+            buscarClientesBackend(searchTerm, 0, size); // Corrigido para iniciar em 0
+        }
+    };
+
+    const handlePageChange = (newPage: number) => {
+        setPage(newPage);
+    };
+
+    const handleSizeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        setSize(Number(e.target.value));
+        setPage(1);
     };
 
     if (loading) {
@@ -316,12 +353,26 @@ const EntradaFila = () => {
                     </CardHeader>
                     <CardContent className="space-y-4">
                         {/* Busca */}
+                        <div className="flex items-center gap-2 mb-2">
+                            <label className="text-sm font-medium">Buscar por:</label>
+                            <select
+                                value={searchType}
+                                onChange={e => { setSearchType(e.target.value as any); setSearchTerm(''); setClientes([]); setPage(1); }}
+                                className="border rounded px-2 py-1 text-sm"
+                            >
+                                <option value="nome">Nome</option>
+                                <option value="cpf">CPF</option>
+                                <option value="email">Email</option>
+                                <option value="telefone">Telefone</option>
+                            </select>
+                        </div>
                         <div className="relative">
                             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                             <Input
-                                placeholder="Buscar por nome, CPF ou email..."
+                                placeholder={searchType === 'nome' ? 'Buscar por nome...' : searchType === 'cpf' ? 'Buscar por CPF...' : searchType === 'email' ? 'Buscar por email...' : 'Buscar por telefone...'}
                                 value={searchTerm}
                                 onChange={(e) => handleBuscarClientes(e.target.value)}
+                                onKeyDown={handleKeyDownBusca}
                                 className="pl-10"
                             />
                         </div>
@@ -360,6 +411,7 @@ const EntradaFila = () => {
                                             <p className="font-medium">{cliente.nome}</p>
                                             <p className="text-sm text-muted-foreground">{cliente.cpf}</p>
                                             <p className="text-sm text-muted-foreground">{cliente.email}</p>
+                                            <p className="text-sm text-muted-foreground">{cliente.telefone}</p>
                                         </div>
                                         {clienteSelecionado?.id === cliente.id && (
                                             <CheckCircle className="h-5 w-5 text-primary" />
@@ -368,6 +420,29 @@ const EntradaFila = () => {
                                 </div>
                             ))}
                         </div>
+                        {/* Paginação */}
+                        {!buscando && !buscaVazia && totalPages > 1 && (
+                            <div className="flex items-center justify-between mt-2">
+                                <div>
+                                    <Button variant="outline" size="sm" disabled={page === 1} onClick={() => handlePageChange(page - 1)}>
+                                        Anterior
+                                    </Button>
+                                    <span className="mx-2 text-sm">Página {page} de {totalPages}</span>
+                                    <Button variant="outline" size="sm" disabled={page === totalPages} onClick={() => handlePageChange(page + 1)}>
+                                        Próxima
+                                    </Button>
+                                </div>
+                                <div>
+                                    <label className="text-sm mr-2">Itens por página:</label>
+                                    <select value={size} onChange={handleSizeChange} className="border rounded px-2 py-1 text-sm">
+                                        <option value={5}>5</option>
+                                        <option value={10}>10</option>
+                                        <option value={20}>20</option>
+                                        <option value={50}>50</option>
+                                    </select>
+                                </div>
+                            </div>
+                        )}
                     </CardContent>
                 </Card>
 

@@ -80,10 +80,14 @@ export const clienteService = {
   },
 
   /**
-   * Busca clientes por nome
+   * Busca clientes por nome (com paginação)
    */
-  async buscarPorNome(nome: string): Promise<ApiResponse<ClienteResponseDTO[]>> {
-    const res = await fetch(`${API_BASE_URL}/api/clientes/nome/${encodeURIComponent(nome)}`, {
+  async buscarPorNome(nome: string, page?: number, size?: number): Promise<ApiResponse<ClienteResponseDTO[]>> {
+    let url = `${API_BASE_URL}/api/clientes/nome/${encodeURIComponent(nome)}`;
+    if (page !== undefined && size !== undefined) {
+      url += `?page=${page}&size=${size}`;
+    }
+    const res = await fetch(url, {
       method: 'GET',
       headers: authService.getAuthHeaders(),
     });
@@ -100,6 +104,38 @@ export const clienteService = {
       headers: authService.getAuthHeaders(),
     });
     if (!res.ok) throw new Error(`Erro ao buscar cliente por CPF: ${res.statusText}`);
+    return res.json();
+  },
+
+  /**
+   * Busca clientes por email (com paginação)
+   */
+  async buscarPorEmail(email: string, page?: number, size?: number): Promise<ApiResponse<ClienteResponseDTO[]>> {
+    let url = `${API_BASE_URL}/api/clientes/email/${encodeURIComponent(email)}`;
+    if (page !== undefined && size !== undefined) {
+      url += `?page=${page}&size=${size}`;
+    }
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: authService.getAuthHeaders(),
+    });
+    if (!res.ok) throw new Error(`Erro ao buscar clientes por email: ${res.statusText}`);
+    return res.json();
+  },
+
+  /**
+   * Busca clientes por telefone (com paginação)
+   */
+  async buscarPorTelefone(telefone: string, page?: number, size?: number): Promise<ApiResponse<ClienteResponseDTO[]>> {
+    let url = `${API_BASE_URL}/api/clientes/telefone/${encodeURIComponent(telefone)}`;
+    if (page !== undefined && size !== undefined) {
+      url += `?page=${page}&size=${size}`;
+    }
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: authService.getAuthHeaders(),
+    });
+    if (!res.ok) throw new Error(`Erro ao buscar clientes por telefone: ${res.statusText}`);
     return res.json();
   },
 };

@@ -11,6 +11,9 @@ import com.wjbc.fila_atendimento.domain.repository.ClienteRepository;
 import com.wjbc.fila_atendimento.domain.repository.specification.ClienteSpecification;
 import com.wjbc.fila_atendimento.domain.service.ClienteService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -114,26 +117,20 @@ public class ClienteServiceImpl implements ClienteService {
         clienteRepository.delete(cliente);
     }
 
+    @Override
     public List<ClienteResponseDTO> buscarPorEmail(String email, Integer page, Integer size) {
-        List<Cliente> clientes = clienteRepository.findAllByEmail(email);
-        return paginarEConverter(clientes, page, size);
+        return clienteRepository.findByEmailContainingIgnoreCase(email)
+                .stream()
+                .map(clienteMapper::toResponseDTO)
+                .toList();
     }
 
+    @Override
     public List<ClienteResponseDTO> buscarPorTelefone(String telefone, Integer page, Integer size) {
-        List<Cliente> clientes = clienteRepository.findAllByTelefone(telefone);
-        return paginarEConverter(clientes, page, size);
-    }
-
-    private List<ClienteResponseDTO> paginarEConverter(List<Cliente> clientes, Integer page, Integer size) {
-        if (page != null && size != null && page >= 0 && size > 0) {
-            int fromIndex = page * size;
-            int toIndex = Math.min(fromIndex + size, clientes.size());
-            if (fromIndex > clientes.size()) {
-                return List.of();
-            }
-            clientes = clientes.subList(fromIndex, toIndex);
-        }
-        return clientes.stream().map(clienteMapper::toResponseDTO).collect(Collectors.toList());
+        return clienteRepository.searchByTelefoneContaining(telefone)
+                .stream()
+                .map(clienteMapper::toResponseDTO)
+                .toList();
     }
 
     private void validarCpf(String cpf, UUID idExcluido) {

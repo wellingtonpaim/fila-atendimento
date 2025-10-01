@@ -3,6 +3,7 @@ package com.wjbc.fila_atendimento.controller.util;
 import com.wjbc.fila_atendimento.domain.dto.ApiResponse;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
+import org.springframework.data.domain.Page;
 
 import java.util.Collections;
 import java.util.List;
@@ -35,5 +36,19 @@ public final class PaginationUtil {
 
         return ResponseEntity.ok().headers(headers).body(new ApiResponse<>(true, message, slice));
     }
-}
 
+    public static <T> ResponseEntity<ApiResponse<List<T>>> build(Page<T> page, String message) {
+        List<T> content = page.getContent();
+        HttpHeaders headers = new HttpHeaders();
+        headers.add("X-Total-Count", String.valueOf(page.getTotalElements()));
+        headers.add("X-Total-Pages", String.valueOf(page.getTotalPages()));
+        headers.add("X-Page", String.valueOf(page.getNumber()));
+        headers.add("X-Page-Size", String.valueOf(page.getSize()));
+        String contentRange = String.format("items %d-%d/%d",
+                page.getNumber() * page.getSize(),
+                page.getNumber() * page.getSize() + Math.max(0, content.size() - 1),
+                page.getTotalElements());
+        headers.add("Content-Range", contentRange);
+        return ResponseEntity.ok().headers(headers).body(new ApiResponse<>(true, message, content));
+    }
+}

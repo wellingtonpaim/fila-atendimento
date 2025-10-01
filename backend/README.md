@@ -222,52 +222,23 @@ curl -i "http://localhost:8899/api/clientes/nome/Ana?page=1&size=25"
 - `DELETE /painel/{id}` – Desativar
 
 ### Clientes (/api/clientes)
-- `GET /api/clientes`  
-  Lista todos os clientes, com paginação opcional (`page`, `size`).
 
-- `GET /api/clientes/{id}`  
-  Busca cliente por ID.
+#### Listar todos os clientes
+`GET /api/clientes`
+- Retorna todos os clientes cadastrados.
+- Suporta paginação opcional via query params: `?page=0&size=20`
 
-- `GET /api/clientes/cpf/{cpf}`  
-  Busca cliente por CPF.
+#### Buscar clientes por e-mail (busca parcial)
+`GET /api/clientes/email/{email}`
+- Retorna uma lista de clientes cujo e-mail contenha o valor informado (busca parcial, case-insensitive).
+- Parâmetros opcionais de paginação: `?page=0&size=20`
+- Exemplo: `/api/clientes/email/jose?size=10&page=0` retorna todos os clientes com "jose" no e-mail.
 
-- `GET /api/clientes/nome/{nome}`  
-  Busca clientes por nome semelhante, com paginação opcional.
-
-- `GET /api/clientes/email/{email}`  
-  Busca clientes por email, retorna lista paginada.  
-  Parâmetros opcionais: `page`, `size`.
-
-- `GET /api/clientes/telefone/{telefone}`  
-  Busca clientes por telefone, retorna lista paginada.  
-  Parâmetros opcionais: `page`, `size`.
-
-**Exemplo de requisição:**
-```
-GET /api/clientes/email/ana@email.com?page=0&size=10
-GET /api/clientes/telefone/11999999999?page=1&size=5
-```
-
-**Resposta:**
-```json
-{
-  "success": true,
-  "message": "Clientes encontrados por email",
-  "data": [
-    {
-      "id": "uuid",
-      "cpf": "12345678900",
-      "nome": "Ana",
-      "email": "ana@email.com",
-      "telefones": [...],
-      "endereco": {...},
-      "ativo": true
-    }
-    // ...
-  ]
-}
-```
-Headers de paginação: `X-Total-Count`, `X-Total-Pages`, `X-Page`, `X-Page-Size`, `Content-Range`.
+#### Buscar clientes por telefone (busca parcial)
+`GET /api/clientes/telefone/{telefone}`
+- Retorna uma lista de clientes cujo telefone contenha o valor informado (busca parcial).
+- Parâmetros opcionais de paginação: `?page=0&size=20`
+- Exemplo: `/api/clientes/telefone/98836?size=10&page=0` retorna todos os clientes com "98836" no telefone.
 
 ### Usuários (/api/usuarios)
 - `GET /api/usuarios` – Listar (paginação opcional)
