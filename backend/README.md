@@ -222,14 +222,52 @@ curl -i "http://localhost:8899/api/clientes/nome/Ana?page=1&size=25"
 - `DELETE /painel/{id}` – Desativar
 
 ### Clientes (/api/clientes)
-- `GET /api/clientes` – Listar (paginação opcional)
-- `GET /api/clientes/{id}` – Buscar por ID
-- `GET /api/clientes/cpf/{cpf}` – Buscar por CPF
-- `GET /api/clientes/nome/{nome}` – Buscar por nome (paginação opcional)
-- `POST /api/clientes` – Criar
-- `PUT /api/clientes/{id}` – Substituir
-- `PATCH /api/clientes/{id}` – Atualização parcial
-- `DELETE /api/clientes/{id}` – Desativar
+- `GET /api/clientes`  
+  Lista todos os clientes, com paginação opcional (`page`, `size`).
+
+- `GET /api/clientes/{id}`  
+  Busca cliente por ID.
+
+- `GET /api/clientes/cpf/{cpf}`  
+  Busca cliente por CPF.
+
+- `GET /api/clientes/nome/{nome}`  
+  Busca clientes por nome semelhante, com paginação opcional.
+
+- `GET /api/clientes/email/{email}`  
+  Busca clientes por email, retorna lista paginada.  
+  Parâmetros opcionais: `page`, `size`.
+
+- `GET /api/clientes/telefone/{telefone}`  
+  Busca clientes por telefone, retorna lista paginada.  
+  Parâmetros opcionais: `page`, `size`.
+
+**Exemplo de requisição:**
+```
+GET /api/clientes/email/ana@email.com?page=0&size=10
+GET /api/clientes/telefone/11999999999?page=1&size=5
+```
+
+**Resposta:**
+```json
+{
+  "success": true,
+  "message": "Clientes encontrados por email",
+  "data": [
+    {
+      "id": "uuid",
+      "cpf": "12345678900",
+      "nome": "Ana",
+      "email": "ana@email.com",
+      "telefones": [...],
+      "endereco": {...},
+      "ativo": true
+    }
+    // ...
+  ]
+}
+```
+Headers de paginação: `X-Total-Count`, `X-Total-Pages`, `X-Page`, `X-Page-Size`, `Content-Range`.
 
 ### Usuários (/api/usuarios)
 - `GET /api/usuarios` – Listar (paginação opcional)

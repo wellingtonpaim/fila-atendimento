@@ -114,9 +114,31 @@ public class ClienteServiceImpl implements ClienteService {
         clienteRepository.delete(cliente);
     }
 
+    public List<ClienteResponseDTO> buscarPorEmail(String email, Integer page, Integer size) {
+        List<Cliente> clientes = clienteRepository.findAllByEmail(email);
+        return paginarEConverter(clientes, page, size);
+    }
+
+    public List<ClienteResponseDTO> buscarPorTelefone(String telefone, Integer page, Integer size) {
+        List<Cliente> clientes = clienteRepository.findAllByTelefone(telefone);
+        return paginarEConverter(clientes, page, size);
+    }
+
+    private List<ClienteResponseDTO> paginarEConverter(List<Cliente> clientes, Integer page, Integer size) {
+        if (page != null && size != null && page >= 0 && size > 0) {
+            int fromIndex = page * size;
+            int toIndex = Math.min(fromIndex + size, clientes.size());
+            if (fromIndex > clientes.size()) {
+                return List.of();
+            }
+            clientes = clientes.subList(fromIndex, toIndex);
+        }
+        return clientes.stream().map(clienteMapper::toResponseDTO).collect(Collectors.toList());
+    }
+
     private void validarCpf(String cpf, UUID idExcluido) {
         clienteRepository.findByCpf(cpf).ifPresent(cliente -> {
-            if (idExcluido == null || !cliente.getId().equals(idExcluido)) {
+            if (idExcluido == null || !idExcluido.equals(cliente.getId())) {
                 throw new BusinessException("CPF " + cpf + " já cadastrado no sistema.");
             }
         });

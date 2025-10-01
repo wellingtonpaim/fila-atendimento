@@ -74,4 +74,24 @@ public class ClienteController {
         clienteService.desativar(id);
         return ResponseEntity.ok(new ApiResponse<>(true, "Cliente desativado com sucesso", null));
     }
+
+    @GetMapping("/email/{email}")
+    public ResponseEntity<ApiResponse<List<ClienteResponseDTO>>> buscarPorEmail(
+            @PathVariable String email,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
+    ) {
+        List<ClienteResponseDTO> clientes = clienteService.buscarPorEmail(email, page, size);
+        return PaginationUtil.build(clientes, page, size, "Clientes encontrados por email");
+    }
+
+    @GetMapping("/telefone/{telefone}")
+    public ResponseEntity<ApiResponse<List<ClienteResponseDTO>>> buscarPorTelefone(
+            @PathVariable String telefone,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
+    ) {
+        List<ClienteResponseDTO> clientes = clienteService.buscarPorTelefone(telefone, page, size);
+        return PaginationUtil.build(clientes, page, size, "Clientes encontrados por telefone");
+    }
 }

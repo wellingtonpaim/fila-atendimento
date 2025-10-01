@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +36,8 @@ import { useAuth } from "@/contexts/AuthContext";
 
 const EntradaFila = () => {
     const [clientes, setClientes] = useState<ClienteResponseDTO[]>([]);
+    const [buscando, setBuscando] = useState(false);
+    const [buscaVazia, setBuscaVazia] = useState(true);
     const [filas, setFilas] = useState<FilaResponseDTO[]>([]);
     const [clienteSelecionado, setClienteSelecionado] = useState<ClienteResponseDTO | null>(null);
     const [filaSelecionada, setFilaSelecionada] = useState<string>('');
@@ -54,28 +56,20 @@ const EntradaFila = () => {
     const { toast } = useToast();
     const currentUser = authService.getUsuario();
     const { selectedUnitId } = useAuth();
+    const debounceTimeout = useRef<NodeJS.Timeout | null>(null);
 
     useEffect(() => {
-        loadData();
+        loadFilas();
     }, []);
 
-    const loadData = async () => {
+    const loadFilas = async () => {
         try {
             setLoading(true);
             setError(null);
-
-            // Buscar clientes e filas da unidade ativa
-            const [clientesData, filasData] = await Promise.all([
-                clienteService.listarTodos(),
-                selectedUnitId ? filaService.listarPorUnidade(selectedUnitId) : []
-            ]);
-
-            setClientes(Array.isArray(clientesData) ? clientesData : clientesData?.data ?? []);
+            const filasData = selectedUnitId ? await filaService.listarPorUnidade(selectedUnitId) : [];
             setFilas(Array.isArray(filasData) ? filasData : filasData?.data ?? []);
-
-            console.log('✅ Dados carregados - Clientes:', clientesData.length, 'Filas:', Array.isArray(filasData) ? filasData.length : filasData?.data?.length ?? 0);
         } catch (err: any) {
-            setError('Erro ao carregar dados. Tente novamente mais tarde.');
+            setError('Erro ao carregar filas. Tente novamente mais tarde.');
         } finally {
             setLoading(false);
         }
@@ -162,11 +156,51 @@ const EntradaFila = () => {
         }
     };
 
-    const clientesFiltrados = clientes.filter(cliente => 
-        (cliente.nome ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (cliente.cpf ?? '').includes(searchTerm) ||
-        (cliente.email ?? '').toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    // Busca dinâmica no backend
+    const buscarClientesBackend = async (termo: string) => {
+        setBuscaVazia(termo.trim() === '');
+        if (termo.trim() === '') {
+            setClientes([]);
+            setBuscando(false);
+            return;
+        }
+        setBuscando(true);
+        try {
+            let resultado: any = null;
+            // Detecta tipo de busca
+            if (/^\d{3}\.\d{3}\.\d{3}-\d{2}$/.test(termo) || /^\d{11}$/.test(termo)) {
+                // CPF
+                resultado = await clienteService.buscarPorCpf(termo);
+                setClientes(resultado?.data ? [resultado.data] : []);
+            } else if (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(termo)) {
+                // Email válido
+                if (clienteService.buscarPorEmail) {
+                    resultado = await clienteService.buscarPorEmail(termo);
+                    setClientes(resultado?.data ? [resultado.data] : []);
+                } else {
+                    setClientes([]);
+                }
+            } else {
+                // Nome
+                resultado = await clienteService.buscarPorNome(termo);
+                setClientes(Array.isArray(resultado?.data) ? resultado.data : []);
+            }
+        } catch (err) {
+            setClientes([]);
+        } finally {
+            setBuscando(false);
+        }
+    };
+
+    const handleBuscarClientes = (termo: string) => {
+        setSearchTerm(termo);
+        if (debounceTimeout.current) {
+            clearTimeout(debounceTimeout.current);
+        }
+        debounceTimeout.current = setTimeout(() => {
+            buscarClientesBackend(termo);
+        }, 400);
+    };
 
     if (loading) {
         return (
@@ -287,14 +321,31 @@ const EntradaFila = () => {
                             <Input
                                 placeholder="Buscar por nome, CPF ou email..."
                                 value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
+                                onChange={(e) => handleBuscarClientes(e.target.value)}
                                 className="pl-10"
                             />
                         </div>
-
-                        {/* Lista de Clientes */}
                         <div className="space-y-2 max-h-96 overflow-y-auto">
-                            {clientesFiltrados.map((cliente) => (
+                            {buscando && (
+                                <div className="text-center py-8 text-muted-foreground">
+                                    <Loader2 className="h-8 w-8 mx-auto mb-2 animate-spin" />
+                                    <p>Buscando clientes...</p>
+                                </div>
+                            )}
+                            {!buscando && buscaVazia && (
+                                <div className="text-center py-8 text-muted-foreground">
+                                    <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                                    <p>Digite para buscar clientes</p>
+                                </div>
+                            )}
+                            {!buscando && !buscaVazia && clientes.length === 0 && (
+                                <div className="text-center py-8 text-muted-foreground">
+                                    <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                                    <p>Nenhum cliente encontrado</p>
+                                    <p className="text-sm">Tente ajustar sua busca ou cadastre um novo cliente</p>
+                                </div>
+                            )}
+                            {!buscando && clientes.length > 0 && clientes.map((cliente) => (
                                 <div
                                     key={cliente.id}
                                     className={`p-3 border rounded-lg cursor-pointer transition-colors ${
@@ -317,14 +368,6 @@ const EntradaFila = () => {
                                 </div>
                             ))}
                         </div>
-
-                        {clientesFiltrados.length === 0 && (
-                            <div className="text-center py-8 text-muted-foreground">
-                                <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                                <p>Nenhum cliente encontrado</p>
-                                <p className="text-sm">Tente ajustar sua busca ou cadastre um novo cliente</p>
-                            </div>
-                        )}
                     </CardContent>
                 </Card>
 
