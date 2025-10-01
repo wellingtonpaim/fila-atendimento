@@ -28,10 +28,9 @@ const DashboardLayout = () => {
     useEffect(() => {
         const currentUser = authService.getUsuario();
         if (!currentUser) {
-            navigate('/login');
+            navigate('/login', { replace: true });
             return;
         }
-
         setUsuario(currentUser);
 
         // Conectar WebSocket se autenticado
@@ -48,11 +47,12 @@ const DashboardLayout = () => {
     const handleLogout = () => {
         authService.logout();
         websocketService.disconnect();
+        setUsuario(null); // Limpa o estado imediatamente
         toast({
             title: 'Logout realizado',
             description: 'Você foi desconectado com sucesso.',
         });
-        navigate('/login');
+        navigate('/login', { replace: true });
     };
 
     const menuItems = [
@@ -216,4 +216,3 @@ const DashboardLayout = () => {
 };
 
 export default DashboardLayout;
-

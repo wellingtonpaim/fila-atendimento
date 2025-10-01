@@ -411,7 +411,11 @@ const EntradaFila = () => {
                                             <p className="font-medium">{cliente.nome}</p>
                                             <p className="text-sm text-muted-foreground">{cliente.cpf}</p>
                                             <p className="text-sm text-muted-foreground">{cliente.email}</p>
-                                            <p className="text-sm text-muted-foreground">{cliente.telefone}</p>
+                                            <p className="text-sm text-muted-foreground">
+                                                {Array.isArray(cliente.telefones) && cliente.telefones.length > 0
+                                                    ? cliente.telefones.map(t => `${t.ddd}${t.numero}`).join(', ')
+                                                    : ''}
+                                            </p>
                                         </div>
                                         {clienteSelecionado?.id === cliente.id && (
                                             <CheckCircle className="h-5 w-5 text-primary" />
