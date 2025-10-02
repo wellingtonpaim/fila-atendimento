@@ -14,12 +14,9 @@ import com.wjbc.fila_atendimento.domain.model.EntradaFila;
 import com.wjbc.fila_atendimento.domain.model.Fila;
 import com.wjbc.fila_atendimento.domain.model.Usuario;
 import com.wjbc.fila_atendimento.domain.repository.EntradaFilaRepository;
-import com.wjbc.fila_atendimento.domain.service.ClienteService;
-import com.wjbc.fila_atendimento.domain.service.EntradaFilaService;
-import com.wjbc.fila_atendimento.domain.service.FilaService;
-import com.wjbc.fila_atendimento.domain.service.UsuarioService;
-import com.wjbc.fila_atendimento.service.FilaBroadcastService;
+import com.wjbc.fila_atendimento.domain.service.*;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,6 +36,15 @@ public class EntradaFilaServiceImpl implements EntradaFilaService {
     private final FilaService filaService;
     private final UsuarioService usuarioService;
     private final FilaBroadcastService filaBroadcastService;
+
+    @Value("${painel.publico.tempo-exibicao-segundos:15}")
+    private int painelTempoExibicaoSegundos;
+
+    @Value("${painel.publico.repeticoes:3}")
+    private int painelRepeticoes;
+
+    @Value("${painel.publico.intervalo-repeticao-segundos:5}")
+    private int painelIntervaloSegundos;
 
     private ChamadaDTO getChamadaAtual(Fila fila) {
         return entradaFilaRepository.findFirstByFilaAndStatusOrderByDataHoraChamadaDesc(fila, StatusFila.CHAMADO)
@@ -66,12 +72,7 @@ public class EntradaFilaServiceImpl implements EntradaFilaService {
     public EntradaFilaResponseDTO adicionarClienteAFila(EntradaFilaCreateDTO dto) {
         Cliente cliente = clienteService.findClienteById(dto.clienteId());
         Fila fila = filaService.findFilaById(dto.filaId());
-        if (cliente == null) {
-            throw new ResourceNotFoundException("Cliente não encontrado.");
-        }
-        if (fila == null) {
-            throw new ResourceNotFoundException("Fila não encontrada.");
-        }
+
         if (entradaFilaRepository.existsByClienteAndFilaAndStatus(cliente, fila, StatusFila.AGUARDANDO)) {
             throw new BusinessException("Este cliente já está aguardando nesta fila.");
         }
@@ -85,22 +86,10 @@ public class EntradaFilaServiceImpl implements EntradaFilaService {
         novaEntrada.setDataHoraEntrada(LocalDateTime.now());
 
         EntradaFila entradaSalva = entradaFilaRepository.save(novaEntrada);
-        PainelPublicoDTO painelPublicoDTO = new PainelPublicoDTO(
-            fila.getId(),
-            getChamadaAtual(fila),
-            getUltimasChamadas(fila),
-            "", // mensagemVocalizacao
-            15, // tempoExibicao
-            3, // repeticoes
-            5, // intervaloRepeticao
-            true // sinalizacaoSonora
-        );
-        PainelProfissionalDTO painelProfissionalDTO = new PainelProfissionalDTO(
-            fila.getSetor().getId(),
-            getFilaAtual(fila.getSetor().getId())
-        );
-        filaBroadcastService.broadcastPainelUpdate(fila.getId(), painelPublicoDTO);
-        filaBroadcastService.broadcastFilaUpdate(fila.getSetor().getId(), painelProfissionalDTO);
+
+        // Notifica painéis sobre a atualização na fila (sem vocalização)
+        notificarPaineis(fila, false);
+
         return entradaFilaMapper.toResponseDTO(findEntradaFilaById(entradaSalva.getId()));
     }
 
@@ -110,18 +99,7 @@ public class EntradaFilaServiceImpl implements EntradaFilaService {
         Fila fila = filaService.findFilaById(filaId);
         Usuario usuario = usuarioService.findUsuarioById(usuarioId);
 
-        Optional<EntradaFila> proximo;
-        if ("Atendimento Médico".equalsIgnoreCase(fila.getNome())) {
-            proximo = entradaFilaRepository.findFirstByFilaAndStatusAndIsRetornoOrderByPrioridadeDescDataHoraEntradaAsc(
-                    fila, StatusFila.AGUARDANDO, true);
-            if (proximo.isEmpty()) {
-                proximo = entradaFilaRepository.findFirstByFilaAndStatusAndIsRetornoOrderByPrioridadeDescDataHoraEntradaAsc(
-                        fila, StatusFila.AGUARDANDO, false);
-            }
-        } else {
-            proximo = entradaFilaRepository.findFirstByFilaAndStatusAndIsRetornoOrderByPrioridadeDescDataHoraEntradaAsc(
-                    fila, StatusFila.AGUARDANDO, false);
-        }
+        Optional<EntradaFila> proximo = encontrarProximoCliente(fila);
 
         EntradaFila entradaASerChamada = proximo.orElseThrow(() -> new ResourceNotFoundException("Nenhum cliente aguardando nesta fila."));
 
@@ -130,29 +108,12 @@ public class EntradaFilaServiceImpl implements EntradaFilaService {
         entradaASerChamada.setUsuarioResponsavel(usuario);
         entradaASerChamada.setGuicheOuSalaAtendimento(guiche);
 
-        EntradaFilaResponseDTO response = entradaFilaMapper.toResponseDTO(entradaFilaRepository.save(entradaASerChamada));
-        ChamadaDTO chamadaAtual = getChamadaAtual(fila);
-        List<ChamadaDTO> ultimasChamadas = getUltimasChamadas(fila);
-        String mensagemVocalizacao = chamadaAtual != null && chamadaAtual.nomePaciente() != null && chamadaAtual.guicheOuSala() != null
-            ? chamadaAtual.nomePaciente() + ", compareça a " + chamadaAtual.guicheOuSala() + "!"
-            : "";
-        PainelPublicoDTO painelPublicoDTO = new PainelPublicoDTO(
-            fila.getId(),
-            chamadaAtual,
-            ultimasChamadas,
-            mensagemVocalizacao,
-            15,
-            3,
-            5,
-            true
-        );
-        PainelProfissionalDTO painelProfissionalDTO = new PainelProfissionalDTO(
-            fila.getSetor().getId(),
-            getFilaAtual(fila.getSetor().getId())
-        );
-        filaBroadcastService.broadcastPainelUpdate(fila.getId(), painelPublicoDTO);
-        filaBroadcastService.broadcastFilaUpdate(fila.getSetor().getId(), painelProfissionalDTO);
-        return response;
+        EntradaFila entradaSalva = entradaFilaRepository.save(entradaASerChamada);
+
+        // Notifica painéis sobre a nova chamada (com vocalização)
+        notificarPaineis(fila, true);
+
+        return entradaFilaMapper.toResponseDTO(entradaSalva);
     }
 
     @Override
@@ -165,24 +126,12 @@ public class EntradaFilaServiceImpl implements EntradaFilaService {
         entrada.setStatus(StatusFila.ATENDIDO);
         entrada.setDataHoraSaida(LocalDateTime.now());
 
-        EntradaFilaResponseDTO response = entradaFilaMapper.toResponseDTO(entradaFilaRepository.save(entrada));
-        PainelPublicoDTO painelPublicoDTO = new PainelPublicoDTO(
-            entrada.getFila().getId(),
-            getChamadaAtual(entrada.getFila()),
-            getUltimasChamadas(entrada.getFila()),
-            "",
-            15,
-            3,
-            5,
-            true
-        );
-        PainelProfissionalDTO painelProfissionalDTO = new PainelProfissionalDTO(
-            entrada.getFila().getSetor().getId(),
-            getFilaAtual(entrada.getFila().getSetor().getId())
-        );
-        filaBroadcastService.broadcastPainelUpdate(entrada.getFila().getId(), painelPublicoDTO);
-        filaBroadcastService.broadcastFilaUpdate(entrada.getFila().getSetor().getId(), painelProfissionalDTO);
-        return response;
+        EntradaFila entradaSalva = entradaFilaRepository.save(entrada);
+
+        // Notifica painéis que a chamada atual foi finalizada (sem vocalização)
+        notificarPaineis(entrada.getFila(), false);
+
+        return entradaFilaMapper.toResponseDTO(entradaSalva);
     }
 
     @Override
@@ -204,26 +153,17 @@ public class EntradaFilaServiceImpl implements EntradaFilaService {
     @Override
     @Transactional
     public EntradaFilaResponseDTO encaminharParaFila(UUID entradaFilaIdOrigem, EntradaFilaCreateDTO dtoDestino) {
+        // Primeiro, finaliza o atendimento atual
         finalizarAtendimento(entradaFilaIdOrigem);
-        EntradaFilaResponseDTO response = adicionarClienteAFila(dtoDestino);
-        Fila filaDestino = filaService.findFilaById(dtoDestino.filaId());
-        PainelPublicoDTO painelPublicoDTO = new PainelPublicoDTO(
-            filaDestino.getId(),
-            getChamadaAtual(filaDestino),
-            getUltimasChamadas(filaDestino),
-            "",
-            15,
-            3,
-            5,
-            true
-        );
-        PainelProfissionalDTO painelProfissionalDTO = new PainelProfissionalDTO(
-            filaDestino.getSetor().getId(),
-            getFilaAtual(filaDestino.getSetor().getId())
-        );
-        filaBroadcastService.broadcastPainelUpdate(filaDestino.getId(), painelPublicoDTO);
-        filaBroadcastService.broadcastFilaUpdate(filaDestino.getSetor().getId(), painelProfissionalDTO);
-        return response;
+
+        // Em seguida, adiciona o cliente à nova fila
+        EntradaFilaResponseDTO novaEntrada = adicionarClienteAFila(dtoDestino);
+
+        // A notificação para a fila de destino já é feita dentro de adicionarClienteAFila.
+        // A notificação para a fila de origem já é feita dentro de finalizarAtendimento.
+        // Nenhuma notificação adicional é necessária aqui.
+
+        return novaEntrada;
     }
 
     @Override
@@ -236,8 +176,55 @@ public class EntradaFilaServiceImpl implements EntradaFilaService {
                 .collect(Collectors.toList());
     }
 
+    // ===================================================================
+    // MÉTODOS PRIVADOS AUXILIARES
+    // ===================================================================
+
     private EntradaFila findEntradaFilaById(UUID id) {
         return entradaFilaRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Entrada na fila não encontrada com o ID: " + id));
+    }
+
+    private Optional<EntradaFila> encontrarProximoCliente(Fila fila) {
+        if ("Atendimento Médico".equalsIgnoreCase(fila.getNome())) {
+            Optional<EntradaFila> retorno = entradaFilaRepository.findFirstByFilaAndStatusAndIsRetornoOrderByPrioridadeDescDataHoraEntradaAsc(
+                    fila, StatusFila.AGUARDANDO, true);
+            if (retorno.isPresent()) {
+                return retorno;
+            }
+        }
+        return entradaFilaRepository.findFirstByFilaAndStatusAndIsRetornoOrderByPrioridadeDescDataHoraEntradaAsc(
+                fila, StatusFila.AGUARDANDO, false);
+    }
+
+    private void notificarPaineis(Fila fila, boolean isNovaChamada) {
+        ChamadaDTO chamadaAtual = getChamadaAtual(fila);
+        List<ChamadaDTO> ultimasChamadas = getUltimasChamadas(fila);
+
+        String mensagemVocalizacao = "";
+        if (isNovaChamada && chamadaAtual != null && chamadaAtual.nomePaciente() != null && !chamadaAtual.nomePaciente().isBlank()
+                && chamadaAtual.guicheOuSala() != null && !chamadaAtual.guicheOuSala().isBlank()) {
+            mensagemVocalizacao = chamadaAtual.nomePaciente() + ", compareça a " + chamadaAtual.guicheOuSala() + "!";
+        }
+        boolean habilitarSom = !mensagemVocalizacao.isBlank();
+
+        PainelPublicoDTO painelPublicoPayload = new PainelPublicoDTO(
+                fila.getId(),
+                chamadaAtual,
+                ultimasChamadas,
+                mensagemVocalizacao,
+                painelTempoExibicaoSegundos,
+                painelRepeticoes,
+                painelIntervaloSegundos,
+                habilitarSom
+        );
+
+        PainelProfissionalDTO painelProfissionalPayload = new PainelProfissionalDTO(
+                fila.getSetor().getId(),
+                getFilaAtual(fila.getSetor().getId())
+        );
+
+        filaBroadcastService.broadcastPainelUpdate(fila.getId(), painelPublicoPayload);
+        filaBroadcastService.broadcastFilaUpdate(fila.getSetor().getId(), painelProfissionalPayload);
     }
 }
