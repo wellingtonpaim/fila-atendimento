@@ -55,13 +55,12 @@ const Login: React.FC = () => {
         }
     }, [isAuthenticated, isLoading, navigate]);
 
-    // Efeito separado para carregar unidades (apenas uma vez)
+    // Carregar unidades sempre ao renderizar a tela de login
     useEffect(() => {
-        // Só carregar unidades se não estiver autenticado e não estiver carregando
-        if (!isAuthenticated && !isLoading) {
-            loadUnidades();
-        }
-    }, [isAuthenticated, isLoading, loadUnidades]);
+        loadUnidades();
+        // Limpar unidades ao desmontar
+        return () => setUnidades([]);
+    }, [loadUnidades]);
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
