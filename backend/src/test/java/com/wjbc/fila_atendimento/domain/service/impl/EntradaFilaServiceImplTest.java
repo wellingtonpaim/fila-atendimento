@@ -12,6 +12,7 @@ import com.wjbc.fila_atendimento.domain.model.Fila;
 import com.wjbc.fila_atendimento.domain.model.Usuario;
 import com.wjbc.fila_atendimento.domain.repository.EntradaFilaRepository;
 import com.wjbc.fila_atendimento.domain.service.ClienteService;
+import com.wjbc.fila_atendimento.domain.service.FilaBroadcastService;
 import com.wjbc.fila_atendimento.domain.service.FilaService;
 import com.wjbc.fila_atendimento.domain.service.UsuarioService;
 import org.junit.jupiter.api.BeforeEach;
@@ -36,7 +37,8 @@ class EntradaFilaServiceImplTest {
     FilaService filaService;
     @Mock
     UsuarioService usuarioService;
-    @Mock com.wjbc.fila_atendimento.service.FilaBroadcastService filaBroadcastService;
+    @Mock
+    FilaBroadcastService filaBroadcastService;
     @InjectMocks EntradaFilaServiceImpl service;
 
     private AutoCloseable mocks;
