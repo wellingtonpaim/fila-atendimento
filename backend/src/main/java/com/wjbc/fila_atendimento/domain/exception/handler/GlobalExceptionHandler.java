@@ -176,6 +176,18 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(resposta);
     }
 
+    @ExceptionHandler(com.wjbc.fila_atendimento.domain.dashboard.exception.DashboardDataNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDashboardDataNotFound(com.wjbc.fila_atendimento.domain.dashboard.exception.DashboardDataNotFoundException ex) {
+        ApiResponse<Void> resposta = new ApiResponse<>(
+                false,
+                ex.getMessage(),
+                null,
+                List.of("Nenhum dado encontrado para os filtros informados."),
+                new Date()
+        );
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(resposta);
+    }
+
     // Handler genérico para capturar todas as exceções não tratadas especificamente
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleGenericException(Exception ex) {

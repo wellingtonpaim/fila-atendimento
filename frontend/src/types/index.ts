@@ -1,12 +1,5 @@
 // Tipos principais do sistema Q-Manager - Atualizados para corresponder à API Java
 
-// ====== RESPOSTA PADRÃO DA API ======
-export interface ApiResponse<T> {
-    success: boolean;
-    message: string;
-    data: T;
-}
-
 // Enums
 export enum CategoriaUsuario {
   ADMINISTRADOR = 'ADMINISTRADOR',
@@ -24,6 +17,15 @@ export enum UF {
   MG = 'MG', PA = 'PA', PB = 'PB', PR = 'PR', PE = 'PE', PI = 'PI',
   RJ = 'RJ', RN = 'RN', RS = 'RS', RO = 'RO', RR = 'RR', SC = 'SC',
   SP = 'SP', SE = 'SE', TO = 'TO'
+}
+
+// ===== API Response wrapper (padrão backend) =====
+export interface ApiResponse<T> {
+  success: boolean;
+  message: string;
+  data: T;
+  errors?: string[];
+  timestamp: string;
 }
 
 // Interfaces para DTOs
@@ -77,6 +79,19 @@ export interface ClienteCreateDTO {
   endereco?: Endereco;
 }
 
+// ===== NOVOS DTOs DE CRIAÇÃO =====
+export interface PainelCreateDTO {
+  descricao: string;
+  unidadeAtendimentoId: string; // UUID
+}
+
+export interface EntradaFilaCreateDTO {
+  clienteId: string; // UUID
+  filaId: string; // UUID
+  prioridade: boolean;
+  isRetorno?: boolean;
+}
+
 // DTOs de resposta
 export interface SetorResponseDTO {
   id: string;
@@ -114,6 +129,13 @@ export interface ClienteResponseDTO {
   endereco?: Endereco;
 }
 
+// ===== NOVO DTO DE RESPOSTA =====
+export interface PainelResponseDTO {
+  id: string; // UUID
+  descricao: string;
+  unidadeAtendimentoId: string; // UUID
+}
+
 // DTOs de atualização
 export interface FilaUpdateDTO {
   nome?: string;
@@ -146,14 +168,12 @@ export interface ClienteUpdateDTO {
   endereco?: Endereco;
 }
 
-// API Response wrapper
-export interface ApiResponse<T> {
-  success: boolean;
-  message: string;
-  data: T;
-  errors?: string[];
-  timestamp: string;
+// ===== NOVO DTO DE ATUALIZAÇÃO =====
+export interface PainelUpdateDTO {
+  descricao?: string;
+  unidadeAtendimentoId?: string; // UUID
 }
+
 
 // Outros tipos que podem existir
 
@@ -189,6 +209,24 @@ export interface ChamadaWebSocket {
     setorNome: string;
     guicheOuSalaAtendimento: string;
     timestamp: string; // ISO DateTime
+}
+
+// ===== NOVOS TIPOS PARA PAINEL PÚBLICO (conforme backend atual) =====
+export interface PainelPublicoChamadaDTO {
+  nomePaciente: string;
+  guicheOuSala: string;
+  dataHoraChamada: string; // ISO DateTime
+}
+
+export interface PainelPublicoDTO {
+  filaId: string;
+  chamadaAtual: PainelPublicoChamadaDTO | null;
+  ultimasChamadas: PainelPublicoChamadaDTO[];
+  mensagemVocalizacao?: string;
+  tempoExibicao?: number; // segundos para destaque/exibição principal
+  repeticoes?: number; // número de repetições da mensagem de voz
+  intervaloRepeticao?: number; // intervalo em segundos entre repetições
+  sinalizacaoSonora?: boolean; // se true e houver mensagem, disparar áudio
 }
 
 // ====== TIPOS NOVOS (públicos/auxiliares) ======

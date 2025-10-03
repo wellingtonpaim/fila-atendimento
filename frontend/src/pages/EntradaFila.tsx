@@ -3,13 +3,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
     Search,
-    UserPlus,
     Users,
     Plus,
     CheckCircle,
@@ -46,20 +44,17 @@ const EntradaFila = () => {
     const [isRetorno, setIsRetorno] = useState(false);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
-    const [showNovoClienteModal, setShowNovoClienteModal] = useState(false);
     const [novoCliente, setNovoCliente] = useState<ClienteCreateDTO>({
         cpf: '',
         nome: '',
         email: ''
     });
     const [error, setError] = useState<string | null>(null);
-    const [page, setPage] = useState(0); // Corrigido para iniciar em 0
+    const [page, setPage] = useState(0); // base 0
     const [size, setSize] = useState(10);
     const [totalPages, setTotalPages] = useState(1);
-    const [totalElements, setTotalElements] = useState(0);
     const [searchType, setSearchType] = useState<'nome' | 'cpf' | 'email' | 'telefone'>('nome');
     const { toast } = useToast();
-    const currentUser = authService.getUsuario();
     const { selectedUnitId } = useAuth();
     const debounceTimeout = useRef<NodeJS.Timeout | null>(null);
 
@@ -86,54 +81,14 @@ const EntradaFila = () => {
         }
     };
 
-    const handleCriarNovoCliente = async () => {
-        try {
-            if (!novoCliente.nome.trim() || !novoCliente.cpf.trim() || !novoCliente.email.trim()) {
-                toast({
-                    title: 'Campos obrigatórios',
-                    description: 'Nome, CPF e email são obrigatórios.',
-                    variant: 'destructive',
-                });
-                return;
-            }
-
-            const clienteCriado = await clienteService.criar(novoCliente);
-            
-            setClientes(prev => [clienteCriado, ...prev]);
-            setClienteSelecionado(clienteCriado);
-            setShowNovoClienteModal(false);
-            setNovoCliente({ cpf: '', nome: '', email: '' });
-            
-            toast({
-                title: 'Sucesso',
-                description: 'Cliente criado com sucesso!',
-            });
-        } catch (error: any) {
-            toast({
-                title: 'Erro ao criar cliente',
-                description: error.message,
-                variant: 'destructive',
-            });
-        }
-    };
-
     const handleAdicionarAFila = async () => {
         try {
             if (!clienteSelecionado) {
-                toast({
-                    title: 'Cliente não selecionado',
-                    description: 'Selecione um cliente primeiro.',
-                    variant: 'destructive',
-                });
+                toast({ title: 'Cliente não selecionado', description: 'Selecione um cliente primeiro.', variant: 'destructive' });
                 return;
             }
-
             if (!filaSelecionada) {
-                toast({
-                    title: 'Fila não selecionada',
-                    description: 'Selecione uma fila de destino.',
-                    variant: 'destructive',
-                });
+                toast({ title: 'Fila não selecionada', description: 'Selecione uma fila de destino.', variant: 'destructive' });
                 return;
             }
 
@@ -146,10 +101,7 @@ const EntradaFila = () => {
 
             await entradaFilaService.adicionarClienteAFila(entrada);
 
-            toast({
-                title: 'Sucesso',
-                description: `${clienteSelecionado.nome} foi adicionado à fila!`,
-            });
+            toast({ title: 'Sucesso', description: `${clienteSelecionado.nome} foi adicionado à fila!` });
 
             // Limpar seleções
             setClienteSelecionado(null);
@@ -157,55 +109,45 @@ const EntradaFila = () => {
             setPrioridade(false);
             setIsRetorno(false);
             setSearchTerm('');
-
         } catch (error: any) {
-            toast({
-                title: 'Erro ao adicionar à fila',
-                description: error.message,
-                variant: 'destructive',
-            });
+            toast({ title: 'Erro ao adicionar à fila', description: error.message, variant: 'destructive' });
         }
     };
 
-    // Busca dinâmica no backend com paginação
-    const buscarClientesBackend = async (termo: string, pageParam = 1, sizeParam = 10) => {
+    // Busca dinâmica no backend com paginação (usa meta dos headers)
+    const buscarClientesBackend = async (termo: string, pageParam = 0, sizeParam = 10) => {
         setBuscaVazia(termo.trim() === '');
         if (termo.trim() === '') {
             setClientes([]);
             setBuscando(false);
             setTotalPages(1);
-            setTotalElements(0);
             return;
         }
         setBuscando(true);
         try {
-            let response;
             if (searchType === 'cpf') {
-                response = await clienteService.buscarPorCpf(termo);
-                setClientes(response?.data ? [response.data] : []);
-                setTotalPages(1);
-                setTotalElements(response?.data ? 1 : 0);
+                const item = await clienteService.buscarPorCpf(termo);
+                const arr = item ? [item] : [];
+                setClientes(arr);
+                setTotalPages(arr.length > 0 ? 1 : 0);
+                setPage(0);
             } else if (searchType === 'email') {
-                response = await clienteService.buscarPorEmail(termo, pageParam, sizeParam);
-                setClientes(Array.isArray(response?.data) ? response.data : []);
-                setTotalPages(response?.totalPages || 1);
-                setTotalElements(response?.totalElements || response?.data?.length || 0);
+                const { data, meta } = await clienteService.buscarPorEmailPaginado(termo, pageParam, sizeParam);
+                setClientes(data);
+                setTotalPages(meta?.totalPages ?? 1);
             } else if (searchType === 'telefone') {
-                response = await clienteService.buscarPorTelefone(termo, pageParam, sizeParam);
-                setClientes(Array.isArray(response?.data) ? response.data : []);
-                setTotalPages(response?.totalPages || 1);
-                setTotalElements(response?.totalElements || response?.data?.length || 0);
+                const { data, meta } = await clienteService.buscarPorTelefonePaginado(termo, pageParam, sizeParam);
+                setClientes(data);
+                setTotalPages(meta?.totalPages ?? 1);
             } else {
                 // Nome
-                response = await clienteService.buscarPorNome(termo, pageParam, sizeParam);
-                setClientes(Array.isArray(response?.data) ? response.data : []);
-                setTotalPages(response?.totalPages || 1);
-                setTotalElements(response?.totalElements || response?.data?.length || 0);
+                const { data, meta } = await clienteService.buscarPorNomePaginado(termo, pageParam, sizeParam);
+                setClientes(data);
+                setTotalPages(meta?.totalPages ?? 1);
             }
         } catch (err) {
             setClientes([]);
             setTotalPages(1);
-            setTotalElements(0);
         } finally {
             setBuscando(false);
         }
@@ -213,32 +155,32 @@ const EntradaFila = () => {
 
     const handleBuscarClientes = (termo: string) => {
         setSearchTerm(termo);
-        setPage(0); // Corrigido para iniciar em 0
-        if (debounceTimeout.current) {
-            clearTimeout(debounceTimeout.current);
-        }
+        setPage(0); // base 0
+        if (debounceTimeout.current) clearTimeout(debounceTimeout.current);
         debounceTimeout.current = setTimeout(() => {
-            buscarClientesBackend(termo, 0, size); // Corrigido para iniciar em 0
+            buscarClientesBackend(termo, 0, size);
         }, 600);
     };
 
     const handleKeyDownBusca = (e: React.KeyboardEvent<HTMLInputElement>) => {
         if (e.key === 'Enter') {
-            if (debounceTimeout.current) {
-                clearTimeout(debounceTimeout.current);
-            }
-            buscarClientesBackend(searchTerm, 0, size); // Corrigido para iniciar em 0
+            if (debounceTimeout.current) clearTimeout(debounceTimeout.current);
+            buscarClientesBackend(searchTerm, 0, size);
         }
     };
 
-    const handlePageChange = (newPage: number) => {
-        setPage(newPage);
+    const goToPage = (newPageZero: number) => {
+        const maxZero = Math.max(0, totalPages - 1);
+        const safe = Math.min(Math.max(0, newPageZero), maxZero);
+        setPage(safe);
     };
 
     const handleSizeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         setSize(Number(e.target.value));
-        setPage(1);
+        setPage(0);
     };
+
+    const displayPage = totalPages > 0 ? page + 1 : 0;
 
     if (loading) {
         return (
@@ -280,11 +222,8 @@ const EntradaFila = () => {
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight">Entrada em Filas</h1>
-                    <p className="text-muted-foreground">
-                        Adicione clientes às filas de atendimento
-                    </p>
+                    <p className="text-muted-foreground">Adicione clientes às filas de atendimento</p>
                 </div>
-                {/* Botão de atualizar seguindo padrão Dashboard */}
                 <Button
                     variant="outline"
                     className="flex items-center gap-2"
@@ -304,9 +243,7 @@ const EntradaFila = () => {
                             <User className="h-5 w-5" />
                             Selecionar Cliente
                         </CardTitle>
-                        <CardDescription>
-                            Busque e selecione o cliente para adicionar à fila
-                        </CardDescription>
+                        <CardDescription>Busque e selecione o cliente para adicionar à fila</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
                         {/* Busca */}
@@ -353,7 +290,7 @@ const EntradaFila = () => {
                                     <p className="text-sm">Tente ajustar sua busca ou cadastre um novo cliente</p>
                                 </div>
                             )}
-                            {/* When a client is selected, clear search results and search term */}
+                            {/* Resultados */}
                             {!buscando && clientes.length > 0 && !clienteSelecionado && clientes.map((cliente) => (
                                 <div
                                     key={cliente.id}
@@ -390,13 +327,19 @@ const EntradaFila = () => {
                         {/* Paginação */}
                         {!buscando && !buscaVazia && totalPages > 1 && !clienteSelecionado && (
                             <div className="flex items-center justify-between mt-2">
-                                <div>
-                                    <Button variant="outline" size="sm" disabled={page === 1} onClick={() => handlePageChange(page - 1)}>
+                                <div className="flex items-center gap-2">
+                                    <Button variant="outline" size="sm" disabled={page === 0} onClick={() => goToPage(0)}>
+                                        Primeira
+                                    </Button>
+                                    <Button variant="outline" size="sm" disabled={page === 0} onClick={() => goToPage(page - 1)}>
                                         Anterior
                                     </Button>
-                                    <span className="mx-2 text-sm">Página {page} de {totalPages}</span>
-                                    <Button variant="outline" size="sm" disabled={page === totalPages} onClick={() => handlePageChange(page + 1)}>
+                                    <span className="mx-2 text-sm">Página {displayPage} de {totalPages}</span>
+                                    <Button variant="outline" size="sm" disabled={page >= totalPages - 1} onClick={() => goToPage(page + 1)}>
                                         Próxima
+                                    </Button>
+                                    <Button variant="outline" size="sm" disabled={page >= totalPages - 1} onClick={() => goToPage(totalPages - 1)}>
+                                        Última
                                     </Button>
                                 </div>
                                 <div>
@@ -420,9 +363,7 @@ const EntradaFila = () => {
                             <FileText className="h-5 w-5" />
                             Configurar Entrada na Fila
                         </CardTitle>
-                        <CardDescription>
-                            Configure os detalhes da entrada na fila
-                        </CardDescription>
+                        <CardDescription>Configure os detalhes da entrada na fila</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
                         {/* Cliente Selecionado */}
@@ -451,9 +392,7 @@ const EntradaFila = () => {
                                         <SelectItem key={fila.id} value={fila.id}>
                                             <div className="flex flex-col">
                                                 <span>{fila.nome}</span>
-                                                <span className="text-xs text-muted-foreground">
-                                                    {fila.setor.nome} - {fila.unidade.nome}
-                                                </span>
+                                                <span className="text-xs text-muted-foreground">{fila.setor.nome} - {fila.unidade.nome}</span>
                                             </div>
                                         </SelectItem>
                                     ))}
@@ -464,34 +403,17 @@ const EntradaFila = () => {
                         {/* Opções */}
                         <div className="space-y-3">
                             <div className="flex items-center space-x-2">
-                                <Checkbox
-                                    id="prioridade"
-                                    checked={prioridade}
-                                    onCheckedChange={(checked) => setPrioridade(!!checked)}
-                                />
-                                <Label htmlFor="prioridade" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                                    Atendimento Prioritário
-                                </Label>
+                                <Checkbox id="prioridade" checked={prioridade} onCheckedChange={(checked) => setPrioridade(!!checked)} />
+                                <Label htmlFor="prioridade" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Atendimento Prioritário</Label>
                             </div>
                             <div className="flex items-center space-x-2">
-                                <Checkbox
-                                    id="retorno"
-                                    checked={isRetorno}
-                                    onCheckedChange={(checked) => setIsRetorno(!!checked)}
-                                />
-                                <Label htmlFor="retorno" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                                    Retorno
-                                </Label>
+                                <Checkbox id="retorno" checked={isRetorno} onCheckedChange={(checked) => setIsRetorno(!!checked)} />
+                                <Label htmlFor="retorno" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Retorno</Label>
                             </div>
                         </div>
 
                         {/* Botão de Adicionar */}
-                        <Button 
-                            onClick={handleAdicionarAFila}
-                            disabled={!clienteSelecionado || !filaSelecionada}
-                            className="w-full"
-                            size="lg"
-                        >
+                        <Button onClick={handleAdicionarAFila} disabled={!clienteSelecionado || !filaSelecionada} className="w-full" size="lg">
                             <Plus className="mr-2 h-4 w-4" />
                             Adicionar à Fila
                         </Button>

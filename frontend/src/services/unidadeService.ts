@@ -1,7 +1,7 @@
 import { ApiResponse, UnidadeAtendimentoCreateDTO, UnidadeAtendimentoResponseDTO, UnidadeAtendimentoUpdateDTO, UnidadeAtendimentoPublicDTO } from '@/types';
 import { authService } from './authService';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || 'http://192.168.0.100:8899'; // Altere para o IP real do backend
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8899';
 
 export const unidadeService = {
   // Listar unidades públicas para tela de login (endpoint sem autenticação)

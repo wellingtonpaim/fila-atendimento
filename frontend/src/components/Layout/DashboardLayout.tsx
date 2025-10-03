@@ -16,11 +16,20 @@ import { authService } from '@/services/authService';
 import { websocketService } from '@/services/websocketService';
 import { UsuarioResponseDTO } from '@/types';
 import { cn } from '@/lib/utils';
+import { filaService } from '@/services/filaService';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const DashboardLayout = () => {
     const [usuario, setUsuario] = useState<UsuarioResponseDTO | null>(null);
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const [notifications, setNotifications] = useState(0);
+    // Estado para diálogo de painel público
+    const [showPainelDialog, setShowPainelDialog] = useState(false);
+    const [filasDisponiveis, setFilasDisponiveis] = useState<any[]>([]);
+    const [loadingFilas, setLoadingFilas] = useState(false);
+    const [selectedFilas, setSelectedFilas] = useState<string[]>([]);
+    const [erroFilas, setErroFilas] = useState<string | null>(null);
 
     const navigate = useNavigate();
     const { toast } = useToast();
@@ -62,6 +71,14 @@ const DashboardLayout = () => {
             icon: Activity,
             description: 'Visão geral do sistema'
         },
+        // Novo item: abrir painel público em nova aba
+        {
+            label: 'Painel Público',
+            path: '/painel-publico',
+            icon: Users,
+            description: 'Abrir painel de TV com chamadas',
+            external: true
+        },
         {
             label: 'Painel Profissional',
             path: '/painel-profissional',
@@ -82,6 +99,45 @@ const DashboardLayout = () => {
         }
     ];
 
+    const abrirDialogPainel = async () => {
+        setShowPainelDialog(true);
+        if (filasDisponiveis.length === 0) {
+            setLoadingFilas(true);
+            setErroFilas(null);
+            try {
+                const unidadeId = authService.getSelectedUnitId();
+                if (!unidadeId) {
+                    setErroFilas('Unidade não selecionada. Faça login novamente.');
+                } else {
+                    const resp = await filaService.listarPorUnidade(unidadeId);
+                    if (resp.success) {
+                        setFilasDisponiveis(resp.data);
+                    } else {
+                        setErroFilas(resp.message || 'Falha ao carregar filas.');
+                    }
+                }
+            } catch (e: any) {
+                setErroFilas(e.message || 'Erro ao buscar filas.');
+            } finally {
+                setLoadingFilas(false);
+            }
+        }
+    };
+
+    const confirmarAbrirPainel = () => {
+        if (selectedFilas.length === 0) {
+            toast({ title: 'Selecione ao menos uma fila', description: 'Marque uma ou mais filas para abrir o painel público.' });
+            return;
+        }
+        const token = authService.getToken();
+        const params = new URLSearchParams();
+        if (token) params.set('token', token);
+        params.set('filas', selectedFilas.join(','));
+        const url = `${window.location.origin}/painel-publico?${params.toString()}`;
+        window.open(url, '_blank', 'noopener,noreferrer');
+        setShowPainelDialog(false);
+    };
+
     if (!usuario) {
         return (
             <div className="min-h-screen flex items-center justify-center" role="status" aria-label="Carregando">
@@ -92,6 +148,46 @@ const DashboardLayout = () => {
 
     return (
         <div className="min-h-screen bg-background" role="application" aria-label="Q-Manager Dashboard">
+            {/* Dialog Seleção de Filas para Painel Público */}
+            <Dialog open={showPainelDialog} onOpenChange={setShowPainelDialog}>
+                <DialogContent className="max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle>Selecionar Filas para o Painel Público</DialogTitle>
+                        <DialogDescription>
+                            Escolha uma ou mais filas. O painel exibirá chamadas em tempo real de todas elas simultaneamente.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="mt-4 max-h-72 overflow-y-auto space-y-2 pr-2">
+                        {loadingFilas && <p className="text-sm text-muted-foreground">Carregando filas...</p>}
+                        {erroFilas && <p className="text-sm text-destructive">{erroFilas}</p>}
+                        {!loadingFilas && !erroFilas && filasDisponiveis.length === 0 && (
+                            <p className="text-sm text-muted-foreground">Nenhuma fila encontrada.</p>
+                        )}
+                        {filasDisponiveis.map(fila => {
+                            const checked = selectedFilas.includes(fila.id);
+                            return (
+                                <label key={fila.id} className="flex items-start gap-3 text-sm cursor-pointer select-none p-2 rounded hover:bg-muted/40">
+                                    <Checkbox
+                                        checked={checked}
+                                        onCheckedChange={(val) => {
+                                            setSelectedFilas(prev => val ? [...prev, fila.id] : prev.filter(id => id !== fila.id));
+                                        }}
+                                        aria-label={`Selecionar fila ${fila.nome}`}
+                                    />
+                                    <span className="flex-1">
+                                        <span className="font-medium">{fila.nome}</span>
+                                        {fila.setor?.nome && <span className="block text-xs text-muted-foreground">Setor: {fila.setor.nome}</span>}
+                                    </span>
+                                </label>
+                            );
+                        })}
+                    </div>
+                    <DialogFooter className="flex gap-2 justify-end mt-4">
+                        <Button variant="outline" onClick={() => setShowPainelDialog(false)}>Cancelar</Button>
+                        <Button onClick={confirmarAbrirPainel} disabled={selectedFilas.length === 0}>Abrir Painel</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
             {/* Header */}
             <header
                 className="fixed top-0 left-0 right-0 z-40 bg-card border-b shadow-sm"
@@ -179,7 +275,13 @@ const DashboardLayout = () => {
                                     "w-full justify-start gap-3 h-12",
                                     !sidebarOpen && "justify-center px-0"
                                 )}
-                                onClick={() => navigate(item.path)}
+                                onClick={() => {
+                                    if (item.external) {
+                                        abrirDialogPainel();
+                                    } else {
+                                        navigate(item.path);
+                                    }
+                                }}
                                 aria-label={sidebarOpen ? item.label : `${item.label}: ${item.description}`}
                                 title={!sidebarOpen ? item.description : undefined}
                             >

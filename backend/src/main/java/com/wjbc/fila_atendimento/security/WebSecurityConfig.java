@@ -55,18 +55,18 @@ public class WebSecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+                        // Endpoints públicos REST
                         .requestMatchers("/auth/login", "/auth/confirmar").permitAll()
                         .requestMatchers(HttpMethod.POST, "/auth/register").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/unidades-atendimento/public/login").permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/**")
-                        .hasAnyRole("USUARIO", "ADMINISTRADOR")
-                        .requestMatchers(HttpMethod.POST, "/**")
-                        .hasAnyRole("USUARIO", "ADMINISTRADOR")
-                        .requestMatchers(HttpMethod.PUT, "/**")
-                        .hasRole("ADMINISTRADOR")
-                        .requestMatchers(HttpMethod.DELETE, "/**")
-                        .hasRole("ADMINISTRADOR")
+                        // Handshake WebSocket/SockJS precisa ser público; autenticação real acontece no frame CONNECT via header Authorization (interceptor)
+                        .requestMatchers("/ws/**").permitAll()
+                        // Regras autenticadas
+                        .requestMatchers(HttpMethod.GET, "/**").hasAnyRole("USUARIO", "ADMINISTRADOR")
+                        .requestMatchers(HttpMethod.POST, "/**").hasAnyRole("USUARIO", "ADMINISTRADOR")
+                        .requestMatchers(HttpMethod.PUT, "/**").hasRole("ADMINISTRADOR")
+                        .requestMatchers(HttpMethod.DELETE, "/**").hasRole("ADMINISTRADOR")
                         .requestMatchers(HttpMethod.PATCH, "/api/usuarios/*/promover").hasRole("ADMINISTRADOR")
                         .anyRequest().authenticated()
                 )
@@ -84,12 +84,14 @@ public class WebSecurityConfig {
     @Bean
     CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of("*")); // Temporariamente permita todas origens
+        config.setAllowedOrigins(List.of("*")); // TODO: restringir em produção (ex.: List.of("https://app.seudominio.com"))
         config.setAllowedMethods(List.of("*"));
         config.setAllowedHeaders(List.of("*"));
+        // Permitir envio de Authorization no frame CONNECT (STOMP) via SockJS -> cabeçalho nativo
+        config.setExposedHeaders(List.of("Authorization"));
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", config); // Aplique a todas URLs
+        source.registerCorsConfiguration("/**", config);
         return source;
     }
 }
