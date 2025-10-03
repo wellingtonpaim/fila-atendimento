@@ -141,12 +141,12 @@ public class EntradaFilaServiceImpl implements EntradaFilaService {
         if (entrada.getStatus() == StatusFila.ATENDIDO) {
             throw new BusinessException("Não é possível cancelar um atendimento que já foi finalizado.");
         }
-        // O @SQLDelete no model fará a mágica de mudar o status e a data_hora_saida.
+        Fila fila = entrada.getFila(); // guarda a fila antes do soft delete
         entradaFilaRepository.delete(entrada);
-        // Recarregamos a entidade do banco para retornar o estado atualizado pelo trigger do @SQLDelete.
         EntradaFila entradaCancelada = entradaFilaRepository.findById(entradaFilaId)
                 .orElseThrow(() -> new ResourceNotFoundException("Entrada na fila não encontrada com o ID: " + entradaFilaId));
-
+        // Notifica painéis para remover o item cancelado da visualização (sem som)
+        notificarPaineis(fila, false);
         return entradaFilaMapper.toResponseDTO(entradaCancelada);
     }
 

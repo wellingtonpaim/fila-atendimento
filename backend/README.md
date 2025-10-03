@@ -33,6 +33,7 @@
   - [Dashboard (/api/dashboard)](#dashboard-apidashboard)
   - [E-mail (/api/email)](#e-mail-apiemail)
   - [WebSocket](#websocket)
+- [Integração WebSocket (Frontend React)](#integração-websocket-frontend-react)
 - [Guia Rápido para o Frontend](#guia-rápido-para-o-frontend)
 - [Referência: Telas do Frontend](#referência-telas-do-frontend)
 - [Estrutura de Dados Principais](#estrutura-de-dados-principais)
@@ -263,6 +264,193 @@ curl -i "http://localhost:8899/api/clientes/nome/Ana?page=1&size=25"
 Tópicos STOMP:
 - `/topic/painel/{filaId}` – Atualizações para painéis públicos
 - `/topic/fila/{setorId}` – Atualizações para profissionais
+
+---
+
+## Integração WebSocket (Frontend React)
+Esta seção orienta o desenvolvedor React a consumir o canal em tempo real de chamadas de pacientes e atualização de filas.
+
+### Visão Geral do Fluxo
+1. Frontend autentica usuário via `POST /auth/login` e obtém um JWT.
+2. Estabelece conexão STOMP sobre WebSocket (ou SockJS fallback) no endpoint `/ws`.
+3. Envia no frame CONNECT o header `Authorization: Bearer <token>` (obrigatório).
+4. Assina os tópicos relevantes:
+   - Painel público da fila: `/topic/painel/{filaId}`
+   - Painel do profissional (fila do setor): `/topic/fila/{setorId}`
+5. Recebe payloads JSON (DTOs) e atualiza a UI. Quando houver nova chamada, `sinalizacaoSonora=true` e `mensagemVocalizacao` conterá texto para leitura.
+
+### Endpoints e Prefixos
+- Handshake WebSocket: `/ws` (aberto, handshake não exige token)
+- Prefixo de envio de mensagens do cliente: `/app` (no momento não há endpoints de envio do cliente; apenas broadcast do servidor)
+- Broker interno (simple broker) publica em: `/topic/**`
+
+### Segurança
+- A validação do token acontece no `CONNECT` via `WebSocketAuthInterceptor`.
+- Se o token for inválido ou ausente: conexão é rejeitada (`Invalid JWT token` ou `Missing or invalid Authorization header`).
+- O handshake HTTP é público, mas qualquer frame após CONNECT sem autenticação válida não prossegue.
+
+### Bibliotecas Recomendadas (React)
+Instale:
+```bash
+npm install @stomp/stompjs sockjs-client
+```
+
+### Exemplo de Cliente STOMP (Painel Público)
+```javascript
+import { Client } from '@stomp/stompjs';
+import SockJS from 'sockjs-client';
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8899';
+
+export function createStompClient({ token, filaId, setorId, onPainel, onFila, onError }) {
+  const client = new Client({
+    // Fallback SockJS (recomendado se houver proxies / CORS complexos)
+    webSocketFactory: () => new SockJS(`${API_BASE}/ws`),
+    // Se quiser tentar WebSocket nativo direto (sem SockJS), use: brokerURL: `${API_BASE.replace('http','ws')}/ws`
+    connectHeaders: { Authorization: `Bearer ${token}` },
+    reconnectDelay: 5000, // ms (backoff simples)
+    debug: (str) => console.debug('[STOMP]', str),
+    onConnect: () => {
+      if (filaId) {
+        client.subscribe(`/topic/painel/${filaId}`, (msg) => {
+          try { onPainel && onPainel(JSON.parse(msg.body)); } catch (e) { console.error(e); }
+        });
+      }
+      if (setorId) {
+        client.subscribe(`/topic/fila/${setorId}`, (msg) => {
+          try { onFila && onFila(JSON.parse(msg.body)); } catch (e) { console.error(e); }
+        });
+      }
+    },
+    onStompError: (frame) => {
+      console.error('Broker error', frame.headers['message'], frame.body);
+      onError && onError(frame.body);
+    },
+    onWebSocketError: (event) => {
+      console.error('WS transport error', event);
+      onError && onError(event);
+    }
+  });
+  client.activate();
+  return client;
+}
+```
+
+### Estrutura dos Payloads
+`/topic/painel/{filaId}` -> `PainelPublicoDTO`:
+```json
+{
+  "filaId": "c3713a4c-0d46-4d9c-9e57-8a1f5d7f9b2e",
+  "chamadaAtual": {
+    "nomePaciente": "Maria Silva",
+    "guicheOuSala": "Guichê 2",
+    "dataHoraChamada": "2025-10-03T14:22:31.123"
+  },
+  "ultimasChamadas": [
+    { "nomePaciente": "João Lima", "guicheOuSala": "Guichê 1", "dataHoraChamada": "2025-10-03T14:20:00" },
+    { "nomePaciente": "Ana Souza", "guicheOuSala": "Guichê 3", "dataHoraChamada": "2025-10-03T14:18:10" }
+  ],
+  "mensagemVocalizacao": "Maria Silva, compareça a Guichê 2!",
+  "tempoExibicao": 15,
+  "repeticoes": 3,
+  "intervaloRepeticao": 5,
+  "sinalizacaoSonora": true
+}
+```
+Observações:
+- `chamadaAtual` pode ser `null` se nenhuma chamada ativa.
+- `ultimasChamadas` já inclui a atual nas posições iniciais? Não. A atual é fornecida separadamente.
+- Controle de exibição e repetição no frontend baseado em `tempoExibicao`, `repeticoes`, `intervaloRepeticao`.
+- Se `sinalizacaoSonora=true` e `mensagemVocalizacao` não vazia, realizar síntese de voz ou tocar áudio.
+
+`/topic/fila/{setorId}` -> `PainelProfissionalDTO`:
+```json
+{
+  "setorId": "9f8b5e2d-1ad3-4b22-9f0e-1b4a6c8a7d55",
+  "filaAtual": [
+    {
+      "id": "...",
+      "cliente": { "id": "...", "nome": "Carlos" },
+      "prioridade": 1,
+      "retorno": false,
+      "status": "AGUARDANDO",
+      "dataHoraEntrada": "2025-10-03T14:10:33.500"
+      // ... outros campos de EntradaFilaResponseDTO
+    }
+  ]
+}
+```
+
+### Exemplo de Hook React Simplificado
+```javascript
+import { useEffect, useRef, useState } from 'react';
+import { createStompClient } from './stompClient';
+
+export function usePainelRealtime({ token, filaId, setorId }) {
+  const clientRef = useRef(null);
+  const [painel, setPainel] = useState(null);
+  const [fila, setFila] = useState(null);
+
+  useEffect(() => {
+    if (!token) return; // aguarda login
+    clientRef.current = createStompClient({
+      token,
+      filaId,
+      setorId,
+      onPainel: (payload) => {
+        setPainel(payload);
+        if (payload?.sinalizacaoSonora && payload?.mensagemVocalizacao) {
+          const utter = new SpeechSynthesisUtterance(payload.mensagemVocalizacao);
+          utter.lang = 'pt-BR';
+          speechSynthesis.speak(utter);
+        }
+      },
+      onFila: setFila,
+      onError: (e) => console.error('Erro STOMP', e)
+    });
+    return () => clientRef.current?.deactivate();
+  }, [token, filaId, setorId]);
+
+  return { painel, fila };
+}
+```
+
+### Boas Práticas
+- Atualize o token JWT antes de expirar: ao renovar, desconecte e reconecte com novo header.
+- Trate `null` em `chamadaAtual` (mostrar placeholder ou estado "Aguardando chamada").
+- Use `reconnectDelay` para resiliência; avalie backoff exponencial manual se necessário.
+- Em TVs/Kiosks: desabilite suspensão de áudio e configure permissão de autoplay conforme navegador.
+- Em produção, restrinja CORS e `setAllowedOriginPatterns` ao(s) domínio(s) do frontend.
+- Para acessibilidade, também renderize o texto da chamada na tela além do áudio.
+
+### Erros Comuns & Debug
+| Sintoma | Causa Provável | Ação |
+|--------|----------------|------|
+| Conexão fecha logo após abrir | Token ausente/expirado | Renovar token e reconectar |
+| 403 no handshake SockJS `info` | Falta de permissão `/ws/**` | Já ajustado na config; verifique reverse proxy |
+| Sem áudio | `sinalizacaoSonora=false` ou bloqueio de autoplay | Habilitar interação do usuário ou liberar autoplay |
+| Recebendo múltiplos handlers duplicados | Recriação de cliente sem cleanup | Certificar-se de chamar `deactivate()` no unmount |
+
+### Teste Rápido Manual (sem React)
+Abra o console do navegador:
+```javascript
+const sock = new SockJS('http://localhost:8899/ws');
+const Stomp = window.Stomp.over(sock);
+Stomp.connect({ Authorization: 'Bearer <TOKEN>' }, () => {
+  Stomp.subscribe('/topic/painel/<FILA_ID>', m => console.log(JSON.parse(m.body)));
+});
+```
+
+### Checklist de Integração
+- [ ] Login funcionando e token armazenado (ex.: localStorage / contexto)
+- [ ] Cliente STOMP inicializado após login
+- [ ] Headers CONNECT enviando Authorization correto
+- [ ] Assinatura dos tópicos relevantes criada
+- [ ] Tratamento de reconexão implementado
+- [ ] UI atualiza chamada atual + últimas chamadas
+- [ ] Áudio / síntese de voz condicional
+- [ ] Limpeza de recursos ao desmontar componente
+- [ ] Monitorar logs de erro no console
 
 ---
 

@@ -1,6 +1,6 @@
 import { ApiResponse, LoginRequest, UsuarioCreateDTO, UsuarioResponseDTO } from "@/types";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8899';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8899';
 
 class AuthService {
     private readonly TOKEN_KEY = 'qmanager_token';
