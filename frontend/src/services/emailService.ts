@@ -4,7 +4,7 @@ import {
 } from '@/types';
 import { authService } from './authService';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8899';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8899';
 
 class EmailService {
     private static instance: EmailService;

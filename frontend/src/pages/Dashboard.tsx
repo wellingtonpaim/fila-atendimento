@@ -10,23 +10,19 @@ import {
     Activity,
     TrendingUp,
     AlertTriangle,
-    CheckCircle,
     UserCheck,
     Timer,
     Building2,
     Loader2,
     RefreshCw,
-    BarChart3,
-    PieChart,
-    Eye
+    BarChart3
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { filaService } from '@/services/filaService';
 import { unidadeService } from '@/services/unidadeService';
-import {
-    FilaResponseDTO,
-    UnidadeAtendimentoResponseDTO
-} from '@/types';
+import { entradaFilaService } from '@/services/entradaFilaService';
+import { dashboardService } from '@/services/dashboardService';
+import { FilaResponseDTO, UnidadeAtendimentoResponseDTO } from '@/types';
 
 interface MetricasFila {
     fila: FilaResponseDTO;
@@ -91,19 +87,19 @@ const Dashboard = () => {
                 }
             }
 
-            // Buscar tempo médio de espera por fila
+            // Tempo médio por fila: mapeia por nome (Swagger não traz id da fila)
             let tempoMedioPorFila: Record<string, number> = {};
             if (unidadeData) {
                 const hoje = new Date();
                 const inicio = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate(), 0, 0, 0).toISOString();
                 const fim = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate(), 23, 59, 59).toISOString();
                 try {
-                    const dashboardService = (await import('@/services/dashboardService')).DashboardService.getInstance();
                     const tempos = await dashboardService.tempoMedioEspera(unidadeData.id, inicio, fim);
-                    tempos.forEach(t => {
-                        tempoMedioPorFila[t.filaId] = t.tempoMedioEspera;
+                    tempos.forEach((t) => {
+                        const filaMatch = filasData.find((f) => (f.nome || '').toLowerCase() === (t.filaNome || '').toLowerCase());
+                        if (filaMatch) tempoMedioPorFila[filaMatch.id] = t.tempoMedioEsperaMinutos || 0;
                     });
-                } catch (err) {
+                } catch {
                     tempoMedioPorFila = {};
                 }
             }
@@ -114,11 +110,11 @@ const Dashboard = () => {
                 let aguardando = 0;
                 let prioritarios = 0;
                 try {
-                    const aguardandoResponse = await entradaFilaService.listarAguardandoPorFila(fila.id);
-                    const clientes = Array.isArray(aguardandoResponse) ? aguardandoResponse : aguardandoResponse?.data || [];
+                    const aguardandoLista = await entradaFilaService.listarAguardandoPorFila(fila.id);
+                    const clientes = Array.isArray(aguardandoLista) ? aguardandoLista : [];
                     aguardando = clientes.length;
                     prioritarios = clientes.filter((c: any) => c.prioridade).length;
-                } catch (err) {
+                } catch {
                     aguardando = 0;
                     prioritarios = 0;
                 }
@@ -126,7 +122,7 @@ const Dashboard = () => {
                     fila,
                     aguardando,
                     prioritarios,
-                    tempoMedioEspera: tempoMedioPorFila[fila.id] || 0
+                    tempoMedioEspera: tempoMedioPorFila[fila.id] || 0,
                 });
             }
             setMetricasFilas(metricas);
@@ -134,52 +130,32 @@ const Dashboard = () => {
             // Calcular estatísticas gerais
             const totalAguardando = metricas.reduce((sum, m) => sum + m.aguardando, 0);
             const totalPrioritarios = metricas.reduce((sum, m) => sum + m.prioritarios, 0);
-            const tempoMedioGeral = metricas.length > 0 
-                ? metricas.reduce((sum, m) => sum + m.tempoMedioEspera, 0) / metricas.length 
-                : 0;
+            const tempoMedioGeral = metricas.length > 0 ? metricas.reduce((sum, m) => sum + m.tempoMedioEspera, 0) / metricas.length : 0;
+
             let atendimentosHoje = 0;
             if (unidadeData) {
                 try {
-                    const dashboardService = (await import('@/services/dashboardService')).DashboardService.getInstance();
                     const hoje = new Date();
                     const inicio = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate(), 0, 0, 0).toISOString();
                     const fim = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate(), 23, 59, 59).toISOString();
                     const produtividade = await dashboardService.produtividade(unidadeData.id, inicio, fim);
                     atendimentosHoje = produtividade.reduce((sum, p) => sum + (p.atendimentosRealizados || 0), 0);
-                } catch (err) {
+                } catch {
                     atendimentosHoje = 0;
                 }
             }
-            setEstatisticas({
-                totalFilas: filasData.length,
-                totalAguardando,
-                totalPrioritarios,
-                tempoMedioGeral,
-                atendimentosHoje
-            });
+            setEstatisticas({ totalFilas: filasData.length, totalAguardando, totalPrioritarios, tempoMedioGeral, atendimentosHoje });
         } catch (error: any) {
-            setEstatisticas({
-                totalFilas: 0,
-                totalAguardando: 0,
-                totalPrioritarios: 0,
-                tempoMedioGeral: 0,
-                atendimentosHoje: 0
-            });
+            setEstatisticas({ totalFilas: 0, totalAguardando: 0, totalPrioritarios: 0, tempoMedioGeral: 0, atendimentosHoje: 0 });
             setMetricasFilas([]);
-            toast({
-                title: 'Aviso',
-                description: 'Alguns dados podem não estar disponíveis. Configure filas para ver mais informações.',
-                variant: 'default',
-            });
+            toast({ title: 'Aviso', description: 'Alguns dados podem não estar disponíveis. Configure filas para ver mais informações.', variant: 'default' });
         } finally {
             setLoading(false);
             setRefreshing(false);
         }
     };
 
-    const handleRefresh = () => {
-        loadDashboardData(true);
-    };
+    const handleRefresh = () => loadDashboardData(true);
 
     const getStatusColor = (aguardando: number): string => {
         if (aguardando === 0) return 'text-green-600';
@@ -187,16 +163,8 @@ const Dashboard = () => {
         return 'text-red-600';
     };
 
-    const getProgressColor = (tempo: number): string => {
-        if (tempo <= 10) return 'bg-green-500';
-        if (tempo <= 30) return 'bg-yellow-500';
-        return 'bg-red-500';
-    };
-
     const formatTempo = (minutos: number): string => {
-        if (minutos < 60) {
-            return `${Math.round(minutos)}m`;
-        }
+        if (minutos < 60) return `${Math.round(minutos)}m`;
         const horas = Math.floor(minutos / 60);
         const mins = Math.round(minutos % 60);
         return `${horas}h ${mins}m`;
@@ -224,9 +192,9 @@ const Dashboard = () => {
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
-                    <Button 
-                        onClick={handleRefresh} 
-                        variant="outline" 
+                    <Button
+                        onClick={handleRefresh}
+                        variant="outline"
                         size="sm"
                         disabled={refreshing}
                     >

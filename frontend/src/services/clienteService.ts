@@ -3,6 +3,13 @@ import { authService } from './authService';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8899';
 
+export interface PaginationMeta {
+  totalCount: number;
+  totalPages: number;
+  page: number; // base 0
+  pageSize: number;
+}
+
 export const clienteService = {
   /**
    * Lista todos os clientes
@@ -32,13 +39,14 @@ export const clienteService = {
   /**
    * Busca cliente por ID
    */
-  async buscarPorId(id: string): Promise<ApiResponse<ClienteResponseDTO>> {
+  async buscarPorId(id: string): Promise<ClienteResponseDTO> {
     const res = await fetch(`${API_BASE_URL}/api/clientes/${id}`, {
       method: 'GET',
       headers: authService.getAuthHeaders(),
     });
     if (!res.ok) throw new Error(`Erro ao buscar cliente: ${res.statusText}`);
-    return res.json();
+    const body: ApiResponse<ClienteResponseDTO> = await res.json();
+    return body.data;
   },
 
   /**
@@ -80,7 +88,7 @@ export const clienteService = {
   },
 
   /**
-   * Busca clientes por nome (com paginação)
+   * Busca clientes por nome (com paginação) - retorna envelope padrão
    */
   async buscarPorNome(nome: string, page?: number, size?: number): Promise<ApiResponse<ClienteResponseDTO[]>> {
     let url = `${API_BASE_URL}/api/clientes/nome/${encodeURIComponent(nome)}`;
@@ -96,19 +104,20 @@ export const clienteService = {
   },
 
   /**
-   * Busca cliente por CPF
+   * Busca cliente por CPF (retorna item único)
    */
-  async buscarPorCpf(cpf: string): Promise<ApiResponse<ClienteResponseDTO>> {
+  async buscarPorCpf(cpf: string): Promise<ClienteResponseDTO | null> {
     const res = await fetch(`${API_BASE_URL}/api/clientes/cpf/${encodeURIComponent(cpf)}`, {
       method: 'GET',
       headers: authService.getAuthHeaders(),
     });
     if (!res.ok) throw new Error(`Erro ao buscar cliente por CPF: ${res.statusText}`);
-    return res.json();
+    const body: ApiResponse<ClienteResponseDTO> = await res.json();
+    return body?.data || null;
   },
 
   /**
-   * Busca clientes por email (com paginação)
+   * Busca clientes por email (com paginação) - envelope padrão
    */
   async buscarPorEmail(email: string, page?: number, size?: number): Promise<ApiResponse<ClienteResponseDTO[]>> {
     let url = `${API_BASE_URL}/api/clientes/email/${encodeURIComponent(email)}`;
@@ -124,7 +133,7 @@ export const clienteService = {
   },
 
   /**
-   * Busca clientes por telefone (com paginação)
+   * Busca clientes por telefone (com paginação) - envelope padrão
    */
   async buscarPorTelefone(telefone: string, page?: number, size?: number): Promise<ApiResponse<ClienteResponseDTO[]>> {
     let url = `${API_BASE_URL}/api/clientes/telefone/${encodeURIComponent(telefone)}`;
@@ -138,4 +147,69 @@ export const clienteService = {
     if (!res.ok) throw new Error(`Erro ao buscar clientes por telefone: ${res.statusText}`);
     return res.json();
   },
+
+  // ===== Métodos paginados com metadados =====
+  async buscarPorNomePaginado(nome: string, page: number, size: number): Promise<{ data: ClienteResponseDTO[]; meta: PaginationMeta | null; }> {
+    const url = `${API_BASE_URL}/api/clientes/nome/${encodeURIComponent(nome)}?page=${page}&size=${size}`;
+    const res = await fetch(url, { headers: authService.getAuthHeaders() });
+    if (!res.ok) throw new Error(`Erro ao buscar clientes por nome: ${res.statusText}`);
+    const body: ApiResponse<ClienteResponseDTO[]> = await res.json();
+    const meta = this.parsePaginationMeta(res, page, size, body?.data?.length ?? 0);
+    return { data: body?.data || [], meta };
+  },
+
+  async buscarPorEmailPaginado(email: string, page: number, size: number): Promise<{ data: ClienteResponseDTO[]; meta: PaginationMeta | null; }> {
+    const url = `${API_BASE_URL}/api/clientes/email/${encodeURIComponent(email)}?page=${page}&size=${size}`;
+    const res = await fetch(url, { headers: authService.getAuthHeaders() });
+    if (!res.ok) throw new Error(`Erro ao buscar clientes por email: ${res.statusText}`);
+    const body: ApiResponse<ClienteResponseDTO[]> = await res.json();
+    const meta = this.parsePaginationMeta(res, page, size, body?.data?.length ?? 0);
+    return { data: body?.data || [], meta };
+  },
+
+  async buscarPorTelefonePaginado(telefone: string, page: number, size: number): Promise<{ data: ClienteResponseDTO[]; meta: PaginationMeta | null; }> {
+    const url = `${API_BASE_URL}/api/clientes/telefone/${encodeURIComponent(telefone)}?page=${page}&size=${size}`;
+    const res = await fetch(url, { headers: authService.getAuthHeaders() });
+    if (!res.ok) throw new Error(`Erro ao buscar clientes por telefone: ${res.statusText}`);
+    const body: ApiResponse<ClienteResponseDTO[]> = await res.json();
+    const meta = this.parsePaginationMeta(res, page, size, body?.data?.length ?? 0);
+    return { data: body?.data || [], meta };
+  },
+
+  // Util para meta
+  parsePaginationMeta(res: Response, page: number, size: number, bodyCount: number): PaginationMeta | null {
+    const hTotalCount = res.headers.get('X-Total-Count');
+    const hTotalPages = res.headers.get('X-Total-Pages');
+    const hPage = res.headers.get('X-Page');
+    const hPageSize = res.headers.get('X-Page-Size');
+
+    if (hTotalCount && hTotalPages && hPage && hPageSize) {
+      const totalCount = Number(hTotalCount);
+      const totalPages = Number(hTotalPages);
+      const pageNum = Number(hPage);
+      const pageSize = Number(hPageSize);
+      if ([totalCount, totalPages, pageNum, pageSize].every(Number.isFinite)) {
+        return { totalCount, totalPages, page: pageNum, pageSize };
+      }
+    }
+
+    const contentRange = res.headers.get('Content-Range');
+    if (contentRange) {
+      const match = /items\s+(\d+)-(\d+)\/(\d+)/i.exec(contentRange);
+      if (match) {
+        const totalCount = Number(match[3]);
+        const totalPages = Math.max(1, Math.ceil(totalCount / (size || 1)));
+        return { totalCount, totalPages, page, pageSize: size };
+      }
+    }
+
+    // Fallback simples usando o tamanho retornado (pouco preciso)
+    if (Number.isFinite(bodyCount)) {
+      const totalCount = bodyCount;
+      const totalPages = Math.max(1, Math.ceil(totalCount / (size || 1)));
+      return { totalCount, totalPages, page, pageSize: size };
+    }
+
+    return null;
+  }
 };
