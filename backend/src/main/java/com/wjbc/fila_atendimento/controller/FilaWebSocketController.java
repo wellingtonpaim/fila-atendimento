@@ -12,13 +12,11 @@ public class FilaWebSocketController {
     @Autowired
     private SimpMessagingTemplate messagingTemplate;
 
-    // Envia atualização para painel público
-    public void sendPainelUpdate(UUID filaId, Object payload) {
-        messagingTemplate.convertAndSend("/topic/painel/" + filaId, payload);
+    public void sendPainelPublicoUpdate(UUID painelId, Object payload) {
+        messagingTemplate.convertAndSend("/topic/painel-publico/" + painelId, payload);
     }
 
-    // Envia atualização para painel do profissional
-    public void sendFilaUpdate(UUID setorId, Object payload) {
+    public void sendFilaProfissionalUpdate(UUID setorId, Object payload) {
         messagingTemplate.convertAndSend("/topic/fila/" + setorId, payload);
     }
 }

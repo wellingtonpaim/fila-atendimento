@@ -1,5 +1,6 @@
 package com.wjbc.fila_atendimento.domain.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -7,6 +8,7 @@ import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.Where;
 
+import java.util.List;
 import java.util.UUID;
 
 @Data
@@ -38,5 +40,9 @@ public class Fila {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "unidade_atendimento_id", nullable = false)
     private UnidadeAtendimento unidadeAtendimento;
+
+    @ManyToMany(mappedBy = "filas", fetch = FetchType.LAZY)
+    @JsonIgnore
+    private List<Painel> paineis;
 
 }
