@@ -27,15 +27,12 @@ import {
 // Importar serviços
 import { entradaFilaService } from "@/services/entradaFilaService";
 import { filaService } from "@/services/filaService";
-import { clienteService } from "@/services/clienteService";
 import { useAuth } from "@/contexts/AuthContext";
 
 // Importar tipos
 import {
-    EntradaFilaResponseDTO,
     FilaResponseDTO,
-    EntradaFilaCreateDTO,
-    ClienteResponseDTO
+    EntradaFilaCreateDTO
 } from "@/types";
 
 // Interface atualizada para corresponder à resposta real da API
@@ -97,7 +94,6 @@ const PainelProfissional = () => {
     const [isPrioridade, setIsPrioridade] = useState(false);
     const [isRetorno, setIsRetorno] = useState(false);
     const [observacoes, setObservacoes] = useState('');
-    const [tipoFinalizacao, setTipoFinalizacao] = useState<'encaminhar' | 'alta' | ''>('');
     const [tempoAtendimento, setTempoAtendimento] = useState(0);
     const [intervalId, setIntervalId] = useState<NodeJS.Timeout | null>(null);
 
@@ -143,35 +139,6 @@ const PainelProfissional = () => {
         }
     }, [clienteAtual]);
 
-    // Função para buscar dados completos do cliente por ID
-    const buscarDadosCliente = async (clienteId: string): Promise<ClienteResponseDTO | null> => {
-        try {
-            console.log('🔍 Buscando dados do cliente:', clienteId);
-            const cliente = await clienteService.buscarPorId(clienteId);
-            console.log('✅ Cliente encontrado:', cliente);
-            return cliente;
-        } catch (error: any) {
-            console.error('❌ Erro ao buscar cliente:', error);
-            return null;
-        }
-    };
-
-    // Função para enriquecer entrada na fila com dados do cliente
-    const enriquecerEntradaComCliente = async (entrada: EntradaFilaResponseDTO): Promise<EntradaFilaComClienteDTO | null> => {
-        const cliente = await buscarDadosCliente(entrada.clienteId);
-        if (!cliente) return null;
-
-        return {
-            ...entrada,
-            cliente,
-            prioridade: false, // TODO: Buscar da API se disponível
-            isRetorno: false,  // TODO: Buscar da API se disponível
-            dataHoraEntrada: entrada.horaEntrada,
-            dataHoraChamada: entrada.horaChamada,
-            guicheOuSalaAtendimento: ''
-        };
-    };
-
     const loadData = async () => {
         try {
             setLoading(true);
@@ -206,7 +173,7 @@ const PainelProfissional = () => {
             console.log('🔍 Debug - Carregando clientes da fila:', filaSelecionada);
             const clientes = await entradaFilaService.listarAguardandoPorFila(filaSelecionada);
             console.log('🔍 Debug - Clientes retornados completos:', clientes);
-            console.log('🔍 Debug - Status de cada cliente:', clientes.map(c => ({ id: c.id.substring(0,8), status: c.status, nome: c.cliente?.nome })));
+            console.log('🔍 Debug - Status de cada cliente:', clientes.map((c: any) => ({ id: c.id.substring(0,8), status: c.status, nome: c.cliente?.nome })));
 
             // A API já retorna os dados completos! Não preciso buscar individualmente
             setClientesAguardando(clientes as EntradaFilaComClienteDTO[]);
@@ -250,13 +217,11 @@ const PainelProfissional = () => {
             setLoadingAction(true);
             
             console.log('🔍 Debug - Chamando próximo cliente...', { filaSelecionada, userId: user.id, guiche });
-            const entradaChamada = await entradaFilaService.chamarProximo(
+            await entradaFilaService.chamarProximo(
                 filaSelecionada,
                 user.id,
                 guiche.trim()
             );
-
-            console.log('🔍 Debug - Entrada chamada retornada:', entradaChamada);
 
             // Aguardar um momento para o backend processar
             await new Promise(resolve => setTimeout(resolve, 1000));
@@ -278,33 +243,6 @@ const PainelProfissional = () => {
             console.error('❌ Erro ao chamar próximo cliente:', error);
             toast({
                 title: 'Erro ao chamar cliente',
-                description: error.message,
-                variant: 'destructive',
-            });
-        } finally {
-            setLoadingAction(false);
-        }
-    };
-
-    const handleFinalizarAtendimento = async () => {
-        if (!clienteAtual) return;
-
-        try {
-            setLoadingAction(true);
-            
-            await entradaFilaService.finalizarAtendimento(clienteAtual.id);
-            
-            setClienteAtual(null);
-            await loadClientesAguardando();
-
-            toast({
-                title: 'Atendimento finalizado!',
-                description: 'O atendimento foi concluído com sucesso.',
-            });
-        } catch (error: any) {
-            console.error('❌ Erro ao finalizar atendimento:', error);
-            toast({
-                title: 'Erro ao finalizar atendimento',
                 description: error.message,
                 variant: 'destructive',
             });
@@ -416,16 +354,10 @@ const PainelProfissional = () => {
     };
 
     const resetModalEncaminhamento = () => {
-        setTipoFinalizacao('');
         setFilaEncaminhamento('');
         setIsPrioridade(false);
         setIsRetorno(false);
         setObservacoes('');
-    };
-
-    const handleAbrirModalEncaminhamento = () => {
-        resetModalEncaminhamento();
-        setShowEncaminharModal(true);
     };
 
     const formatarTempo = (segundos: number): string => {
@@ -562,7 +494,7 @@ const PainelProfissional = () => {
                                 <div className="space-y-4">
                                     <div className="p-4 bg-primary/5 border border-primary/20 rounded-lg">
                                         <div className="flex items-center justify-between mb-2">
-                                            <h3 className="font-semibold">{clienteAtual.cliente?.nome || 'Cliente'}</h3>
+                                            <h3 className="font-semibold">{clienteAtual.cliente?.nome || 'ClienteResponseDTO'}</h3>
                                             {getStatusBadge(clienteAtual.status)}
                                         </div>
                                         <p className="text-sm text-muted-foreground">
@@ -595,7 +527,7 @@ const PainelProfissional = () => {
                                         <span className="text-lg font-mono">{formatarTempo(tempoAtendimento)}</span>
                                     </div>
 
-                                    {/* Ações do Atendimento Refatoradas */}
+                                    {/* Ações do Atendimento */}
                                     <div className="space-y-3">
                                         <Button
                                             onClick={handleCancelarAtendimento}
@@ -614,7 +546,6 @@ const PainelProfissional = () => {
                                                 <Button
                                                     onClick={() => {
                                                         resetModalEncaminhamento();
-                                                        setTipoFinalizacao('encaminhar');
                                                         setShowEncaminharModal(true);
                                                     }}
                                                     variant="default"
@@ -634,7 +565,6 @@ const PainelProfissional = () => {
                                                     </DialogDescription>
                                                 </DialogHeader>
 
-                                                {/* Opções de encaminhamento direto */}
                                                 <div className="space-y-4 py-4">
                                                     <div className="space-y-2">
                                                         <Label>Fila de Destino *</Label>
@@ -646,13 +576,13 @@ const PainelProfissional = () => {
                                                                 {filasDisponiveis
                                                                     .filter(f => f.id !== filaSelecionada)
                                                                     .map((fila) => (
-                                                                    <SelectItem key={fila.id} value={fila.id}>
-                                                                        <div className="flex flex-col">
-                                                                            <span className="font-medium">{fila.nome}</span>
-                                                                            <span className="text-xs text-muted-foreground">{fila.setor.nome}</span>
-                                                                        </div>
-                                                                    </SelectItem>
-                                                                ))}
+                                                                        <SelectItem key={fila.id} value={fila.id}>
+                                                                            <div className="flex flex-col">
+                                                                                <span className="font-medium">{fila.nome}</span>
+                                                                                <span className="text-xs text-muted-foreground">{fila.setor.nome}</span>
+                                                                            </div>
+                                                                        </SelectItem>
+                                                                    ))}
                                                             </SelectContent>
                                                         </Select>
                                                     </div>
@@ -716,7 +646,6 @@ const PainelProfissional = () => {
                                             </DialogContent>
                                         </Dialog>
 
-                                        {/* Botão para dar alta médica */}
                                         <Button
                                             onClick={handleDarAlta}
                                             disabled={loadingAction}
@@ -768,7 +697,7 @@ const PainelProfissional = () => {
                                                 {index + 1}
                                             </div>
                                             <div>
-                                                <p className="font-medium">{cliente.cliente?.nome || 'Cliente'}</p>
+                                                <p className="font-medium">{cliente.cliente?.nome || 'ClienteResponseDTO'}</p>
                                                 <p className="text-sm text-muted-foreground">{cliente.cliente?.cpf || 'CPF não informado'}</p>
                                                 <p className="text-sm text-muted-foreground">
                                                     ID: {cliente.id.substring(0, 8)}...

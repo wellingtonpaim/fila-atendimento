@@ -1,228 +1,109 @@
-import { 
-    ApiResponse, 
-    PainelResponseDTO, 
-    PainelCreateDTO, 
-    PainelUpdateDTO 
+import {
+    ApiResponse,
+    PainelResponseDTO,
+    PainelCreateDTO,
+    PainelUpdateDTO,
+    PainelPublicoConfigDTO
 } from '@/types';
 import { authService } from './authService';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8899';
 
 class PainelService {
-    private static instance: PainelService;
-
-    private constructor() {}
-
-    public static getInstance(): PainelService {
-        if (!PainelService.instance) {
-            PainelService.instance = new PainelService();
-        }
-        return PainelService.instance;
-    }
-
-    /**
-     * Headers padrão para requisições autenticadas
-     */
-    private getAuthHeaders(): Record<string, string> {
-        const token = authService.getToken();
-        return {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-        };
-    }
-
-    /**
-     * Lista todos os painéis (requer unidadeAtendimentoId como query param)
-     */
-    async listarTodos(unidadeAtendimentoId: string): Promise<PainelResponseDTO[]> {
-        try {
-            console.log('🚀 Buscando painéis da unidade:', unidadeAtendimentoId);
-
-            const params = new URLSearchParams({
-                unidadeAtendimentoId
-            });
-
-            const response = await fetch(`${API_BASE_URL}/painel?${params}`, {
-                method: 'GET',
-                headers: this.getAuthHeaders(),
-            });
-
-            if (!response.ok) {
-                throw new Error(`Erro HTTP: ${response.status} - ${response.statusText}`);
-            }
-
-            const result: ApiResponse<PainelResponseDTO[]> = await response.json();
-
-            if (!result.success) {
-                throw new Error(result.message || 'Erro ao buscar painéis');
-            }
-
-            console.log('✅ Painéis carregados:', result.data.length);
-            return result.data;
-        } catch (error) {
-            console.error('❌ Erro ao buscar painéis:', error);
-            throw error;
-        }
-    }
 
     /**
      * Lista painéis por unidade
      */
-    async listarPorUnidade(unidadeId: string): Promise<PainelResponseDTO[]> {
-        try {
-            console.log('🚀 Buscando painéis por unidade:', unidadeId);
-
-            const response = await fetch(`${API_BASE_URL}/painel/unidade/${unidadeId}`, {
-                method: 'GET',
-                headers: this.getAuthHeaders(),
-            });
-
-            if (!response.ok) {
-                throw new Error(`Erro HTTP: ${response.status} - ${response.statusText}`);
-            }
-
-            const result: ApiResponse<PainelResponseDTO[]> = await response.json();
-
-            if (!result.success) {
-                throw new Error(result.message || 'Erro ao buscar painéis por unidade');
-            }
-
-            console.log('✅ Painéis por unidade carregados:', result.data.length);
-            return result.data;
-        } catch (error) {
-            console.error('❌ Erro ao buscar painéis por unidade:', error);
-            throw error;
-        }
+    async listarPorUnidade(unidadeId: string): Promise<ApiResponse<PainelResponseDTO[]>> {
+        const response = await fetch(`${API_BASE_URL}/api/paineis/unidade/${unidadeId}`, {
+            headers: authService.getAuthHeaders(),
+        });
+        if (!response.ok) throw new Error('Falha ao buscar painéis por unidade');
+        return response.json();
     }
 
     /**
      * Busca painel por ID
      */
-    async buscarPorId(id: string, unidadeAtendimentoId: string): Promise<PainelResponseDTO> {
-        try {
-            console.log('🚀 Buscando painel por ID:', id);
+    async buscarPorId(id: string): Promise<ApiResponse<PainelResponseDTO>> {
+        const response = await fetch(`${API_BASE_URL}/api/paineis/${id}`, {
+            headers: authService.getAuthHeaders(),
+        });
+        if (!response.ok) throw new Error('Falha ao buscar painel');
+        return response.json();
+    }
 
-            const params = new URLSearchParams({
-                unidadeAtendimentoId
-            });
-
-            const response = await fetch(`${API_BASE_URL}/painel/${id}?${params}`, {
-                method: 'GET',
-                headers: this.getAuthHeaders(),
-            });
-
-            if (!response.ok) {
-                throw new Error(`Erro HTTP: ${response.status} - ${response.statusText}`);
-            }
-
-            const result: ApiResponse<PainelResponseDTO> = await response.json();
-
-            if (!result.success) {
-                throw new Error(result.message || 'Erro ao buscar painel');
-            }
-
-            console.log('✅ Painel encontrado:', result.data.descricao);
-            return result.data;
-        } catch (error) {
-            console.error('❌ Erro ao buscar painel:', error);
-            throw error;
-        }
+    /**
+     * Busca a configuração pública de um painel (sem autenticação)
+     */
+    async buscarConfiguracaoPublica(id: string): Promise<ApiResponse<PainelPublicoConfigDTO>> {
+        const response = await fetch(`${API_BASE_URL}/api/paineis/publico/${id}`);
+        if (!response.ok) throw new Error('Falha ao buscar configuração do painel');
+        return response.json();
     }
 
     /**
      * Cria novo painel
      */
-    async criar(painel: PainelCreateDTO): Promise<PainelResponseDTO> {
-        try {
-            console.log('🚀 Criando novo painel:', painel.descricao);
-
-            const response = await fetch(`${API_BASE_URL}/painel`, {
-                method: 'POST',
-                headers: this.getAuthHeaders(),
-                body: JSON.stringify(painel),
-            });
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`Erro HTTP: ${response.status} - ${errorText}`);
-            }
-
-            const result: ApiResponse<PainelResponseDTO> = await response.json();
-
-            if (!result.success) {
-                throw new Error(result.message || 'Erro ao criar painel');
-            }
-
-            console.log('✅ Painel criado:', result.data.descricao);
-            return result.data;
-        } catch (error) {
-            console.error('❌ Erro ao criar painel:', error);
-            throw error;
-        }
+    async criar(painel: PainelCreateDTO): Promise<ApiResponse<PainelResponseDTO>> {
+        const response = await fetch(`${API_BASE_URL}/api/paineis`, {
+            method: 'POST',
+            headers: authService.getAuthHeaders(),
+            body: JSON.stringify(painel),
+        });
+        if (!response.ok) throw new Error('Falha ao criar painel');
+        return response.json();
     }
 
     /**
      * Atualiza painel (PUT)
      */
-    async atualizar(id: string, painel: PainelUpdateDTO): Promise<PainelResponseDTO> {
-        try {
-            console.log('🚀 Atualizando painel:', id);
-
-            const response = await fetch(`${API_BASE_URL}/painel/${id}`, {
-                method: 'PUT',
-                headers: this.getAuthHeaders(),
-                body: JSON.stringify(painel),
-            });
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`Erro HTTP: ${response.status} - ${errorText}`);
-            }
-
-            const result: ApiResponse<PainelResponseDTO> = await response.json();
-
-            if (!result.success) {
-                throw new Error(result.message || 'Erro ao atualizar painel');
-            }
-
-            console.log('✅ Painel atualizado:', result.data.descricao);
-            return result.data;
-        } catch (error) {
-            console.error('❌ Erro ao atualizar painel:', error);
-            throw error;
-        }
+    async atualizar(id: string, painel: PainelUpdateDTO): Promise<ApiResponse<PainelResponseDTO>> {
+        const response = await fetch(`${API_BASE_URL}/api/paineis/${id}`, {
+            method: 'PUT',
+            headers: authService.getAuthHeaders(),
+            body: JSON.stringify(painel),
+        });
+        if (!response.ok) throw new Error('Falha ao atualizar painel');
+        return response.json();
     }
 
     /**
      * Desativa painel
      */
-    async desativar(id: string): Promise<void> {
-        try {
-            console.log('🚀 Desativando painel:', id);
+    async desativar(id: string): Promise<ApiResponse<void>> {
+        const response = await fetch(`${API_BASE_URL}/api/paineis/${id}`, {
+            method: 'DELETE',
+            headers: authService.getAuthHeaders(),
+        });
+        if (!response.ok) throw new Error('Falha ao desativar painel');
+        return response.json();
+    }
 
-            const response = await fetch(`${API_BASE_URL}/painel/${id}`, {
-                method: 'DELETE',
-                headers: this.getAuthHeaders(),
-            });
+    /**
+     * Adiciona uma fila a um painel
+     */
+    async adicionarFila(painelId: string, filaId: string): Promise<ApiResponse<PainelResponseDTO>> {
+        const response = await fetch(`${API_BASE_URL}/api/paineis/${painelId}/filas/${filaId}`, {
+            method: 'POST',
+            headers: authService.getAuthHeaders(),
+        });
+        if (!response.ok) throw new Error('Falha ao adicionar fila ao painel');
+        return response.json();
+    }
 
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`Erro HTTP: ${response.status} - ${errorText}`);
-            }
-
-            const result: ApiResponse<void> = await response.json();
-
-            if (!result.success) {
-                throw new Error(result.message || 'Erro ao desativar painel');
-            }
-
-            console.log('✅ Painel desativado com sucesso');
-        } catch (error) {
-            console.error('❌ Erro ao desativar painel:', error);
-            throw error;
-        }
+    /**
+     * Remove uma fila de um painel
+     */
+    async removerFila(painelId: string, filaId: string): Promise<ApiResponse<PainelResponseDTO>> {
+        const response = await fetch(`${API_BASE_URL}/api/paineis/${painelId}/filas/${filaId}`, {
+            method: 'DELETE',
+            headers: authService.getAuthHeaders(),
+        });
+        if (!response.ok) throw new Error('Falha ao remover fila do painel');
+        return response.json();
     }
 }
 
 // Exportar instância singleton
-export const painelService = PainelService.getInstance();
+export const painelService = new PainelService();

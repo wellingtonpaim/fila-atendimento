@@ -15,7 +15,7 @@ import java.util.List;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/painel")
+@RequestMapping("/api/paineis")
 @RequiredArgsConstructor
 @CrossOrigin
 public class PainelController {

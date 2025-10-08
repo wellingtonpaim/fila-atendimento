@@ -1,456 +1,258 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
+import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import {
-    Volume2,
-    VolumeX,
-    Clock,
-    Users,
-    RefreshCw,
-    AlertTriangle
-} from 'lucide-react';
+import { Volume2, VolumeX, Clock, Users, RefreshCw, AlertTriangle, Loader2 } from 'lucide-react';
 import { websocketService } from '@/services/websocketService';
+import { painelService } from '@/services/painelService'; // Importar novo serviço
 import { audioService } from '@/services/audioService';
-import { ChamadaWebSocket, PainelPublicoDTO, PainelPublicoChamadaDTO } from '@/types';
+import { PainelPublicoDTO, PainelPublicoConfigDTO } from '@/types';
 import { cn } from '@/lib/utils';
-import { authService } from '@/services/authService';
 
-interface ChamadaAtual extends ChamadaWebSocket {
-    timestampLocal: number;
+interface ChamadaExibicao {
+    filaId: string;
+    filaNome: string;
+    clienteNome: string;
+    guicheOuSala: string;
+    timestamp: string; // ISO string
     isNew: boolean;
 }
 
-// Map para deduplicação (chave = dataHoraChamada ou timestamp original)
-const chaveChamada = (c: ChamadaAtual) => `${c.timestamp}`;
-
-interface FilaPainelState {
-  filaId: string;
-  chamadas: ChamadaAtual[]; // ordenadas desc por timestamp
-}
-
 const PainelPublico = () => {
-    const [chamadas, setChamadas] = useState<ChamadaAtual[]>([]); // manter legado (única fila)
-    const [filasPainel, setFilasPainel] = useState<Record<string, FilaPainelState>>({});
+    const [painelConfig, setPainelConfig] = useState<PainelPublicoConfigDTO | null>(null);
+    const [chamadaAtual, setChamadaAtual] = useState<ChamadaExibicao | null>(null);
+    const [ultimasChamadas, setUltimasChamadas] = useState<ChamadaExibicao[]>([]);
     const [audioEnabled, setAudioEnabled] = useState(true);
     const [currentTime, setCurrentTime] = useState(new Date());
     const [isConnected, setIsConnected] = useState(false);
-    const [semToken, setSemToken] = useState(false);
-    const [filaId, setFilaId] = useState<string | null>(null);
+    const [error, setError] = useState<string | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+
     const repeticaoTimers = useRef<number[]>([]);
 
-    // ===== Utilidades Query =====
     const getParam = (k: string): string | null => {
-        try { const p = new URLSearchParams(window.location.search); const v = p.get(k); return v && v.trim() ? v.trim() : null; } catch { return null; }
-    };
-
-    const getTokenFromQuery = (): string | null => getParam('token');
-    const getFilaFromQuery = (): string | null => getParam('fila') || getParam('filaId') || (() => {
-        // compat: permitir listas antigas ?filas=a,b  -> pega primeira
         try {
-            const filas = getParam('filas');
-            if (!filas) return null;
-            return filas.split(',').map(s => s.trim()).filter(Boolean)[0] || null;
-        } catch { return null; }
-    })();
-    const getFilasFromQuery = (): string[] => {
-        const multi = getParam('filas');
-        if (multi) return multi.split(',').map(s => s.trim()).filter(Boolean);
-        const single = getParam('fila') || getParam('filaId');
-        return single ? [single] : [];
+            const params = new URLSearchParams(window.location.search);
+            return params.get(k);
+        } catch {
+            return null;
+        }
     };
 
-    // Relógio
+    // Efeito para carregar o painel e conectar ao WebSocket
+    useEffect(() => {
+        const token = getParam('token');
+        const painelId = getParam('painelId');
+
+        if (!painelId) {
+            setError('ID do painel não fornecido na URL. Adicione "?painelId=SEU_ID".');
+            setIsLoading(false);
+            return;
+        }
+
+        if (!token) {
+            setError('Token de autenticação não fornecido na URL. Adicione "?token=SEU_TOKEN".');
+            setIsLoading(false);
+            return;
+        }
+
+        const initializePainel = async () => {
+            try {
+                // 1. Buscar a configuração do painel
+                const configResponse = await painelService.buscarConfiguracaoPublica(painelId);
+                if (!configResponse.success) throw new Error(configResponse.message);
+                setPainelConfig(configResponse.data);
+
+                // 2. Conectar ao WebSocket
+                websocketService.connect(token);
+                setIsConnected(websocketService.isConnected());
+
+                // 3. Assinar o tópico do painel
+                const topic = `/topic/painel-publico/${painelId}`;
+                const unsubscribe = websocketService.subscribe(topic, (payload: any) => {
+                    processPayload(payload as PainelPublicoDTO, configResponse.data);
+                });
+
+                return () => {
+                    unsubscribe();
+                    websocketService.disconnect();
+                };
+            } catch (err: any) {
+                setError(`Erro ao inicializar o painel: ${err.message}`);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        const cleanup = initializePainel();
+
+        return () => {
+            if (cleanup && typeof cleanup.then === 'function') {
+                cleanup.then(unsub => unsub && unsub());
+            }
+        };
+    }, []);
+
+    // Efeitos secundários
     useEffect(() => {
         const timer = setInterval(() => setCurrentTime(new Date()), 1000);
         return () => clearInterval(timer);
     }, []);
 
-    // Limpeza timers de repetição ao desmontar
     useEffect(() => {
         return () => {
-            repeticaoTimers.current.forEach(id => clearTimeout(id));
-            repeticaoTimers.current = [];
+            repeticaoTimers.current.forEach(clearTimeout);
         };
     }, []);
 
-    // ====== Conexão WebSocket ======
-    useEffect(() => {
-        const jwt = getTokenFromQuery() || authService.getToken();
-        const listaFilas = getFilasFromQuery();
-        setFilaId(listaFilas[0] || null); // compat com lógica existente
-        if (!jwt) {
-            console.warn('[PainelPublico] JWT ausente. Forneça ?token=... na URL ou faça login.');
-            setSemToken(true);
-            setIsConnected(false);
-            return;
+    // Processamento de payload WebSocket
+    const processPayload = useCallback((dto: PainelPublicoDTO, config: PainelPublicoConfigDTO) => {
+        const filaDaChamada = config.filas.find(f => f.id === dto.filaId);
+        if (!filaDaChamada) return;
+
+        // Atualiza a chamada atual
+        if (dto.chamadaAtual) {
+            const novaChamada: ChamadaExibicao = {
+                filaId: dto.filaId,
+                filaNome: filaDaChamada.nome,
+                clienteNome: dto.chamadaAtual.nomePaciente,
+                guicheOuSala: dto.chamadaAtual.guicheOuSala,
+                timestamp: dto.chamadaAtual.dataHoraChamada,
+                isNew: true,
+            };
+            setChamadaAtual(novaChamada);
+
+            // Adiciona às últimas chamadas, mantendo o limite
+            setUltimasChamadas(prev => [novaChamada, ...prev.filter(c => c.timestamp !== novaChamada.timestamp)].slice(0, 5));
+
+            // Lógica de áudio
+            if (audioEnabled && dto.sinalizacaoSonora && dto.mensagemVocalizacao) {
+                dispararAudio(dto);
+            }
+
+            // Remove o destaque após o tempo
+            const tempoDestaque = (dto.tempoExibicao ?? 15) * 1000;
+            setTimeout(() => {
+                setChamadaAtual(prev => prev?.timestamp === novaChamada.timestamp ? { ...prev, isNew: false } : prev);
+            }, tempoDestaque);
+        } else {
+            setChamadaAtual(null); // Limpa se não houver chamada atual
         }
-        if (listaFilas.length === 0) {
-            console.warn('[PainelPublico] Nenhuma fila informada. Use ?filas=ID1,ID2 ou ?fila=ID');
-        }
-
-        websocketService.connect(jwt);
-        setIsConnected(websocketService.isConnected());
-
-        const unsubscribers: Array<() => void> = [];
-        listaFilas.forEach(fila => {
-            const dest = `/topic/painel/${fila}`;
-            const unsub = websocketService.subscribe(dest, (payload: any) => {
-                processPayloadMulti(fila, payload);
-            });
-            unsubscribers.push(unsub);
-        });
-
-        return () => {
-            unsubscribers.forEach(u => u());
-            websocketService.disconnect();
-        };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
-    // ====== Processamento de Payload (multi-fila) ======
-    const processPayloadMulti = useCallback((filaId: string, payload: any) => {
-        if (payload && (payload.chamadaAtual !== undefined || payload.ultimasChamadas)) {
-            handlePainelPublicoDTOMulti(filaId, payload as PainelPublicoDTO);
-            return;
-        }
-        handleChamadaUnicaMulti(filaId, payload as ChamadaWebSocket);
     }, [audioEnabled]);
-
-    const toChamadaAtual = (c: PainelPublicoChamadaDTO, fila: string): ChamadaAtual => ({
-        entradaFilaId: c.dataHoraChamada, // não temos ID -> usar timestamp ISO como chave
-        clienteNome: c.nomePaciente,
-        senha: '-',
-        filaId: fila,
-        filaNome: '',
-        setorNome: 'Atendimento',
-        guicheOuSalaAtendimento: c.guicheOuSala,
-        timestamp: c.dataHoraChamada,
-        timestampLocal: Date.now(),
-        isNew: true
-    });
-
-    const handlePainelPublicoDTO = (dto: PainelPublicoDTO) => {
-        setChamadas(prev => {
-            const mapa = new Map(prev.map(c => [chaveChamada(c), c]));
-            const novos: ChamadaAtual[] = [];
-
-            if (dto.chamadaAtual) {
-                const ch = toChamadaAtual(dto.chamadaAtual, dto.filaId);
-                mapa.set(chaveChamada(ch), ch);
-                novos.push(ch);
-            }
-            dto.ultimasChamadas?.forEach(c => {
-                const ch = toChamadaAtual(c, dto.filaId);
-                if (!mapa.has(chaveChamada(ch))) {
-                    mapa.set(chaveChamada(ch), { ...ch, isNew: false });
-                }
-            });
-
-            // Ordenar por timestamp (desc)
-            const ordenado = Array.from(mapa.values()).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-            const limitado = ordenado.slice(0, 10);
-
-            // Marcar apenas a chamadaAtual como isNew (se houver)
-            if (dto.chamadaAtual) {
-                const chaveAtual = dto.chamadaAtual.dataHoraChamada;
-                for (const c of limitado) {
-                    c.isNew = c.timestamp === chaveAtual;
-                }
-                // Remover destaque após tempoExibicao
-                const tempo = (dto.tempoExibicao ?? 15) * 1000;
-                setTimeout(() => {
-                    setChamadas(cs => cs.map(c => c.timestamp === chaveAtual ? { ...c, isNew: false } : c));
-                }, tempo);
-            }
-
-            // Áudio (repetições) se habilitado
-            if (audioEnabled && dto.sinalizacaoSonora && dto.mensagemVocalizacao) {
-                dispararAudio(dto);
-            }
-
-            return limitado;
-        });
-    };
-
-    const handlePainelPublicoDTOMulti = (fid: string, dto: PainelPublicoDTO) => {
-        setFilasPainel(prev => {
-            const clone = { ...prev };
-            const existente = clone[fid] || { filaId: fid, chamadas: [] };
-            const mapa = new Map(existente.chamadas.map(c => [chaveChamada(c), c]));
-
-            if (dto.chamadaAtual) {
-                const ch = toChamadaAtual(dto.chamadaAtual, fid);
-                mapa.set(chaveChamada(ch), ch);
-            }
-            dto.ultimasChamadas?.forEach(c => {
-                const ch = toChamadaAtual(c, fid);
-                if (!mapa.has(chaveChamada(ch))) mapa.set(chaveChamada(ch), { ...ch, isNew: false });
-            });
-
-            let lista = Array.from(mapa.values()).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-            lista = lista.slice(0, 10);
-
-            if (dto.chamadaAtual) {
-                const chaveAtual = dto.chamadaAtual.dataHoraChamada;
-                lista = lista.map(c => ({ ...c, isNew: c.timestamp === chaveAtual }));
-                const tempo = (dto.tempoExibicao ?? 15) * 1000;
-                setTimeout(() => {
-                    setFilasPainel(p => {
-                        const cp = { ...p };
-                        const f = cp[fid];
-                        if (!f) return p;
-                        f.chamadas = f.chamadas.map(c => c.timestamp === chaveAtual ? { ...c, isNew: false } : c);
-                        return cp;
-                    });
-                }, tempo);
-            }
-
-            existente.chamadas = lista;
-            clone[fid] = existente;
-
-            if (audioEnabled && dto.sinalizacaoSonora && dto.mensagemVocalizacao) {
-                dispararAudio(dto);
-            }
-
-            return clone;
-        });
-    };
 
     const dispararAudio = (dto: PainelPublicoDTO) => {
-        // Limpar timers anteriores
-        repeticaoTimers.current.forEach(id => clearTimeout(id));
+        repeticaoTimers.current.forEach(clearTimeout);
         repeticaoTimers.current = [];
-
         const rep = Math.max(1, dto.repeticoes ?? 1);
-        const intervalo = Math.max(1, dto.intervaloRepeticao ?? 5);
+        const intervalo = (dto.intervaloRepeticao ?? 5) * 1000;
         for (let i = 0; i < rep; i++) {
-            const delay = i * intervalo * 1000;
-            const t = window.setTimeout(() => {
+            const timerId = window.setTimeout(() => {
                 try {
-                    const texto = dto.mensagemVocalizacao!;
-                    // Usar API nativa diretamente para flexibilidade (não conflitar com vocalizarChamada pré-existente)
-                    window.speechSynthesis.cancel();
-                    const utter = new SpeechSynthesisUtterance(texto);
-                    utter.lang = 'pt-BR';
-                    utter.rate = 0.95;
-                    utter.pitch = 1;
-                    window.speechSynthesis.speak(utter);
-                } catch (e) {
-                    console.error('Erro síntese:', e);
-                }
-            }, delay);
-            repeticaoTimers.current.push(t);
+                    audioService.vocalizarChamada(dto.chamadaAtual!.nomePaciente, dto.chamadaAtual!.guicheOuSala, '');
+                } catch (e) { console.error('Erro na síntese de voz:', e); }
+            }, i * intervalo);
+            repeticaoTimers.current.push(timerId);
         }
     };
-
-    const handleChamadaUnica = useCallback(async (novaChamada: ChamadaWebSocket) => {
-        const chamadaComTimestamp: ChamadaAtual = {
-            ...novaChamada,
-            timestampLocal: Date.now(),
-            isNew: true,
-        };
-
-        setChamadas(prev => {
-            const existentes = prev.filter(c => c.entradaFilaId !== chamadaComTimestamp.entradaFilaId);
-            const novas = [chamadaComTimestamp, ...existentes].slice(0, 10);
-            return novas.map((c, idx) => ({ ...c, isNew: idx === 0 }));
-        });
-
-        if (audioEnabled) {
-            try {
-                await audioService.vocalizarChamada(
-                    novaChamada.clienteNome,
-                    novaChamada.guicheOuSalaAtendimento,
-                    novaChamada.setorNome
-                );
-            } catch (error) {
-                console.error('Erro na vocalização:', error);
-            }
-        }
-
-        setTimeout(() => {
-            setChamadas(prev => prev.map(c => (
-                c.entradaFilaId === chamadaComTimestamp.entradaFilaId ? { ...c, isNew: false } : c
-            )));
-        }, 5000);
-    }, [audioEnabled]);
-
-    const handleChamadaUnicaMulti = useCallback(async (fid: string, novaChamada: ChamadaWebSocket) => {
-        const chamadaComTimestamp: ChamadaAtual = {
-            ...novaChamada,
-            timestampLocal: Date.now(),
-            isNew: true,
-        };
-        setFilasPainel(prev => {
-            const clone = { ...prev };
-            const existente = clone[fid] || { filaId: fid, chamadas: [] };
-            const filtradas = existente.chamadas.filter(c => c.entradaFilaId !== chamadaComTimestamp.entradaFilaId);
-            existente.chamadas = [chamadaComTimestamp, ...filtradas].slice(0, 10).map((c, idx) => ({ ...c, isNew: idx === 0 }));
-            clone[fid] = existente;
-            return clone;
-        });
-        if (audioEnabled) {
-            try {
-                await audioService.vocalizarChamada(novaChamada.clienteNome, novaChamada.guicheOuSalaAtendimento, novaChamada.setorNome);
-            } catch (e) { console.error('Erro fala', e); }
-        }
-        setTimeout(() => {
-            setFilasPainel(prev => {
-                const clone = { ...prev };
-                const existente = clone[fid];
-                if (!existente) return prev;
-                existente.chamadas = existente.chamadas.map(c => c.entradaFilaId === chamadaComTimestamp.entradaFilaId ? { ...c, isNew: false } : c);
-                return clone;
-            });
-        }, 5000);
-    }, [audioEnabled]);
 
     const toggleAudio = async () => {
-        const newState = !audioEnabled;
-        setAudioEnabled(newState);
-        audioService.setEnabled(newState);
-        if (newState) {
-            try { await audioService.testarAudio(); } catch (error) { console.error('Teste de áudio falhou:', error); }
-        }
+        setAudioEnabled(prev => {
+            audioService.setEnabled(!prev);
+            return !prev;
+        });
     };
 
-    const formatTime = (date: Date) => date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    if (isLoading) {
+        return <div className="min-h-screen flex items-center justify-center bg-background"><Loader2 className="h-16 w-16 animate-spin text-primary" /></div>;
+    }
+
+    if (error) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-destructive/5 p-4 text-center">
+                <Card className="max-w-lg border-destructive shadow-lg">
+                    <CardHeader>
+                        <CardTitle className="flex items-center justify-center gap-2 text-destructive"><AlertTriangle/> Erro na Configuração</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <p className="text-destructive-foreground">{error}</p>
+                    </CardContent>
+                </Card>
+            </div>
+        );
+    }
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5 p-6" role="main" aria-label="Painel público de chamadas">
+        <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5 p-4 md:p-6 lg:p-8 grid grid-rows-[auto_1fr_auto] gap-4" role="main">
             {/* Header */}
-            <div className="mb-8">
-                <div className="flex items-center justify-between mb-4">
-                    <div className="flex flex-wrap items-center gap-4">
-                        <h1 className="text-4xl font-bold text-primary">Painel de Chamadas</h1>
-                        <Badge variant={isConnected ? 'default' : 'desconectado'} className="text-sm">
-                            {isConnected ? 'Online' : 'Desconectado'}
-                        </Badge>
-                        {semToken && (
-                            <span className="text-xs text-destructive ml-2 flex items-center gap-1"><AlertTriangle className="h-3 w-3"/> Sem credenciais: informe ?token=JWT</span>
-                        )}
-                        {!filaId && (
-                            <span className="text-xs text-destructive ml-2 flex items-center gap-1"><AlertTriangle className="h-3 w-3"/> Fila ausente: adicione ?fila=ID</span>
-                        )}
-                    </div>
-
-                    <div className="flex items-center gap-4">
-                        <Button variant="ghost" size="icon" onClick={toggleAudio} aria-label={audioEnabled ? 'Desativar áudio' : 'Ativar áudio'} className="h-12 w-12">
-                            {audioEnabled ? (
-                                <Volume2 className="h-6 w-6 text-success" />
-                            ) : (
-                                <VolumeX className="h-6 w-6 text-muted-foreground" />
-                            )}
-                        </Button>
-
-                        <div className="text-right">
-                            <div className="text-3xl font-mono font-bold">{formatTime(currentTime)}</div>
-                            <div className="text-sm text-muted-foreground">{currentTime.toLocaleDateString('pt-BR')}</div>
-                        </div>
+            <header className="flex items-start justify-between gap-4">
+                <div>
+                    <h1 className="text-2xl md:text-4xl font-bold text-primary">{painelConfig?.descricao || 'Painel de Chamadas'}</h1>
+                    <div className="flex items-center gap-4 text-muted-foreground mt-2">
+                        <Badge variant={isConnected ? 'default' : 'destructive'} className="text-sm">{isConnected ? 'Online' : 'Desconectado'}</Badge>
+                        <div className="hidden md:flex items-center gap-2"><Users className="h-4 w-4" /><span>{painelConfig?.filas.length || 0} fila(s) monitorada(s)</span></div>
                     </div>
                 </div>
-
-                <div className="flex items-center gap-4 text-muted-foreground flex-wrap">
-                    <div className="flex items-center gap-2">
-                        <Users className="h-4 w-4" />
-                        <span>Chamadas recentes</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <Clock className="h-4 w-4" />
-                        <span>Tempo real (fila: {filaId || '—'})</span>
+                <div className="flex items-center gap-2 md:gap-4">
+                    <Button variant="ghost" size="icon" onClick={toggleAudio} className="h-10 w-10 md:h-12 md:w-12">
+                        {audioEnabled ? <Volume2 className="h-5 w-5 md:h-6 md:w-6 text-success" /> : <VolumeX className="h-5 w-5 md:h-6 md:w-6 text-muted-foreground" />}
+                    </Button>
+                    <div className="text-right">
+                        <div className="text-2xl md:text-3xl font-mono font-bold">{currentTime.toLocaleTimeString('pt-BR')}</div>
+                        <div className="text-xs md:text-sm text-muted-foreground">{currentTime.toLocaleDateString('pt-BR')}</div>
                     </div>
                 </div>
-            </div>
+            </header>
 
-            {/* GRID de filas quando múltiplas */}
-            {Object.keys(filasPainel).length > 1 && (
-                <div className="grid gap-6 mt-8" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(360px,1fr))' }}>
-                    {Object.values(filasPainel).map(fila => {
-                        const chamadasFila = fila.chamadas;
-                        const atual = chamadasFila.find(c => c.isNew) || chamadasFila[0];
-                        const ultimas = chamadasFila.filter(c => c !== atual).slice(0, 3);
-                        return (
-                            <Card key={fila.filaId} className={cn('relative', atual?.isNew && 'ring-2 ring-primary')}>
-                                <CardContent className="p-4 space-y-4">
-                                    <div className="flex items-center justify-between">
-                                        <h2 className="text-lg font-semibold">Fila</h2>
-                                        <Badge variant={atual ? 'default' : 'secondary'}>{fila.filaId.substring(0,8)}</Badge>
-                                    </div>
-                                    <div className="bg-primary/5 rounded p-3 text-center min-h-[90px] flex flex-col items-center justify-center">
-                                        {atual ? (
-                                            <>
-                                                <span className="text-xl font-bold">{atual.clienteNome}</span>
-                                                <span className="text-sm text-muted-foreground">{atual.guicheOuSalaAtendimento}</span>
-                                            </>
-                                        ) : <span className="text-sm text-muted-foreground">Aguardando...</span>}
-                                    </div>
-                                    <div className="space-y-2">
-                                        {ultimas.length === 0 && <p className="text-xs text-muted-foreground">Sem chamadas anteriores.</p>}
-                                        {ultimas.map(u => (
-                                            <div key={u.entradaFilaId} className="flex items-center justify-between text-xs">
-                                                <span className="truncate max-w-[140px]">{u.clienteNome}</span>
-                                                <span className="text-muted-foreground">{new Date(u.timestamp).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        );
-                    })}
-                </div>
-            )}
-
-            {/* Lista de Chamadas (modo single / compat) */}
-            {Object.keys(filasPainel).length <= 1 && (
-                <div className="space-y-4" role="region" aria-label="Lista de chamadas recentes" aria-live="polite">
-                    {chamadas.length === 0 ? (
-                        <Card className="p-12 text-center">
-                            <div className="flex flex-col items-center gap-4 text-muted-foreground">
-                                <RefreshCw className="h-12 w-12" />
-                                <p className="text-xl">Aguardando chamadas...</p>
-                                <p className="text-sm">As chamadas aparecerão aqui em tempo real</p>
+            {/* Content */}
+            <main className="grid md:grid-cols-3 gap-4 md:gap-6 lg:gap-8">
+                {/* Chamada Atual */}
+                <div className={cn("md:col-span-2 rounded-lg flex items-center justify-center p-6 transition-all duration-500", chamadaAtual?.isNew ? 'bg-primary/10 ring-4 ring-primary' : 'bg-card border')}>
+                    {chamadaAtual ? (
+                        <div className="text-center w-full">
+                            <p className="text-lg md:text-2xl text-muted-foreground">Senha</p>
+                            <p className="text-6xl md:text-8xl lg:text-9xl font-bold tracking-tight my-2 md:my-4">{chamadaAtual.clienteNome.split(' ')[0]}</p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6 text-xl md:text-2xl">
+                                <div className="bg-muted p-3 rounded-md">
+                                    <p className="text-sm font-semibold text-muted-foreground">LOCAL</p>
+                                    <p className="font-bold">{chamadaAtual.guicheOuSala}</p>
+                                </div>
+                                <div className="bg-muted p-3 rounded-md">
+                                    <p className="text-sm font-semibold text-muted-foreground">FILA</p>
+                                    <p className="font-bold">{chamadaAtual.filaNome}</p>
+                                </div>
                             </div>
-                        </Card>
+                        </div>
                     ) : (
-                        chamadas.map((chamada, index) => (
-                            <Card key={`${chamada.entradaFilaId}-${chamada.timestampLocal}`} className={cn(
-                                'transition-all duration-500',
-                                chamada.isNew && 'ring-4 ring-primary ring-opacity-50 shadow-2xl bg-primary/5',
-                                index === 0 && 'border-primary border-2'
-                            )}>
-                                <CardContent className="p-6">
-                                    <div className="flex items-center justify-between flex-wrap gap-6">
-                                        <div className="flex items-center gap-6 flex-wrap">
-                                            <div>
-                                                <div className="text-3xl font-bold mb-1" aria-label={`Cliente: ${chamada.clienteNome}`}>{chamada.clienteNome}</div>
-                                                <div className="text-sm text-muted-foreground">Dirija-se ao local indicado</div>
-                                            </div>
-                                        </div>
-                                        <div className="text-right flex items-center gap-8 flex-wrap">
-                                            <div className="text-center min-w-[140px]">
-                                                <div className="text-2xl font-bold mb-1">{chamada.guicheOuSalaAtendimento}</div>
-                                                <div className="text-xs text-muted-foreground uppercase tracking-wider">Local</div>
-                                            </div>
-                                            <div className="text-center min-w-[100px]">
-                                                <div className="text-lg font-mono">
-                                                    {new Date(chamada.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                                                </div>
-                                                <div className="text-xs text-muted-foreground uppercase tracking-wider">Hora</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        ))
+                        <div className="text-center text-muted-foreground">
+                            <Clock className="h-16 w-16 mx-auto mb-4 opacity-50"/>
+                            <p className="text-2xl">Aguardando chamada...</p>
+                        </div>
                     )}
                 </div>
-            )}
+
+                {/* Últimas Chamadas */}
+                <div className="bg-card border rounded-lg p-4 md:p-6 flex flex-col">
+                    <h2 className="text-xl md:text-2xl font-semibold mb-4">Últimas Chamadas</h2>
+                    <div className="space-y-3 flex-1">
+                        {ultimasChamadas.slice(1, 6).map((chamada) => (
+                            <div key={chamada.timestamp} className="flex items-center justify-between p-3 bg-muted/50 rounded-md text-sm md:text-base">
+                                <div className="font-medium truncate">{chamada.clienteNome}</div>
+                                <div className="text-muted-foreground whitespace-nowrap">{chamada.guicheOuSala}</div>
+                            </div>
+                        ))}
+                        {ultimasChamadas.length <= 1 && (
+                            <div className="text-center text-muted-foreground pt-8">
+                                <p>Nenhuma chamada anterior.</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </main>
 
             {/* Footer */}
-            <div className="mt-12 text-center text-muted-foreground">
-                <p className="text-sm">Em caso de dúvidas, dirija-se à recepção • Sistema Q-Manager</p>
-            </div>
+            <footer className="text-center text-muted-foreground text-xs md:text-sm">
+                <p>Em caso de dúvidas, dirija-se à recepção • Sistema Q-Manager</p>
+            </footer>
         </div>
     );
 };

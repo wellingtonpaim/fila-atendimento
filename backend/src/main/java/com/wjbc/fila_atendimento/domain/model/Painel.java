@@ -17,7 +17,7 @@ public class Painel {
     @Id
     @GeneratedValue(generator = "UUID")
     @GenericGenerator(name = "UUID", strategy = "org.hibernate.id.UUIDGenerator")
-    @Column(name = "painel_id", updatable = false, nullable = false)
+    @Column(name = "id", updatable = false, nullable = false)
     private UUID id;
 
     @Column(name = "descricao", nullable = false)
@@ -36,4 +36,3 @@ public class Painel {
     )
     private List<Fila> filas;
 }
-
