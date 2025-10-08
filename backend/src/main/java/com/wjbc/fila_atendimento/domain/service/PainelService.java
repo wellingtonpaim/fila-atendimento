@@ -14,4 +14,6 @@ public interface PainelService {
     List<PainelResponseDTO> listarTodos(UUID unidadeAtendimentoId);
     List<PainelResponseDTO> listarPorUnidade(UUID unidadeAtendimentoId);
     void desativar(UUID id);
+    PainelResponseDTO adicionarFilaAoPainel(UUID painelId, UUID filaId);
+    PainelResponseDTO removerFilaDoPainel(UUID painelId, UUID filaId);
 }

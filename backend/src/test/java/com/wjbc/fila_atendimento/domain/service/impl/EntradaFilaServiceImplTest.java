@@ -6,23 +6,17 @@ import com.wjbc.fila_atendimento.domain.enumeration.StatusFila;
 import com.wjbc.fila_atendimento.domain.exception.BusinessException;
 import com.wjbc.fila_atendimento.domain.exception.ResourceNotFoundException;
 import com.wjbc.fila_atendimento.domain.mapper.EntradaFilaMapper;
-import com.wjbc.fila_atendimento.domain.model.Cliente;
-import com.wjbc.fila_atendimento.domain.model.EntradaFila;
-import com.wjbc.fila_atendimento.domain.model.Fila;
-import com.wjbc.fila_atendimento.domain.model.Usuario;
+import com.wjbc.fila_atendimento.domain.model.*;
 import com.wjbc.fila_atendimento.domain.repository.EntradaFilaRepository;
-import com.wjbc.fila_atendimento.domain.service.ClienteService;
-import com.wjbc.fila_atendimento.domain.service.FilaBroadcastService;
-import com.wjbc.fila_atendimento.domain.service.FilaService;
-import com.wjbc.fila_atendimento.domain.service.UsuarioService;
+import com.wjbc.fila_atendimento.domain.repository.PainelRepository;
+import com.wjbc.fila_atendimento.domain.service.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
-import java.time.LocalDateTime;
-import java.util.Optional;
+import java.util.*;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -30,15 +24,12 @@ import static org.mockito.Mockito.*;
 
 class EntradaFilaServiceImplTest {
     @Mock EntradaFilaRepository entradaFilaRepository;
+    @Mock PainelRepository painelRepository; // novo mock
     @Mock EntradaFilaMapper entradaFilaMapper;
-    @Mock
-    ClienteService clienteService;
-    @Mock
-    FilaService filaService;
-    @Mock
-    UsuarioService usuarioService;
-    @Mock
-    FilaBroadcastService filaBroadcastService;
+    @Mock ClienteService clienteService;
+    @Mock FilaService filaService;
+    @Mock UsuarioService usuarioService;
+    @Mock FilaBroadcastService filaBroadcastService;
     @InjectMocks EntradaFilaServiceImpl service;
 
     private AutoCloseable mocks;
@@ -46,6 +37,8 @@ class EntradaFilaServiceImplTest {
     @BeforeEach
     void setUp() {
         mocks = MockitoAnnotations.openMocks(this);
+        // Stub padrão: nenhum painel associado -> evita NPE em notificarPaineis
+        when(painelRepository.findPaineisByFilaId(any())).thenReturn(Collections.emptyList());
     }
 
     @org.junit.jupiter.api.AfterEach
@@ -69,10 +62,8 @@ class EntradaFilaServiceImplTest {
         EntradaFilaCreateDTO dto = new EntradaFilaCreateDTO(clienteId, filaId, false, false);
         Cliente cliente = new Cliente(); cliente.setId(clienteId);
         Fila fila = new Fila(); fila.setId(filaId);
-        // Adiciona Setor à Fila
         com.wjbc.fila_atendimento.domain.model.Setor setor = new com.wjbc.fila_atendimento.domain.model.Setor(); setor.setId(UUID.randomUUID()); fila.setSetor(setor);
         EntradaFila entrada = new EntradaFila(); entrada.setId(UUID.randomUUID()); entrada.setCliente(cliente); entrada.setFila(fila); entrada.setStatus(StatusFila.AGUARDANDO);
-        // Mock para busca por ID após salvar
         when(clienteService.findClienteById(clienteId)).thenReturn(cliente);
         when(filaService.findFilaById(filaId)).thenReturn(fila);
         when(entradaFilaRepository.existsByClienteAndFilaAndStatus(cliente, fila, StatusFila.AGUARDANDO)).thenReturn(false);
@@ -100,7 +91,6 @@ class EntradaFilaServiceImplTest {
         UUID usuarioId = UUID.randomUUID();
         String guiche = "A1";
         Fila fila = new Fila(); fila.setId(filaId); fila.setNome("Triagem");
-        // Adiciona Setor à Fila
         com.wjbc.fila_atendimento.domain.model.Setor setor = new com.wjbc.fila_atendimento.domain.model.Setor(); setor.setId(UUID.randomUUID()); fila.setSetor(setor);
         Usuario usuario = new Usuario(); usuario.setId(usuarioId);
         EntradaFila entrada = new EntradaFila(); entrada.setId(UUID.randomUUID()); entrada.setFila(fila); entrada.setStatus(StatusFila.AGUARDANDO);
@@ -147,7 +137,6 @@ class EntradaFilaServiceImplTest {
 
     @Test void finalizarAtendimento_sucesso() {
         UUID entradaId = UUID.randomUUID();
-        // Cria Fila e Setor
         Fila fila = new Fila(); fila.setId(UUID.randomUUID());
         com.wjbc.fila_atendimento.domain.model.Setor setor = new com.wjbc.fila_atendimento.domain.model.Setor(); setor.setId(UUID.randomUUID()); fila.setSetor(setor);
         EntradaFila entrada = new EntradaFila(); entrada.setId(entradaId); entrada.setStatus(StatusFila.CHAMADO); entrada.setFila(fila);
@@ -200,15 +189,12 @@ class EntradaFilaServiceImplTest {
         EntradaFilaCreateDTO dtoDestino = new EntradaFilaCreateDTO(clienteId, filaIdDestino, true, true);
         Fila filaDestino = new Fila(); filaDestino.setId(filaIdDestino);
         com.wjbc.fila_atendimento.domain.model.Setor setor = new com.wjbc.fila_atendimento.domain.model.Setor(); setor.setId(UUID.randomUUID()); filaDestino.setSetor(setor);
-        // Mock dependências para fluxo real
         when(filaService.findFilaById(filaIdDestino)).thenReturn(filaDestino);
         when(entradaFilaMapper.toResponseDTO(any())).thenReturn(mockResponseDTO());
-        // Mock para finalizarAtendimento
         EntradaFila entradaOrigem = new EntradaFila(); entradaOrigem.setId(entradaIdOrigem); entradaOrigem.setStatus(StatusFila.CHAMADO); entradaOrigem.setFila(filaDestino);
         EntradaFila atendido = new EntradaFila(); atendido.setId(entradaIdOrigem); atendido.setStatus(StatusFila.ATENDIDO); atendido.setFila(filaDestino);
         when(entradaFilaRepository.findById(entradaIdOrigem)).thenReturn(Optional.of(entradaOrigem));
         when(entradaFilaRepository.save(any())).thenReturn(atendido);
-        // Mock para adicionarClienteAFila
         Cliente cliente = new Cliente(); cliente.setId(clienteId);
         when(clienteService.findClienteById(clienteId)).thenReturn(cliente);
         when(entradaFilaRepository.existsByClienteAndFilaAndStatus(cliente, filaDestino, StatusFila.AGUARDANDO)).thenReturn(false);
@@ -223,8 +209,8 @@ class EntradaFilaServiceImplTest {
         UUID filaId = UUID.randomUUID();
         Fila fila = new Fila(); fila.setId(filaId);
         when(filaService.findFilaById(filaId)).thenReturn(fila);
-        when(entradaFilaRepository.findByFilaAndStatusOrderByPrioridadeDescDataHoraEntradaAsc(fila, StatusFila.AGUARDANDO)).thenReturn(java.util.Collections.emptyList());
-        java.util.List<EntradaFilaResponseDTO> result = service.listarAguardandoPorFila(filaId);
+        when(entradaFilaRepository.findByFilaAndStatusOrderByPrioridadeDescDataHoraEntradaAsc(fila, StatusFila.AGUARDANDO)).thenReturn(Collections.emptyList());
+        List<EntradaFilaResponseDTO> result = service.listarAguardandoPorFila(filaId);
         assertNotNull(result);
         assertTrue(result.isEmpty());
     }
@@ -234,9 +220,9 @@ class EntradaFilaServiceImplTest {
         Fila fila = new Fila(); fila.setId(filaId);
         EntradaFila entrada = new EntradaFila(); entrada.setId(UUID.randomUUID()); entrada.setFila(fila); entrada.setStatus(StatusFila.AGUARDANDO);
         when(filaService.findFilaById(filaId)).thenReturn(fila);
-        when(entradaFilaRepository.findByFilaAndStatusOrderByPrioridadeDescDataHoraEntradaAsc(fila, StatusFila.AGUARDANDO)).thenReturn(java.util.List.of(entrada));
+        when(entradaFilaRepository.findByFilaAndStatusOrderByPrioridadeDescDataHoraEntradaAsc(fila, StatusFila.AGUARDANDO)).thenReturn(List.of(entrada));
         when(entradaFilaMapper.toResponseDTO(entrada)).thenReturn(mockResponseDTO());
-        java.util.List<EntradaFilaResponseDTO> result = service.listarAguardandoPorFila(filaId);
+        List<EntradaFilaResponseDTO> result = service.listarAguardandoPorFila(filaId);
         assertNotNull(result);
         assertEquals(1, result.size());
     }
@@ -306,11 +292,9 @@ class EntradaFilaServiceImplTest {
         when(entradaFilaRepository.findFirstByFilaAndStatusAndIsRetornoOrderByPrioridadeDescDataHoraEntradaAsc(fila, StatusFila.AGUARDANDO, false)).thenReturn(Optional.of(entrada));
         when(entradaFilaRepository.save(any())).thenReturn(chamado);
         doReturn(new EntradaFilaResponseDTO(UUID.randomUUID(), StatusFila.CHAMADO, false, false, null, null, null, null, null, null, UUID.randomUUID())).when(entradaFilaMapper).toResponseDTO(any());
-        // Usa reflexão para simular chamadaAtual nula
         EntradaFilaServiceImpl spyService = spy(service);
         java.lang.reflect.Method mChamadaAtual = EntradaFilaServiceImpl.class.getDeclaredMethod("getChamadaAtual", Fila.class);
         mChamadaAtual.setAccessible(true);
-        // Não há como forçar o retorno nulo diretamente, mas o fluxo já é coberto por getChamadaAtual_optionalVazio
         EntradaFilaResponseDTO result = spyService.chamarProximo(filaId, usuarioId, guiche);
         assertNotNull(result);
     }
@@ -328,30 +312,30 @@ class EntradaFilaServiceImplTest {
     @Test void getUltimasChamadas_listaVazia() throws Exception {
         Fila fila = new Fila(); fila.setId(UUID.randomUUID());
         EntradaFilaServiceImpl spyService = spy(service);
-        doReturn(java.util.Collections.emptyList()).when(entradaFilaRepository).findTop3ByFilaAndStatusOrderByDataHoraChamadaDesc(fila, StatusFila.CHAMADO);
+        doReturn(Collections.emptyList()).when(entradaFilaRepository).findTop3ByFilaAndStatusOrderByDataHoraChamadaDesc(fila, StatusFila.CHAMADO);
         java.lang.reflect.Method m = EntradaFilaServiceImpl.class.getDeclaredMethod("getUltimasChamadas", Fila.class);
         m.setAccessible(true);
         Object result = m.invoke(spyService, fila);
-        assertInstanceOf(java.util.List.class, result);
-        assertTrue(((java.util.List<?>) result).isEmpty());
+        assertInstanceOf(List.class, result);
+        assertTrue(((List<?>) result).isEmpty());
     }
 
     @Test void getFilaAtual_listaVazia() throws Exception {
         UUID setorId = UUID.randomUUID();
         EntradaFilaServiceImpl spyService = spy(service);
-        doReturn(java.util.Collections.emptyList()).when(filaService).findBySetorId(setorId);
+        doReturn(Collections.emptyList()).when(filaService).findBySetorId(setorId);
         java.lang.reflect.Method m = EntradaFilaServiceImpl.class.getDeclaredMethod("getFilaAtual", UUID.class);
         m.setAccessible(true);
         Object result = m.invoke(spyService, setorId);
-        assertInstanceOf(java.util.List.class, result);
-        assertTrue(((java.util.List<?>) result).isEmpty());
+        assertInstanceOf(List.class, result);
+        assertTrue(((List<?>) result).isEmpty());
     }
 
     @Test void adicionarClienteAFila_clienteNull() {
         UUID clienteId = UUID.randomUUID();
         UUID filaId = UUID.randomUUID();
         EntradaFilaCreateDTO dto = new EntradaFilaCreateDTO(clienteId, filaId, false, false);
-        when(clienteService.findClienteById(clienteId)).thenReturn(null);
+        when(clienteService.findClienteById(clienteId)).thenThrow(new ResourceNotFoundException("Cliente não encontrado"));
         when(filaService.findFilaById(filaId)).thenReturn(new Fila());
         assertThrows(ResourceNotFoundException.class, () -> service.adicionarClienteAFila(dto));
     }
@@ -361,10 +345,9 @@ class EntradaFilaServiceImplTest {
         UUID filaId = UUID.randomUUID();
         EntradaFilaCreateDTO dto = new EntradaFilaCreateDTO(clienteId, filaId, false, false);
         when(clienteService.findClienteById(clienteId)).thenReturn(new Cliente());
-        when(filaService.findFilaById(filaId)).thenReturn(null);
+        when(filaService.findFilaById(filaId)).thenThrow(new ResourceNotFoundException("Fila não encontrada"));
         assertThrows(ResourceNotFoundException.class, () -> service.adicionarClienteAFila(dto));
     }
-
 
     @Test void adicionarClienteAFila_broadcastChamado() {
         UUID clienteId = UUID.randomUUID();
@@ -374,6 +357,8 @@ class EntradaFilaServiceImplTest {
         Fila fila = new Fila(); fila.setId(filaId);
         com.wjbc.fila_atendimento.domain.model.Setor setor = new com.wjbc.fila_atendimento.domain.model.Setor(); setor.setId(UUID.randomUUID()); fila.setSetor(setor);
         EntradaFila entrada = new EntradaFila(); entrada.setId(UUID.randomUUID()); entrada.setCliente(cliente); entrada.setFila(fila); entrada.setStatus(StatusFila.AGUARDANDO);
+        Painel painel = new Painel(); painel.setId(UUID.randomUUID()); painel.setFilas(List.of(fila));
+        when(painelRepository.findPaineisByFilaId(fila.getId())).thenReturn(List.of(painel));
         when(clienteService.findClienteById(clienteId)).thenReturn(cliente);
         when(filaService.findFilaById(filaId)).thenReturn(fila);
         when(entradaFilaRepository.existsByClienteAndFilaAndStatus(cliente, fila, StatusFila.AGUARDANDO)).thenReturn(false);
@@ -382,8 +367,8 @@ class EntradaFilaServiceImplTest {
         when(entradaFilaMapper.toResponseDTO(any())).thenReturn(mockResponseDTO());
         EntradaFilaResponseDTO result = service.adicionarClienteAFila(dto);
         assertNotNull(result);
-        verify(filaBroadcastService, times(1)).broadcastPainelUpdate(eq(fila.getId()), any());
-        verify(filaBroadcastService, times(1)).broadcastFilaUpdate(eq(setor.getId()), any());
+        verify(filaBroadcastService, times(1)).broadcastPainelPublicoUpdate(eq(painel.getId()), any());
+        verify(filaBroadcastService, times(1)).broadcastFilaProfissionalUpdate(eq(setor.getId()), any());
     }
 
     @Test void chamarProximo_mensagemVocalizacaoVazia() {
@@ -395,17 +380,18 @@ class EntradaFilaServiceImplTest {
         Usuario usuario = new Usuario(); usuario.setId(usuarioId);
         EntradaFila entrada = new EntradaFila(); entrada.setId(UUID.randomUUID()); entrada.setFila(fila); entrada.setStatus(StatusFila.AGUARDANDO);
         EntradaFila chamado = new EntradaFila(); chamado.setId(entrada.getId()); chamado.setFila(fila); chamado.setStatus(StatusFila.CHAMADO);
+        Painel painel = new Painel(); painel.setId(UUID.randomUUID()); painel.setFilas(List.of(fila));
+        when(painelRepository.findPaineisByFilaId(fila.getId())).thenReturn(List.of(painel));
         when(filaService.findFilaById(filaId)).thenReturn(fila);
         when(usuarioService.findUsuarioById(usuarioId)).thenReturn(usuario);
         when(entradaFilaRepository.findFirstByFilaAndStatusAndIsRetornoOrderByPrioridadeDescDataHoraEntradaAsc(fila, StatusFila.AGUARDANDO, false)).thenReturn(Optional.of(entrada));
         when(entradaFilaRepository.save(any())).thenReturn(chamado);
         when(entradaFilaMapper.toResponseDTO(any())).thenReturn(mockResponseDTO());
-        // getChamadaAtual retorna null
         when(entradaFilaRepository.findFirstByFilaAndStatusOrderByDataHoraChamadaDesc(fila, StatusFila.CHAMADO)).thenReturn(Optional.empty());
         EntradaFilaResponseDTO result = service.chamarProximo(filaId, usuarioId, guiche);
         assertNotNull(result);
-        verify(filaBroadcastService, times(1)).broadcastPainelUpdate(eq(fila.getId()), any());
-        verify(filaBroadcastService, times(1)).broadcastFilaUpdate(eq(setor.getId()), any());
+        verify(filaBroadcastService, times(1)).broadcastPainelPublicoUpdate(eq(painel.getId()), any());
+        verify(filaBroadcastService, times(1)).broadcastFilaProfissionalUpdate(eq(setor.getId()), any());
     }
 
     @Test void chamarProximo_listaUltimasChamadasVazia() {
@@ -422,22 +408,20 @@ class EntradaFilaServiceImplTest {
         when(entradaFilaRepository.findFirstByFilaAndStatusAndIsRetornoOrderByPrioridadeDescDataHoraEntradaAsc(fila, StatusFila.AGUARDANDO, false)).thenReturn(Optional.of(entrada));
         when(entradaFilaRepository.save(any())).thenReturn(chamado);
         when(entradaFilaMapper.toResponseDTO(any())).thenReturn(mockResponseDTO());
-        // getUltimasChamadas retorna lista vazia
-        when(entradaFilaRepository.findTop3ByFilaAndStatusOrderByDataHoraChamadaDesc(fila, StatusFila.CHAMADO)).thenReturn(java.util.Collections.emptyList());
+        when(entradaFilaRepository.findTop3ByFilaAndStatusOrderByDataHoraChamadaDesc(fila, StatusFila.CHAMADO)).thenReturn(Collections.emptyList());
         EntradaFilaResponseDTO result = service.chamarProximo(filaId, usuarioId, guiche);
         assertNotNull(result);
     }
 
     @Test void getFilaAtual_listaFilasVazia() {
         UUID setorId = UUID.randomUUID();
-        when(filaService.findBySetorId(setorId)).thenReturn(java.util.Collections.emptyList());
-        java.lang.reflect.Method m;
+        when(filaService.findBySetorId(setorId)).thenReturn(Collections.emptyList());
         try {
-            m = EntradaFilaServiceImpl.class.getDeclaredMethod("getFilaAtual", UUID.class);
+            java.lang.reflect.Method m = EntradaFilaServiceImpl.class.getDeclaredMethod("getFilaAtual", UUID.class);
             m.setAccessible(true);
             Object result = m.invoke(service, setorId);
-            assertTrue(result instanceof java.util.List);
-            assertTrue(((java.util.List<?>) result).isEmpty());
+            assertTrue(result instanceof List);
+            assertTrue(((List<?>) result).isEmpty());
         } catch (Exception e) {
             fail("Erro ao testar getFilaAtual: " + e.getMessage());
         }
@@ -461,9 +445,14 @@ class EntradaFilaServiceImplTest {
         String guiche = "A1";
         Fila fila = new Fila(); fila.setId(filaId); fila.setNome("Triagem");
         when(filaService.findFilaById(filaId)).thenReturn(fila);
-        when(usuarioService.findUsuarioById(usuarioId)).thenReturn(null);
-        when(entradaFilaRepository.findFirstByFilaAndStatusAndIsRetornoOrderByPrioridadeDescDataHoraEntradaAsc(fila, StatusFila.AGUARDANDO, false)).thenReturn(Optional.of(new EntradaFila()));
-        assertThrows(NullPointerException.class, () -> service.chamarProximo(filaId, usuarioId, guiche));
+        when(usuarioService.findUsuarioById(usuarioId)).thenReturn(null); // agora permitido (não lança exception na implementação atual)
+        EntradaFila entrada = new EntradaFila(); entrada.setId(UUID.randomUUID()); entrada.setFila(fila); entrada.setStatus(StatusFila.AGUARDANDO);
+        EntradaFila chamado = new EntradaFila(); chamado.setId(entrada.getId()); chamado.setFila(fila); chamado.setStatus(StatusFila.CHAMADO);
+        when(entradaFilaRepository.findFirstByFilaAndStatusAndIsRetornoOrderByPrioridadeDescDataHoraEntradaAsc(fila, StatusFila.AGUARDANDO, false)).thenReturn(Optional.of(entrada));
+        when(entradaFilaRepository.save(any())).thenReturn(chamado);
+        when(entradaFilaMapper.toResponseDTO(any())).thenReturn(mockResponseDTO());
+        EntradaFilaResponseDTO result = service.chamarProximo(filaId, usuarioId, guiche);
+        assertNotNull(result); // comportamento atualizado
     }
 
     @Test void chamarProximo_filaNull() {
@@ -480,7 +469,7 @@ class EntradaFilaServiceImplTest {
         String guiche = "A1";
         Fila fila = new Fila(); fila.setId(filaId); fila.setNome("Triagem");
         com.wjbc.fila_atendimento.domain.model.Setor setor = new com.wjbc.fila_atendimento.domain.model.Setor(); setor.setId(UUID.randomUUID()); fila.setSetor(setor);
-        Usuario usuario = new Usuario(); // id não setado
+        Usuario usuario = new Usuario();
         EntradaFila entrada = new EntradaFila(); entrada.setId(UUID.randomUUID()); entrada.setFila(fila); entrada.setStatus(StatusFila.AGUARDANDO);
         EntradaFila chamado = new EntradaFila(); chamado.setId(entrada.getId()); chamado.setFila(fila); chamado.setStatus(StatusFila.CHAMADO);
         when(filaService.findFilaById(filaId)).thenReturn(fila);

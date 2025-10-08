@@ -4,7 +4,6 @@ import java.util.UUID;
 
 public interface FilaBroadcastService {
 
-    void broadcastPainelUpdate(UUID filaId, Object payload);
-    void broadcastFilaUpdate(UUID setorId, Object payload);
-
+    void broadcastPainelPublicoUpdate(UUID painelId, Object payload);
+    void broadcastFilaProfissionalUpdate(UUID setorId, Object payload);
 }

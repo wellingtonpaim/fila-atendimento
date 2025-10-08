@@ -65,4 +65,20 @@ public class PainelController {
         painelService.desativar(id);
         return ResponseEntity.ok(new ApiResponse<>(true, "Painel desativado com sucesso", null));
     }
+
+    @PostMapping("/{painelId}/filas/{filaId}")
+    public ResponseEntity<ApiResponse<PainelResponseDTO>> adicionarFilaAoPainel(
+            @PathVariable UUID painelId,
+            @PathVariable UUID filaId) {
+        PainelResponseDTO response = painelService.adicionarFilaAoPainel(painelId, filaId);
+        return ResponseEntity.ok(new ApiResponse<>(true, "Fila adicionada ao painel com sucesso", response));
+    }
+
+    @DeleteMapping("/{painelId}/filas/{filaId}")
+    public ResponseEntity<ApiResponse<PainelResponseDTO>> removerFilaDoPainel(
+            @PathVariable UUID painelId,
+            @PathVariable UUID filaId) {
+        PainelResponseDTO response = painelService.removerFilaDoPainel(painelId, filaId);
+        return ResponseEntity.ok(new ApiResponse<>(true, "Fila removida do painel com sucesso", response));
+    }
 }

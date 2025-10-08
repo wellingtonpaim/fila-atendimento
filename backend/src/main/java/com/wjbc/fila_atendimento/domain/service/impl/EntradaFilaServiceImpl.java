@@ -9,11 +9,9 @@ import com.wjbc.fila_atendimento.domain.enumeration.StatusFila;
 import com.wjbc.fila_atendimento.domain.exception.BusinessException;
 import com.wjbc.fila_atendimento.domain.exception.ResourceNotFoundException;
 import com.wjbc.fila_atendimento.domain.mapper.EntradaFilaMapper;
-import com.wjbc.fila_atendimento.domain.model.Cliente;
-import com.wjbc.fila_atendimento.domain.model.EntradaFila;
-import com.wjbc.fila_atendimento.domain.model.Fila;
-import com.wjbc.fila_atendimento.domain.model.Usuario;
+import com.wjbc.fila_atendimento.domain.model.*;
 import com.wjbc.fila_atendimento.domain.repository.EntradaFilaRepository;
+import com.wjbc.fila_atendimento.domain.repository.PainelRepository;
 import com.wjbc.fila_atendimento.domain.service.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -31,6 +29,7 @@ import java.util.stream.Collectors;
 public class EntradaFilaServiceImpl implements EntradaFilaService {
 
     private final EntradaFilaRepository entradaFilaRepository;
+    private final PainelRepository painelRepository;
     private final EntradaFilaMapper entradaFilaMapper;
     private final ClienteService clienteService;
     private final FilaService filaService;
@@ -198,33 +197,40 @@ public class EntradaFilaServiceImpl implements EntradaFilaService {
     }
 
     private void notificarPaineis(Fila fila, boolean isNovaChamada) {
-        ChamadaDTO chamadaAtual = getChamadaAtual(fila);
-        List<ChamadaDTO> ultimasChamadas = getUltimasChamadas(fila);
+        // 1. Notificar os painéis públicos associados a esta fila
+        List<Painel> paineisAfetados = painelRepository.findPaineisByFilaId(fila.getId());
 
-        String mensagemVocalizacao = "";
-        if (isNovaChamada && chamadaAtual != null && chamadaAtual.nomePaciente() != null && !chamadaAtual.nomePaciente().isBlank()
-                && chamadaAtual.guicheOuSala() != null && !chamadaAtual.guicheOuSala().isBlank()) {
-            mensagemVocalizacao = chamadaAtual.nomePaciente() + ", compareça a " + chamadaAtual.guicheOuSala() + "!";
+        for (Painel painel : paineisAfetados) {
+            ChamadaDTO chamadaAtual = getChamadaAtual(fila);
+            List<ChamadaDTO> ultimasChamadas = getUltimasChamadas(fila);
+
+            String mensagemVocalizacao = "";
+            if (isNovaChamada && chamadaAtual != null && chamadaAtual.nomePaciente() != null && !chamadaAtual.nomePaciente().isBlank()
+                    && chamadaAtual.guicheOuSala() != null && !chamadaAtual.guicheOuSala().isBlank()) {
+                mensagemVocalizacao = chamadaAtual.nomePaciente() + ", compareça a " + chamadaAtual.guicheOuSala() + "!";
+            }
+            boolean habilitarSom = !mensagemVocalizacao.isBlank();
+
+            PainelPublicoDTO painelPublicoPayload = new PainelPublicoDTO(
+                    fila.getId(), // Enviamos o ID da fila que foi atualizada
+                    chamadaAtual,
+                    ultimasChamadas,
+                    mensagemVocalizacao,
+                    painelTempoExibicaoSegundos,
+                    painelRepeticoes,
+                    painelIntervaloSegundos,
+                    habilitarSom
+            );
+
+            // Envia para o tópico do PAINEL específico
+            filaBroadcastService.broadcastPainelPublicoUpdate(painel.getId(), painelPublicoPayload);
         }
-        boolean habilitarSom = !mensagemVocalizacao.isBlank();
 
-        PainelPublicoDTO painelPublicoPayload = new PainelPublicoDTO(
-                fila.getId(),
-                chamadaAtual,
-                ultimasChamadas,
-                mensagemVocalizacao,
-                painelTempoExibicaoSegundos,
-                painelRepeticoes,
-                painelIntervaloSegundos,
-                habilitarSom
-        );
-
+        // 2. Notificar o painel profissional (sem alteração na lógica)
         PainelProfissionalDTO painelProfissionalPayload = new PainelProfissionalDTO(
                 fila.getSetor().getId(),
                 getFilaAtual(fila.getSetor().getId())
         );
-
-        filaBroadcastService.broadcastPainelUpdate(fila.getId(), painelPublicoPayload);
-        filaBroadcastService.broadcastFilaUpdate(fila.getSetor().getId(), painelProfissionalPayload);
+        filaBroadcastService.broadcastFilaProfissionalUpdate(fila.getSetor().getId(), painelProfissionalPayload);
     }
 }

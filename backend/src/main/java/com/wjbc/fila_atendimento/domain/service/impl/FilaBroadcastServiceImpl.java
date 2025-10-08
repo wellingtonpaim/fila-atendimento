@@ -14,12 +14,13 @@ public class FilaBroadcastServiceImpl implements FilaBroadcastService {
     private final FilaWebSocketController filaWebSocketController;
 
     @Override
-    public void broadcastPainelUpdate(UUID filaId, Object payload) {
-        filaWebSocketController.sendPainelUpdate(filaId, payload);
+    public void broadcastPainelPublicoUpdate(UUID painelId, Object payload) {
+        filaWebSocketController.sendPainelPublicoUpdate(painelId, payload);
     }
 
     @Override
-    public void broadcastFilaUpdate(UUID setorId, Object payload) {
-        filaWebSocketController.sendFilaUpdate(setorId, payload);
+    public void broadcastFilaProfissionalUpdate(UUID setorId, Object payload) {
+        filaWebSocketController.sendFilaProfissionalUpdate(setorId, payload);
     }
+
 }
