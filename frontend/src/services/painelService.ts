@@ -23,10 +23,21 @@ class PainelService {
     }
 
     /**
-     * Busca painel por ID
+     * Lista painéis por unidade com paginação
      */
-    async buscarPorId(id: string): Promise<ApiResponse<PainelResponseDTO>> {
-        const response = await fetch(`${API_BASE_URL}/api/paineis/${id}`, {
+    async listarPorUnidadePaginado(unidadeId: string, page: number, size: number): Promise<ApiResponse<PainelResponseDTO[]>> {
+        const response = await fetch(`${API_BASE_URL}/api/paineis/unidade/${unidadeId}?page=${page}&size=${size}`, {
+            headers: authService.getAuthHeaders(),
+        });
+        if (!response.ok) throw new Error('Falha ao buscar painéis por unidade');
+        return response.json();
+    }
+
+    /**
+     * Busca painel por ID (requer unidadeAtendimentoId)
+     */
+    async buscarPorId(id: string, unidadeAtendimentoId: string): Promise<ApiResponse<PainelResponseDTO>> {
+        const response = await fetch(`${API_BASE_URL}/api/paineis/${id}?unidadeAtendimentoId=${encodeURIComponent(unidadeAtendimentoId)}`, {
             headers: authService.getAuthHeaders(),
         });
         if (!response.ok) throw new Error('Falha ao buscar painel');
