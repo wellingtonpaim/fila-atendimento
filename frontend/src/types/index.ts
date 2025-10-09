@@ -19,6 +19,7 @@ export enum UF {
   SP = 'SP', SE = 'SE', TO = 'TO'
 }
 
+
 // ===== API Response wrapper (padrão backend) =====
 export interface ApiResponse<T> {
   success: boolean;
@@ -27,6 +28,7 @@ export interface ApiResponse<T> {
   errors?: string[];
   timestamp: string;
 }
+
 
 // Interfaces para DTOs
 export interface Telefone {
@@ -45,6 +47,7 @@ export interface Endereco {
   uf?: UF;
   enderecoFormatado?: string;
 }
+
 
 // DTOs de criação
 export interface FilaCreateDTO {
@@ -79,18 +82,19 @@ export interface ClienteCreateDTO {
   endereco?: Endereco;
 }
 
-// ===== NOVOS DTOs DE CRIAÇÃO =====
 export interface PainelCreateDTO {
-  descricao: string;
-  unidadeAtendimentoId: string; // UUID
+    descricao: string;
+    unidadeAtendimentoId: string;
+    filasIds?: string[];
 }
 
 export interface EntradaFilaCreateDTO {
-  clienteId: string; // UUID
-  filaId: string; // UUID
-  prioridade: boolean;
-  isRetorno?: boolean;
+    clienteId: string;
+    filaId: string;
+    prioridade: boolean;
+    isRetorno?: boolean;
 }
+
 
 // DTOs de resposta
 export interface SetorResponseDTO {
@@ -129,12 +133,27 @@ export interface ClienteResponseDTO {
   endereco?: Endereco;
 }
 
-// ===== NOVO DTO DE RESPOSTA =====
 export interface PainelResponseDTO {
-  id: string; // UUID
-  descricao: string;
-  unidadeAtendimentoId: string; // UUID
+    id: string;
+    descricao: string;
+    unidadeAtendimentoId: string;
+    filasIds: string[];
 }
+
+export interface EntradaFilaResponseDTO {
+    id: string;
+    status: 'AGUARDANDO' | 'CHAMADO' | 'ATENDIDO' | 'CANCELADO';
+    prioridade: boolean;
+    isRetorno?: boolean;
+    dataHoraEntrada: string;
+    dataHoraChamada?: string;
+    dataHoraSaida?: string;
+    guicheOuSalaAtendimento?: string;
+    cliente: ClienteResponseDTO;
+    fila: FilaResponseDTO;
+    usuarioResponsavelId?: string;
+}
+
 
 // DTOs de atualização
 export interface FilaUpdateDTO {
@@ -168,28 +187,12 @@ export interface ClienteUpdateDTO {
   endereco?: Endereco;
 }
 
-// ===== NOVO DTO DE ATUALIZAÇÃO =====
 export interface PainelUpdateDTO {
-  descricao?: string;
-  unidadeAtendimentoId?: string; // UUID
+    descricao: string;
+    unidadeAtendimentoId: string;
+    filasIds: string[];
 }
 
-
-// Outros tipos que podem existir
-
-export interface EntradaFilaResponseDTO {
-  id: string;
-  status: 'AGUARDANDO' | 'CHAMADO' | 'ATENDIDO' | 'CANCELADO';
-  prioridade: boolean;
-  isRetorno?: boolean;
-  dataHoraEntrada: string;
-  dataHoraChamada?: string;
-  dataHoraSaida?: string;
-  guicheOuSalaAtendimento?: string;
-  cliente: ClienteResponseDTO;
-  fila: FilaResponseDTO;
-  usuarioResponsavelId?: string;
-}
 
 // ====== EMAIL ======
 export interface EmailRequestDTO {
@@ -199,19 +202,19 @@ export interface EmailRequestDTO {
     from: string;
 }
 
+
 // ====== WEBSOCKET ======
 export interface ChamadaWebSocket {
-    entradaFilaId: string; // UUID
+    entradaFilaId: string;
     clienteNome: string;
     senha: string;
-    filaId: string; // UUID
+    filaId: string;
     filaNome: string;
     setorNome: string;
     guicheOuSalaAtendimento: string;
     timestamp: string; // ISO DateTime
 }
 
-// ===== NOVOS TIPOS PARA PAINEL PÚBLICO (conforme backend atual) =====
 export interface PainelPublicoChamadaDTO {
   nomePaciente: string;
   guicheOuSala: string;
@@ -232,7 +235,7 @@ export interface PainelPublicoDTO {
 // ====== TIPOS NOVOS (públicos/auxiliares) ======
 // Unidade pública para tela de login (endpoint público)
 export interface UnidadeAtendimentoPublicDTO {
-  id: string; // UUID
+  id: string;
   nome: string;
 }
 
@@ -240,88 +243,12 @@ export interface UnidadeAtendimentoPublicDTO {
 export interface LoginRequest {
   username: string;
   password: string;
-  unidadeAtendimentoId: string; // UUID
+  unidadeAtendimentoId: string;
 }
 
-// ====== TIPOS LEGADOS (para compatibilidade) ======
-// Mantendo para não quebrar código existente, mas marcados como deprecated
-/** @deprecated Use UsuarioResponseDTO instead */
-export interface Usuario {
-    id: number;
-    nome: string;
-    email: string;
-    categoria: 'ADMINISTRADOR' | 'USUARIO';
-    ativo: boolean;
-    unidadesAtendimento: UnidadeAtendimento[];
-}
-
-/** @deprecated Use UnidadeAtendimentoResponseDTO instead */
-export interface UnidadeAtendimento {
-    id: number;
-    nome: string;
-    endereco: string;
-    telefone: string;
-    email: string;
-    ativo: boolean;
-}
-
-/** @deprecated Use SetorResponseDTO instead */
-export interface Setor {
-    id: number;
-    nome: string;
-    descricao: string;
-    cor: string;
-    unidadeAtendimento: UnidadeAtendimento;
-    ativo: boolean;
-}
-
-/** @deprecated Use FilaResponseDTO instead */
-export interface Fila {
-    id: number;
-    nome: string;
-    setor: Setor;
-    prioridade: number;
-    tempoEstimadoAtendimento: number;
-    ativo: boolean;
-}
-
-/** @deprecated Use ClienteResponseDTO instead */
-export interface Cliente {
-    id: number;
-    nome: string;
-    cpf: string;
-    telefone: string;
-    email: string;
-    endereco: string;
-    ativo: boolean;
-}
-
-/** @deprecated Use EntradaFilaResponseDTO instead */
-export interface EntradaFila {
-    id: number;
-    cliente: Cliente;
-    fila: Fila;
-    senha: string;
-    horarioEntrada: string;
-    horarioChamada?: string;
-    horarioFinalizacao?: string;
-    status: 'AGUARDANDO' | 'EM_ATENDIMENTO' | 'FINALIZADO' | 'CANCELADO';
-    prioridade: boolean;
-    observacoes?: string;
-}
-
-/** @deprecated Use PainelResponseDTO instead */
-export interface Painel {
-    id: number;
-    nome: string;
-    descricao: string;
-    unidadeAtendimento: UnidadeAtendimento;
-    filasVinculadas: Fila[];
-    ativo: boolean;
-}
-
-/** @deprecated Use UnidadeAtendimentoPublicDTO instead */
-export interface UnidadeAtendimentoLogin {
+// DTO público para obter a configuração de um painel
+export interface PainelPublicoConfigDTO {
     id: string;
-    nome: string;
+    descricao: string;
+    filas: FilaResponseDTO[];
 }

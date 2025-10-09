@@ -5,12 +5,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Edit, Trash2, UserPlus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import SearchBar from '@/components/SearchBar';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Checkbox } from '@/components/ui/checkbox';
 
 // Services
 import { filaService } from '@/services/filaService';
@@ -18,1681 +21,1233 @@ import { setorService } from '@/services/setorService';
 import { unidadeService } from '@/services/unidadeService';
 import { usuarioService } from '@/services/usuarioService';
 import { clienteService } from '@/services/clienteService';
-import { authService } from '@/services/authService';
+import { painelService } from '@/services/painelService'; // Importado
+import { useAuth } from '@/contexts/AuthContext';
 
 // Types
 import {
-  FilaCreateDTO,
-  FilaResponseDTO,
-  SetorCreateDTO,
-  SetorResponseDTO,
-  UnidadeAtendimentoCreateDTO,
-  UnidadeAtendimentoResponseDTO,
-  UsuarioCreateDTO,
-  UsuarioResponseDTO,
-  CategoriaUsuario,
-  TipoTelefone,
-  Telefone,
-  ClienteCreateDTO,
-  ClienteResponseDTO,
-  Endereco
+    FilaResponseDTO, SetorResponseDTO,
+    UnidadeAtendimentoResponseDTO,
+    UsuarioResponseDTO, CategoriaUsuario,
+    ClienteResponseDTO,
+    PainelResponseDTO, UF
 } from '@/types';
 
 interface FormErrors { [key: string]: string }
 
-// Helper: base URL da API
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8899';
-
-// Helper: metadados de paginação
-interface PaginationMeta {
-  totalCount: number;
-  totalPages: number;
-  page: number; // 0-based vindo do backend
-  pageSize: number;
-}
-
-// Ordenação genérica
-type SortState = { field: string; dir: 'asc' | 'desc' };
-
-// Util: máscara de CEP 00000-000
-const formatCepMask = (value: string): string => {
-  const digits = String(value || '').replace(/\D/g, '').slice(0, 8);
-  return digits.replace(/(\d{5})(\d)/, '$1-$2');
-};
-
 const Gestao = () => {
-  const { toast } = useToast();
+    const { toast } = useToast();
+    const { selectedUnitId } = useAuth();
 
-  // Controle da aba ativa (persistida)
-  const [activeTab, setActiveTab] = useState<string>(() => {
-    const saved = typeof window !== 'undefined' ? localStorage.getItem('gestao_active_tab') : null;
-    const allowed = new Set(['filas','setores','unidades','usuarios','clientes']);
-    return saved && allowed.has(saved) ? saved : 'filas';
-  });
-  useEffect(() => { try { localStorage.setItem('gestao_active_tab', activeTab); } catch {} }, [activeTab]);
-
-  // ===== Dados =====
-  const [filas, setFilas] = useState<FilaResponseDTO[]>([]);
-  const [setores, setSetores] = useState<SetorResponseDTO[]>([]);
-  const [unidades, setUnidades] = useState<UnidadeAtendimentoResponseDTO[]>([]);
-  const [usuarios, setUsuarios] = useState<UsuarioResponseDTO[]>([]);
-  const [clientes, setClientes] = useState<ClienteResponseDTO[]>([]);
-
-  // ===== Estados globais =====
-  const [loading, setLoading] = useState(false);
-
-  // ===== Modais =====
-  const [filaModalOpen, setFilaModalOpen] = useState(false);
-  const [setorModalOpen, setSetorModalOpen] = useState(false);
-  const [unidadeModalOpen, setUnidadeModalOpen] = useState(false);
-  const [usuarioModalOpen, setUsuarioModalOpen] = useState(false);
-  const [clienteModalOpen, setClienteModalOpen] = useState(false);
-
-  // ===== Edição =====
-  const [editingFila, setEditingFila] = useState<FilaResponseDTO | null>(null);
-  const [editingSetor, setEditingSetor] = useState<SetorResponseDTO | null>(null);
-  const [editingUnidade, setEditingUnidade] = useState<UnidadeAtendimentoResponseDTO | null>(null);
-  const [editingUsuario, setEditingUsuario] = useState<UsuarioResponseDTO | null>(null);
-  const [editingCliente, setEditingCliente] = useState<ClienteResponseDTO | null>(null);
-
-  // ===== Formulários =====
-  const [filaForm, setFilaForm] = useState<FilaCreateDTO>({ nome: '', setorId: '', unidadeAtendimentoId: '' });
-  const [setorForm, setSetorForm] = useState<SetorCreateDTO>({ nome: '' });
-  const [unidadeForm, setUnidadeForm] = useState<UnidadeAtendimentoCreateDTO>({
-    nome: '',
-    endereco: { logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', cep: '', uf: undefined },
-    telefones: []
-  });
-  const [usuarioForm, setUsuarioForm] = useState<UsuarioCreateDTO>({
-    nomeUsuario: '', email: '', senha: '', categoria: CategoriaUsuario.USUARIO, unidadesIds: []
-  });
-  const [clienteForm, setClienteForm] = useState<ClienteCreateDTO>({
-    cpf: '', nome: '', email: '',
-    telefones: [],
-    endereco: { logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', cep: '', uf: undefined }
-  });
-
-  // Telefones temporários
-  const [telefoneTemp, setTelefoneTemp] = useState<Telefone>({ tipo: TipoTelefone.FIXO, ddd: 11, numero: 0 });
-  const [telefoneClienteTemp, setTelefoneClienteTemp] = useState<Telefone>({ tipo: TipoTelefone.CELULAR, ddd: 11, numero: 0 });
-
-  // Erros de validação
-  const [errors, setErrors] = useState<FormErrors>({});
-
-  // ===== Paginação/Busca por aba =====
-  // Filas
-  const [filasPage, setFilasPage] = useState(0);
-  const [filasSize, setFilasSize] = useState(10);
-  const [filasMeta, setFilasMeta] = useState<PaginationMeta | null>(null);
-  const [filasUnidadeId, setFilasUnidadeId] = useState<string>('');
-  const [filasSearchType, setFilasSearchType] = useState<'unidade'|'nome'|'setor'>('unidade');
-  const [filasSearchValue, setFilasSearchValue] = useState('');
-  const [filasSetorId, setFilasSetorId] = useState<string>('');
-
-  // Setores
-  const [setoresPage, setSetoresPage] = useState(0);
-  const [setoresSize, setSetoresSize] = useState(10);
-  const [setoresMeta, setSetoresMeta] = useState<PaginationMeta | null>(null);
-  const [setoresSearchType, setSetoresSearchType] = useState<'todos'|'nome'>('todos');
-  const [setoresSearchValue, setSetoresSearchValue] = useState('');
-
-  // Unidades
-  const [unidadesPage, setUnidadesPage] = useState(0);
-  const [unidadesSize, setUnidadesSize] = useState(10);
-  const [unidadesMeta, setUnidadesMeta] = useState<PaginationMeta | null>(null);
-  const [unidadesSearchType, setUnidadesSearchType] = useState<'todos'|'nome'>('todos');
-  const [unidadesSearchValue, setUnidadesSearchValue] = useState('');
-
-  // Usuários
-  const [usuariosPage, setUsuariosPage] = useState(0);
-  const [usuariosSize, setUsuariosSize] = useState(10);
-  const [usuariosMeta, setUsuariosMeta] = useState<PaginationMeta | null>(null);
-  const [usuariosSearchType, setUsuariosSearchType] = useState<'todos'|'email'|'nome'>('todos');
-  const [usuariosSearchValue, setUsuariosSearchValue] = useState('');
-
-  // Clientes
-  const [clientesPage, setClientesPage] = useState(0);
-  const [clientesSize, setClientesSize] = useState(10);
-  const [clientesMeta, setClientesMeta] = useState<PaginationMeta | null>(null);
-  const [clientesSearchType, setClientesSearchType] = useState<'todos'|'nome'|'cpf'>('todos');
-  const [clientesSearchValue, setClientesSearchValue] = useState('');
-
-  // Opções completas para selects (não paginadas)
-  const [unidadeOptions, setUnidadeOptions] = useState<UnidadeAtendimentoResponseDTO[]>([]);
-  const [setorOptions, setSetorOptions] = useState<SetorResponseDTO[]>([]);
-
-  // ===== Ordenação por aba =====
-  const [filasSort, setFilasSort] = useState<SortState>({ field: 'nome', dir: 'asc' });
-  const [setoresSort, setSetoresSort] = useState<SortState>({ field: 'nome', dir: 'asc' });
-  const [unidadesSort, setUnidadesSort] = useState<SortState>({ field: 'nome', dir: 'asc' });
-  const [usuariosSort, setUsuariosSort] = useState<SortState>({ field: 'nomeUsuario', dir: 'asc' });
-  const [clientesSort, setClientesSort] = useState<SortState>({ field: 'nome', dir: 'asc' });
-
-  const toggleSort = (current: SortState, field: string, setter: (s: SortState)=>void) => {
-    if (current.field !== field) setter({ field, dir: 'asc' });
-    else setter({ field, dir: current.dir === 'asc' ? 'desc' : 'asc' });
-  };
-
-  function applySort<T>(items: T[], sort: SortState, getter: (item: T, field: string)=>any): T[] {
-    const arr = [...items];
-    const dir = sort.dir === 'asc' ? 1 : -1;
-    arr.sort((a,b) => {
-      const va = getter(a, sort.field);
-      const vb = getter(b, sort.field);
-      const sa = (va ?? '').toString().toLowerCase();
-      const sb = (vb ?? '').toString().toLowerCase();
-      if (sa < sb) return -1*dir; if (sa > sb) return 1*dir; return 0;
+    const [activeTab, setActiveTab] = useState<string>(() => {
+        const saved = typeof window !== 'undefined' ? localStorage.getItem('gestao_active_tab') : null;
+        const allowed = new Set(['filas', 'setores', 'unidades', 'usuarios', 'clientes', 'paineis']);
+        return saved && allowed.has(saved) ? saved : 'filas';
     });
-    return arr;
-  }
+    useEffect(() => { try { localStorage.setItem('gestao_active_tab', activeTab); } catch { } }, [activeTab]);
 
-  async function fetchPageData<T>(path: string, page: number, size: number): Promise<T[]> {
-    const url = new URL(`${API_BASE_URL}${path}`);
-    url.searchParams.set('page', String(page));
-    url.searchParams.set('size', String(size));
-    const res = await fetch(url.toString(), { headers: authService.getAuthHeaders() });
-    if (!res.ok) throw new Error(res.statusText);
-    const body = await res.json();
-    return (body?.data || []) as T[];
-  }
+    // ===== Dados =====
+    const [filas, setFilas] = useState<FilaResponseDTO[]>([]);
+    const [setores, setSetores] = useState<SetorResponseDTO[]>([]);
+    const [unidades, setUnidades] = useState<UnidadeAtendimentoResponseDTO[]>([]);
+    const [usuarios, setUsuarios] = useState<UsuarioResponseDTO[]>([]);
+    const [clientes, setClientes] = useState<ClienteResponseDTO[]>([]);
+    const [paineis, setPaineis] = useState<PainelResponseDTO[]>([]); // Novo
 
-  async function getAllItems<T extends { id?: string }>(path: string, fetchSize = 200, maxLoops = 50): Promise<T[]> {
-    const all: T[] = [];
-    const seen = new Set<string>();
-    let page = 0;
-    let lastFirstId: string | null = null;
-    while (page < maxLoops) {
-      const batch = await fetchPageData<T>(path, page, fetchSize);
-      if (!Array.isArray(batch) || batch.length === 0) break;
-      // Se servidor ignorar paginação e devolver sempre tudo, evite loop infinito
-      const firstId = (batch[0] as any)?.id || `${JSON.stringify(batch[0])}`;
-      if (page > 0 && firstId && firstId === lastFirstId) break;
-      lastFirstId = firstId || null;
+    const [loading, setLoading] = useState(false);
 
-      for (const item of batch) {
-        const id = (item as any)?.id ? String((item as any).id) : JSON.stringify(item);
-        if (!seen.has(id)) { seen.add(id); all.push(item); }
-      }
+    // ===== Modais e Edição =====
+    const [modalOpen, setModalOpen] = useState<string | null>(null);
+    const [editingItem, setEditingItem] = useState<any | null>(null);
+    const [formData, setFormData] = useState<any>({});
 
-      if (batch.length < fetchSize) break;
-      page += 1;
-    }
-    return all;
-  }
+    // Opções para Selects
+    const [unidadeOptions, setUnidadeOptions] = useState<UnidadeAtendimentoResponseDTO[]>([]);
+    const [setorOptions, setSetorOptions] = useState<SetorResponseDTO[]>([]);
+    const [filaOptions, setFilaOptions] = useState<FilaResponseDTO[]>([]); // Para modal de painel
 
-  // Agregador para buscar filas por nome/setor dentro da unidade
-  const loadFilasByNomeOuSetor = async ({ page = filasPage, size = filasSize, unidadeId, nome, setorId }:
-    { page?: number; size?: number; unidadeId: string; nome?: string; setorId?: string; }) => {
-    if (!unidadeId) { setFilas([]); setFilasMeta({ totalCount: 0, totalPages: 1, page: 0, pageSize: size }); return; }
-    const fetchSize = 50; // reduzir chamadas
-    let all: FilaResponseDTO[] = [];
-    try {
-      const first = await getPaginated<FilaResponseDTO[]>(`/api/filas/unidade/${unidadeId}`, { page: 0, size: fetchSize });
-      all = [...(first.data || [])];
-      const totalBackendPages = first.meta?.totalPages ?? 1;
-      for (let p = 1; p < totalBackendPages; p++) {
-        const { data } = await getPaginated<FilaResponseDTO[]>(`/api/filas/unidade/${unidadeId}`, { page: p, size: fetchSize });
-        all.push(...(data || []));
-      }
-    } catch {
-      setFilas([]); setFilasMeta({ totalCount: 0, totalPages: 1, page: 0, pageSize: size }); return;
-    }
-    let filtered = all;
-    if (nome?.trim()) filtered = filtered.filter(f => f.nome?.toLowerCase().includes(nome.toLowerCase()));
-    if (setorId?.trim()) filtered = filtered.filter(f => f.setor?.id === setorId);
-    const totalCount = filtered.length;
-    const totalPages = Math.max(1, Math.ceil(totalCount / size));
-    const safePage = Math.min(page, totalPages - 1);
-    const slice = filtered.slice(safePage * size, safePage * size + size);
-    setFilas(slice);
-    setFilasMeta({ totalCount, totalPages, page: safePage, pageSize: size });
-    setFilasPage(safePage);
-    setFilasSize(size);
-  };
+    // ===== Estado de busca/paginação por aba =====
+    // Unidades
+    const [uniQuery, setUniQuery] = useState('');
+    const [uniMode, setUniMode] = useState<'todas' | 'nome'>('todas');
+    const [uniPage, setUniPage] = useState(0);
+    const [uniSize, setUniSize] = useState(10);
+    const [uniMeta, setUniMeta] = useState<any | null>(null);
+    const [uniLoading, setUniLoading] = useState(false);
 
-  // ===== Loaders =====
-  const loadFilasPage = async (page = filasPage, size = filasSize, unidadeIdParam?: string) => {
-    const unidadeId = unidadeIdParam ?? filasUnidadeId;
-    try {
-      if (filasSearchType === 'unidade') {
-        if (!unidadeId) { setFilas([]); setFilasMeta({ totalCount: 0, totalPages: 1, page: 0, pageSize: size }); return; }
-        const { data, meta } = await getPaginated<FilaResponseDTO[]>(`/api/filas/unidade/${unidadeId}`, { page, size });
-        const sorted = applySort(data || [], filasSort, (it: FilaResponseDTO, f) => f==='nome'?it.nome: f==='setor'?it.setor?.nome: f==='unidade'?it.unidade?.nome:'' );
-        setFilas(sorted); setFilasMeta(meta ?? { totalCount: data?.length||0, totalPages: 1, page, pageSize: size }); setFilasPage(meta?.page ?? page); setFilasSize(meta?.pageSize ?? size);
-      } else if (filasSearchType === 'nome') {
-        // Sem endpoint específico: filtra no cliente (carrega todas dentro da unidade)
-        await loadFilasByNomeOuSetor({ page, size, unidadeId, nome: filasSearchValue });
-        setFilas(p=> applySort(p, filasSort, (it: FilaResponseDTO, f)=> f==='nome'?it.nome: f==='setor'?it.setor?.nome: it.unidade?.nome));
-      } else {
-        await loadFilasByNomeOuSetor({ page, size, unidadeId, setorId: filasSetorId });
-        setFilas(p=> applySort(p, filasSort, (it: FilaResponseDTO, f)=> f==='nome'?it.nome: f==='setor'?it.setor?.nome: it.unidade?.nome));
-      }
-    } catch { setFilas([]); setFilasMeta({ totalCount: 0, totalPages: 1, page: 0, pageSize: size }); }
-  };
+    // Setores
+    const [setQuery, setSetQuery] = useState('');
+    const [setMode, setSetMode] = useState<'todas' | 'nome'>('todas');
+    const [setPage, setSetPage] = useState(0);
+    const [setSize, setSetSize] = useState(10);
+    const [setMeta, setSetMeta] = useState<any | null>(null);
+    const [setoresLoading, setSetoresLoading] = useState(false);
 
-  const loadSetoresPage = async (page = setoresPage, size = setoresSize) => {
-    try {
-      if (setoresSearchType === 'nome' && setoresSearchValue.trim()) {
-        const { data, meta } = await getPaginated<SetorResponseDTO[]>(`/api/setores/nome/${encodeURIComponent(setoresSearchValue)}`, { page, size });
-        const sorted = applySort(data||[], setoresSort, (s: SetorResponseDTO, _f)=> s.nome);
-        setSetores(sorted); setSetoresMeta(meta ?? { totalCount: data?.length||0, totalPages: 1, page, pageSize: size }); setSetoresPage(meta?.page ?? page); setSetoresSize(meta?.pageSize ?? size);
-      } else {
-        const { data, meta } = await getPaginated<SetorResponseDTO[]>(`/api/setores`, { page, size });
-        const sorted = applySort(data||[], setoresSort, (s: SetorResponseDTO, _f)=> s.nome);
-        setSetores(sorted); setSetoresMeta(meta ?? { totalCount: data?.length||0, totalPages: 1, page, pageSize: size }); setSetoresPage(meta?.page ?? page); setSetoresSize(meta?.pageSize ?? size);
-      }
-    } catch { setSetores([]); setSetoresMeta({ totalCount: 0, totalPages: 1, page: 0, pageSize: size }); }
-  };
+    // Usuários
+    const [usrQuery, setUsrQuery] = useState('');
+    const [usrMode, setUsrMode] = useState<'todas' | 'email'>('todas');
+    const [usrPage, setUsrPage] = useState(0);
+    const [usrSize, setUsrSize] = useState(10);
+    const [usrMeta, setUsrMeta] = useState<any | null>(null);
+    const [usrLoading, setUsrLoading] = useState(false);
 
-  const loadUnidadesPage = async (page = unidadesPage, size = unidadesSize) => {
-    try {
-      if (unidadesSearchType === 'nome' && unidadesSearchValue.trim()) {
-        const { data, meta } = await getPaginated<UnidadeAtendimentoResponseDTO[]>(`/api/unidades-atendimento/nome/${encodeURIComponent(unidadesSearchValue)}`, { page, size });
-        const sorted = applySort(data||[], unidadesSort, (u: UnidadeAtendimentoResponseDTO, f)=> f==='nome'?u.nome: (u.endereco?.enderecoFormatado || `${u.endereco?.logradouro}, ${u.endereco?.numero}` || ''));
-        setUnidades(sorted); setUnidadesMeta(meta ?? { totalCount: data?.length||0, totalPages: 1, page, pageSize: size }); setUnidadesPage(meta?.page ?? page); setUnidadesSize(meta?.pageSize ?? size);
-      } else {
-        const { data, meta } = await getPaginated<UnidadeAtendimentoResponseDTO[]>(`/api/unidades-atendimento`, { page, size });
-        const sorted = applySort(data||[], unidadesSort, (u: UnidadeAtendimentoResponseDTO, f)=> f==='nome'?u.nome: (u.endereco?.enderecoFormatado || `${u.endereco?.logradouro}, ${u.endereco?.numero}` || ''));
-        setUnidades(sorted); setUnidadesMeta(meta ?? { totalCount: data?.length||0, totalPages: 1, page, pageSize: size }); setUnidadesPage(meta?.page ?? page); setUnidadesSize(meta?.pageSize ?? size);
-      }
-    } catch { setUnidades([]); setUnidadesMeta({ totalCount: 0, totalPages: 1, page: 0, pageSize: size }); }
-  };
+    // Clientes
+    const [cliQuery, setCliQuery] = useState('');
+    const [cliMode, setCliMode] = useState<'todas' | 'nome' | 'email' | 'telefone' | 'cpf'>('todas');
+    const [cliPage, setCliPage] = useState(0);
+    const [cliSize, setCliSize] = useState(10);
+    const [cliMeta, setCliMeta] = useState<any | null>(null);
+    const [cliLoading, setCliLoading] = useState(false);
 
-  const loadUsuariosPage = async (page = usuariosPage, size = usuariosSize) => {
-    try {
-      if (usuariosSearchType === 'email' && usuariosSearchValue.trim()) {
-        const res = await fetch(`${API_BASE_URL}/api/usuarios/email/${encodeURIComponent(usuariosSearchValue)}`, { headers: authService.getAuthHeaders() });
-        if (res.ok) {
-          const body = await res.json();
-          const item = body.data as UsuarioResponseDTO;
-          const data = item ? [item] : [];
-          const meta = { totalCount: data.length, totalPages: 1, page: 0, pageSize: data.length || 1 } as PaginationMeta;
-          const sorted = applySort(data, usuariosSort, (u: UsuarioResponseDTO, f)=> f==='nomeUsuario'?u.nomeUsuario: f==='email'?u.email: u.categoria);
-          setUsuarios(sorted); setUsuariosMeta(meta); setUsuariosPage(0); setUsuariosSize(meta.pageSize);
-        } else { setUsuarios([]); setUsuariosMeta({ totalCount: 0, totalPages: 1, page: 0, pageSize: size }); }
-      } else if (usuariosSearchType === 'nome' && usuariosSearchValue.trim()) {
-        // Tenta endpoint específico (se existir). Caso não, usa fallback paginado geral e filtra no cliente.
-        const res = await fetch(`${API_BASE_URL}/api/usuarios/nome/${encodeURIComponent(usuariosSearchValue)}?page=${page}&size=${size}`, { headers: authService.getAuthHeaders() });
-        if (res.ok) {
-          const totalCount = Number(res.headers.get('X-Total-Count'));
-          const totalPages = Number(res.headers.get('X-Total-Pages'));
-          const xpage = Number(res.headers.get('X-Page'));
-          const pageSize = Number(res.headers.get('X-Page-Size'));
-          const meta = [totalCount,totalPages,xpage,pageSize].every(Number.isFinite) ? { totalCount, totalPages, page: xpage, pageSize } : { totalCount: 0, totalPages: 1, page, pageSize: size } as PaginationMeta;
-          const body = await res.json();
-          const data = (body.data as UsuarioResponseDTO[]) || [];
-          const sorted = applySort(data, usuariosSort, (u: UsuarioResponseDTO, f)=> f==='nomeUsuario'?u.nomeUsuario: f==='email'?u.email: u.categoria);
-          setUsuarios(sorted); setUsuariosMeta(meta); setUsuariosPage(meta.page); setUsuariosSize(meta.pageSize);
-        } else {
-          // Fallback simples: usa /api/usuarios paginado e filtra no cliente nesta página
-          const { data, meta } = await getPaginated<UsuarioResponseDTO[]>(`/api/usuarios`, { page, size });
-          const filtered = (data||[]).filter(u=> u.nomeUsuario?.toLowerCase().includes(usuariosSearchValue.toLowerCase()));
-          const sorted = applySort(filtered, usuariosSort, (u: UsuarioResponseDTO, f)=> f==='nomeUsuario'?u.nomeUsuario: f==='email'?u.email: u.categoria);
-          setUsuarios(sorted); setUsuariosMeta(meta ?? { totalCount: sorted.length, totalPages: 1, page, pageSize: size }); setUsuariosPage(meta?.page ?? page); setUsuariosSize(meta?.pageSize ?? size);
+    // Filas
+    const [filaQuery, setFilaQuery] = useState('');
+    const [filaMode, setFilaMode] = useState<'todas' | 'porUnidade'>('porUnidade');
+    const [filaPage, setFilaPage] = useState(0);
+    const [filaSize, setFilaSize] = useState(10);
+    const [filaMetaState, setFilaMetaState] = useState<any | null>(null);
+    const [filaLoading, setFilaLoading] = useState(false);
+    const [filaUnidadeFilter, setFilaUnidadeFilter] = useState<string | ''>('');
+
+    // Painéis
+    const [painelPage, setPainelPage] = useState(0);
+    const [painelSize, setPainelSize] = useState(10);
+    const [painelMeta, setPainelMeta] = useState<any | null>(null);
+    const [painelLoading, setPainelLoading] = useState(false);
+    const [painelUnidadeFilter, setPainelUnidadeFilter] = useState<string | ''>('');
+
+    // Carregar opções iniciais (unidades, setores) e filas por unidade selecionada
+    useEffect(() => {
+        const loadOptions = async () => {
+            try {
+                const [unidadesRes, setoresRes] = await Promise.all([
+                    unidadeService.listarTodas(),
+                    setorService.listarTodos()
+                ]);
+                setUnidadeOptions(unidadesRes?.data || []);
+                setSetorOptions(setoresRes?.data || []);
+            } catch (e: any) {
+                toast({ title: 'Erro', description: e.message || 'Falha ao carregar opções.', variant: 'destructive' });
+            }
+        };
+        loadOptions();
+    }, [toast]);
+
+    useEffect(() => {
+        const loadFilasDaUnidade = async () => {
+            try {
+                if (selectedUnitId) {
+                    const res = await filaService.listarPorUnidade(selectedUnitId);
+                    setFilaOptions(res?.data || []);
+                } else {
+                    setFilaOptions([]);
+                }
+            } catch (e: any) {
+                toast({ title: 'Erro', description: e.message || 'Falha ao carregar filas da unidade.', variant: 'destructive' });
+            }
+        };
+        loadFilasDaUnidade();
+    }, [selectedUnitId, toast]);
+
+    // Carregar dados da aba ativa quando trocar de aba ou quando unidade selecionada mudar
+    useEffect(() => {
+        const loadActiveTab = async () => {
+            try {
+                if (activeTab === 'unidades') {
+                    await searchUnidades(0);
+                } else if (activeTab === 'setores') {
+                    await searchSetores(0);
+                } else if (activeTab === 'usuarios') {
+                    await searchUsuarios(0);
+                } else if (activeTab === 'clientes') {
+                    await searchClientes(0);
+                } else if (activeTab === 'filas') {
+                    if (filaMode === 'todas' || selectedUnitId) {
+                        await searchFilas(0);
+                    }
+                } else if (activeTab === 'paineis') {
+                    if (selectedUnitId) {
+                        await searchPaineis(0);
+                    }
+                }
+            } catch (e) {
+                // searchX já exibem toast; silencioso aqui
+            }
+        };
+        loadActiveTab();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeTab, selectedUnitId, filaMode]);
+
+    // Reagir à troca de filtros de unidade em Filas e Painéis
+    useEffect(() => {
+        if (activeTab === 'filas') {
+            searchFilas(0);
         }
-      } else {
-        const { data, meta } = await getPaginated<UsuarioResponseDTO[]>(`/api/usuarios`, { page, size });
-        const sorted = applySort(data||[], usuariosSort, (u: UsuarioResponseDTO, f)=> f==='nomeUsuario'?u.nomeUsuario: f==='email'?u.email: u.categoria);
-        setUsuarios(sorted); setUsuariosMeta(meta ?? { totalCount: data?.length||0, totalPages: 1, page, pageSize: size }); setUsuariosPage(meta?.page ?? page); setUsuariosSize(meta?.pageSize ?? size);
-      }
-    } catch { setUsuarios([]); setUsuariosMeta({ totalCount: 0, totalPages: 1, page: 0, pageSize: size }); }
-  };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [filaUnidadeFilter]);
 
-  const loadClientesPage = async (page = clientesPage, size = clientesSize) => {
-    try {
-      if (clientesSearchType === 'nome' && clientesSearchValue.trim()) {
-        const { data, meta } = await getPaginated<ClienteResponseDTO[]>(`/api/clientes/nome/${encodeURIComponent(clientesSearchValue)}`, { page, size });
-        const sorted = applySort(data||[], clientesSort, (c: ClienteResponseDTO, f)=> f==='nome'?c.nome: f==='cpf'?c.cpf: c.email);
-        setClientes(sorted); setClientesMeta(meta ?? { totalCount: data?.length||0, totalPages: 1, page, pageSize: size }); setClientesPage(meta?.page ?? page); setClientesSize(meta?.pageSize ?? size);
-      } else if (clientesSearchType === 'cpf' && clientesSearchValue.trim()) {
-        const res = await fetch(`${API_BASE_URL}/api/clientes/cpf/${encodeURIComponent(clientesSearchValue)}`, { headers: authService.getAuthHeaders() });
-        if (res.ok) {
-          const body = await res.json();
-          const item = body.data as ClienteResponseDTO;
-          const data = item ? [item] : [];
-          const meta = { totalCount: data.length, totalPages: 1, page: 0, pageSize: data.length || 1 } as PaginationMeta;
-          const sorted = applySort(data, clientesSort, (c: ClienteResponseDTO, f)=> f==='nome'?c.nome: f==='cpf'?c.cpf: c.email);
-          setClientes(sorted); setClientesMeta(meta); setClientesPage(0); setClientesSize(meta.pageSize);
-        } else { setClientes([]); setClientesMeta({ totalCount: 0, totalPages: 1, page: 0, pageSize: size }); }
-      } else {
-        const { data, meta } = await getPaginated<ClienteResponseDTO[]>(`/api/clientes`, { page, size });
-        const sorted = applySort(data||[], clientesSort, (c: ClienteResponseDTO, f)=> f==='nome'?c.nome: f==='cpf'?c.cpf: c.email);
-        setClientes(sorted); setClientesMeta(meta ?? { totalCount: data?.length||0, totalPages: 1, page, pageSize: size }); setClientesPage(meta?.page ?? page); setClientesSize(meta?.pageSize ?? size);
-      }
-    } catch { setClientes([]); setClientesMeta({ totalCount: 0, totalPages: 1, page: 0, pageSize: size }); }
-  };
-
-  // ===== Helpers =====
-  const pageDisplay = (meta: PaginationMeta | null, statePage: number) => {
-    const current = (meta?.page ?? statePage) + 1; // 1-based
-    const total = Math.max(1, meta?.totalPages ?? 1);
-    return { current: Math.min(current, total), total };
-  };
-
-  // Helper para requests paginados (lendo headers)
-  async function getPaginated<T>(path: string, params?: Record<string, string|number>): Promise<{ data: T; meta: PaginationMeta | null; }> {
-    const url = new URL(`${API_BASE_URL}${path}`);
-    if (params) Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, String(v)));
-    const res = await fetch(url.toString(), { headers: authService.getAuthHeaders() });
-    if (!res.ok) throw new Error(res.statusText);
-
-    // Tenta ler headers de paginação (checa presença real e depois faz parse)
-    const hTotalCount = res.headers.get('X-Total-Count');
-    const hTotalPages = res.headers.get('X-Total-Pages');
-    const hPage = res.headers.get('X-Page');
-    const hPageSize = res.headers.get('X-Page-Size');
-
-    const body = await res.json();
-    let data = (body?.data as T) ?? ([] as unknown as T);
-
-    const sizeNum = Number(params?.size ?? 10) || 10;
-    const pageNum = Number(params?.page ?? 0) || 0;
-
-    let meta: PaginationMeta | null = null;
-
-    // 1) Headers X-Total-* expostos
-    if (hTotalCount !== null && hTotalPages !== null && hPage !== null && hPageSize !== null) {
-      const totalCount = Number(hTotalCount);
-      const totalPages = Number(hTotalPages);
-      const page = Number(hPage);
-      const pageSize = Number(hPageSize);
-      if ([totalCount, totalPages, page, pageSize].every((n) => Number.isFinite(n)) && totalPages > 0 && pageSize > 0) {
-        meta = { totalCount, totalPages, page, pageSize };
-      }
-    }
-
-    // 2) Header Content-Range: items start-end/total (end inclusivo)
-    if (!meta) {
-      const contentRange = res.headers.get('Content-Range');
-      if (contentRange) {
-        const match = /items\s+(\d+)-(\d+)\/(\d+)/i.exec(contentRange);
-        if (match) {
-          const totalCount = Number(match[3]);
-          const totalPages = Math.max(1, Math.ceil(totalCount / sizeNum));
-          const page = Math.min(pageNum, totalPages - 1);
-          const pageSize = sizeNum;
-          if (Number.isFinite(totalCount) && totalCount >= 0) {
-            meta = { totalCount, totalPages, page, pageSize };
-          }
+    useEffect(() => {
+        if (activeTab === 'paineis') {
+            searchPaineis(0);
         }
-      }
-    }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [painelUnidadeFilter]);
 
-    // 3) Fallback: chamada sem paginação (API retorna lista completa)
-    if (!meta) {
-      try {
-        const urlAll = new URL(`${API_BASE_URL}${path}`);
-        const resAll = await fetch(urlAll.toString(), { headers: authService.getAuthHeaders() });
-        if (resAll.ok) {
-          const bodyAll = await resAll.json();
-          const all = (bodyAll?.data as any[]) || [];
-          const totalCount = all.length;
-          const totalPages = Math.max(1, Math.ceil(totalCount / sizeNum));
-          const page = Math.min(pageNum, totalPages - 1);
-          const pageSize = sizeNum;
-          meta = { totalCount, totalPages, page, pageSize };
+    // ===== Funções de busca/paginação =====
+    const searchUnidades = async (page = uniPage) => {
+        setUniLoading(true);
+        try {
+            if (uniMode === 'todas') {
+                const { data, meta } = await unidadeService.listarTodasPaginado(page, uniSize);
+                setUnidades(data); setUniMeta(meta); setUniPage(page);
+            } else {
+                const { data, meta } = await unidadeService.buscarPorNomePaginado(uniQuery, page, uniSize);
+                setUnidades(data); setUniMeta(meta); setUniPage(page);
+            }
+        } catch (e: any) {
+            toast({ title: 'Erro', description: e.message, variant: 'destructive' });
+        } finally {
+            setUniLoading(false);
         }
-      } catch { /* ignora e tenta próximo fallback */ }
-    }
+    };
 
-    // 4) Fallback: varrer páginas até o fim (caso o backend só responda paginado mas sem expor headers)
-    if (!meta) {
-      try {
-        let p = 0; let count = 0; let loops = 0; const maxLoops = 200;
-        while (loops < maxLoops) {
-          const pageUrl = new URL(`${API_BASE_URL}${path}`);
-          pageUrl.searchParams.set('page', String(p));
-          pageUrl.searchParams.set('size', String(sizeNum));
-          const r = await fetch(pageUrl.toString(), { headers: authService.getAuthHeaders() });
-          if (!r.ok) break;
-          const b = await r.json();
-          const arr = (b?.data as any[]) || [];
-          count += arr.length;
-          p += 1; loops += 1;
-          if (arr.length < sizeNum) break;
+    const searchSetores = async (page = setPage) => {
+        setSetoresLoading(true);
+        try {
+            if (setMode === 'todas') {
+                const { data, meta } = await setorService.listarTodosPaginado(page, setSize);
+                setSetores(data); setSetMeta(meta); setSetPage(page);
+            } else {
+                const { data, meta } = await setorService.buscarPorNomePaginado(setQuery, page, setSize);
+                setSetores(data); setSetMeta(meta); setSetPage(page);
+            }
+        } catch (e: any) {
+            toast({ title: 'Erro', description: e.message, variant: 'destructive' });
+        } finally {
+            setSetoresLoading(false);
         }
-        const totalCount = count;
-        const totalPages = Math.max(1, Math.ceil(totalCount / sizeNum));
-        const page = Math.min(pageNum, totalPages - 1);
-        const pageSize = sizeNum;
-        meta = { totalCount, totalPages, page, pageSize };
-      } catch { meta = null; }
-    }
+    };
 
-    return { data, meta };
-  }
+    const searchUsuarios = async (page = usrPage) => {
+        setUsrLoading(true);
+        try {
+            if (usrMode === 'todas') {
+                const { data, meta } = await usuarioService.listarTodosPaginado(page, usrSize);
+                setUsuarios(data); setUsrMeta(meta); setUsrPage(page);
+            } else {
+                const res = await usuarioService.buscarPorEmail(usrQuery);
+                const list = res?.data ? [res.data] : [];
+                setUsuarios(list); setUsrMeta(null); setUsrPage(0);
+            }
+        } catch (e: any) {
+            toast({ title: 'Erro', description: e.message, variant: 'destructive' });
+        } finally {
+            setUsrLoading(false);
+        }
+    };
 
-  // ===== Inicialização =====
-  useEffect(() => { carregarDados() }, []);
+    const searchClientes = async (page = cliPage) => {
+        setCliLoading(true);
+        try {
+            if (cliMode === 'todas') {
+                const { data, meta } = await clienteService.buscarPorNomePaginado('', page, cliSize); // backend não tem listarTodos paginado dedicado; usar nome vazio
+                setClientes(data); setCliMeta(meta); setCliPage(page);
+            } else if (cliMode === 'nome') {
+                const { data, meta } = await clienteService.buscarPorNomePaginado(cliQuery, page, cliSize);
+                setClientes(data); setCliMeta(meta); setCliPage(page);
+            } else if (cliMode === 'email') {
+                const { data, meta } = await clienteService.buscarPorEmailPaginado(cliQuery, page, cliSize);
+                setClientes(data); setCliMeta(meta); setCliPage(page);
+            } else if (cliMode === 'telefone') {
+                const { data, meta } = await clienteService.buscarPorTelefonePaginado(cliQuery, page, cliSize);
+                setClientes(data); setCliMeta(meta); setCliPage(page);
+            } else if (cliMode === 'cpf') {
+                const item = await clienteService.buscarPorCpf(cliQuery);
+                setClientes(item ? [item] : []); setCliMeta(null); setCliPage(0);
+            }
+        } catch (e: any) {
+            toast({ title: 'Erro', description: e.message, variant: 'destructive' });
+        } finally {
+            setCliLoading(false);
+        }
+    };
 
-  // Carregar primeira página (ordenada por nome) ao trocar de aba
-  useEffect(() => {
-    if (activeTab === 'filas') { setFilasSort({ field: 'nome', dir: 'asc' }); loadFilasPage(0, filasSize); }
-    if (activeTab === 'setores') { setSetoresSort({ field: 'nome', dir: 'asc' }); loadSetoresPage(0, setoresSize); }
-    if (activeTab === 'unidades') { setUnidadesSort({ field: 'nome', dir: 'asc' }); loadUnidadesPage(0, unidadesSize); }
-    if (activeTab === 'usuarios') { setUsuariosSort({ field: 'nomeUsuario', dir: 'asc' }); loadUsuariosPage(0, usuariosSize); }
-    if (activeTab === 'clientes') { setClientesSort({ field: 'nome', dir: 'asc' }); loadClientesPage(0, clientesSize); }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab]);
+    const searchFilas = async (page = filaPage) => {
+        setFilaLoading(true);
+        try {
+            if (filaMode === 'todas') {
+                const { data, meta } = await filaService.listarTodasPaginado(page, filaSize);
+                setFilas(data); setFilaMetaState(meta); setFilaPage(page);
+            } else {
+                const unidadeId = filaUnidadeFilter || selectedUnitId;
+                if (!unidadeId) throw new Error('Selecione uma unidade.');
+                const { data, meta } = await filaService.listarPorUnidadePaginado(unidadeId, page, filaSize);
+                setFilas(data); setFilaMetaState(meta); setFilaPage(page);
+            }
+        } catch (e: any) {
+            toast({ title: 'Erro', description: e.message, variant: 'destructive' });
+        } finally {
+            setFilaLoading(false);
+        }
+    };
 
-  const carregarDados = async () => {
-    setLoading(true);
-    try {
-      const [setoresAll, unidadesAll] = await Promise.all([ setorService.listarTodos(), unidadeService.listarTodas() ]);
-      setSetorOptions(setoresAll.data || []);
-      setUnidadeOptions(unidadesAll.data || []);
-      const defaultUnid = (unidadesAll.data && unidadesAll.data[0]?.id) || '';
-      setFilasUnidadeId(prev => prev || defaultUnid);
-      await Promise.all([
-        loadSetoresPage(0, setoresSize),
-        loadUnidadesPage(0, unidadesSize),
-        loadUsuariosPage(0, usuariosSize),
-        loadClientesPage(0, clientesSize)
-      ]);
-      await loadFilasPage(0, filasSize, defaultUnid);
-    } catch (err) {
-      console.error('Erro ao carregar dados:', err);
-      setFilas([]); setSetores([]); setUnidades([]); setUsuarios([]); setClientes([]);
-      setFilasMeta(null); setSetoresMeta(null); setUnidadesMeta(null); setUsuariosMeta(null); setClientesMeta(null);
-      toast({ title: 'Erro', description: 'Erro ao carregar dados.', variant: 'destructive' });
-    } finally { setLoading(false); }
-  };
+    const searchPaineis = async (page = painelPage) => {
+        setPainelLoading(true);
+        try {
+            const unidadeId = painelUnidadeFilter || selectedUnitId;
+            if (!unidadeId) throw new Error('Selecione uma unidade.');
+            const res = await painelService.listarPorUnidadePaginado(unidadeId, page, painelSize);
+            if (!res.success) throw new Error(res.message);
+            setPaineis(res.data || []);
+            setPainelMeta(null); // evitar paginação imprecisa; API não retorna headers aqui
+            setPainelPage(page);
+        } catch (e: any) {
+            toast({ title: 'Erro', description: e.message, variant: 'destructive' });
+        } finally {
+            setPainelLoading(false);
+        }
+    };
 
-  // ===== Validações =====
-  const validarFilaForm = (form: FilaCreateDTO): FormErrors => {
-    const e: FormErrors = {};
-    if (!form.nome || form.nome.length < 3 || form.nome.length > 50) e.nome = 'Nome deve ter entre 3 e 50 caracteres';
-    if (!form.setorId) e.setorId = 'Setor é obrigatório';
-    if (!form.unidadeAtendimentoId) e.unidadeAtendimentoId = 'Unidade de Atendimento é obrigatória';
-    return e;
-  };
-  const validarSetorForm = (form: SetorCreateDTO): FormErrors => {
-    const e: FormErrors = {}; if (!form.nome || form.nome.length < 3 || form.nome.length > 50) e.nome = 'Nome deve ter entre 3 e 50 caracteres'; return e;
-  };
-  const validarUnidadeForm = (form: UnidadeAtendimentoCreateDTO): FormErrors => {
-    const e: FormErrors = {};
-    if (!form.nome || form.nome.length < 3 || form.nome.length > 100) e.nome = 'Nome deve ter entre 3 e 100 caracteres';
-    if (form.endereco?.logradouro && !form.endereco.logradouro.trim()) e.logradouro = 'Logradouro não pode ser vazio';
-    if (form.endereco?.numero && !form.endereco.numero.trim()) e.numero = 'Número não pode ser vazio';
-    return e;
-  };
-  const validarUsuarioForm = (form: UsuarioCreateDTO): FormErrors => {
-    const e: FormErrors = {};
-    if (!form.nomeUsuario || form.nomeUsuario.length < 3) e.nomeUsuario = 'Nome de usuário deve ter pelo menos 3 caracteres';
-    if (!form.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = 'Email deve ter um formato válido';
-    if (!editingUsuario && (!form.senha || form.senha.length < 6)) e.senha = 'Senha deve ter pelo menos 6 caracteres';
-    return e;
-  };
-  const validarClienteForm = (form: ClienteCreateDTO): FormErrors => {
-    const e: FormErrors = {};
-    if (!form.cpf || !form.cpf.trim()) e.cpf = 'CPF é obrigatório';
-    if (!form.nome || form.nome.length < 3 || form.nome.length > 100) e.nome = 'Nome deve ter entre 3 e 100 caracteres';
-    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = 'Email inválido';
-    // Endereço é opcional; só validar campos se preenchidos
-    if (form.endereco) {
-      if (form.endereco.logradouro && !form.endereco.logradouro.trim()) e.logradouro = 'Logradouro não pode ser vazio';
-      if (form.endereco.numero && !form.endereco.numero.trim()) e.numero = 'Número não pode ser vazio';
-    }
-    return e;
-  };
+    // ===== Componentes internos =====
+    const PaginationIconNav = ({ meta, onFirst, onPrev, onNext, onLast, inline = false }: any) => {
+        if (!meta) return null;
+        return (
+            <div className={`flex items-center ${inline ? 'justify-end mt-0' : 'justify-end mt-3'} gap-1`}>
+                <Button variant="ghost" size="icon" onClick={onFirst} disabled={meta.page <= 0} aria-label="Primeira página"><ChevronsLeft className="h-4 w-4" /></Button>
+                <Button variant="ghost" size="icon" onClick={onPrev} disabled={meta.page <= 0} aria-label="Página anterior"><ChevronLeft className="h-4 w-4" /></Button>
+                <span className="text-xs text-muted-foreground px-2">Página {meta.page + 1} de {meta.totalPages}</span>
+                <Button variant="ghost" size="icon" onClick={onNext} disabled={meta.page >= meta.totalPages - 1} aria-label="Próxima página"><ChevronRight className="h-4 w-4" /></Button>
+                <Button variant="ghost" size="icon" onClick={onLast} disabled={meta.page >= meta.totalPages - 1} aria-label="Última página"><ChevronsRight className="h-4 w-4" /></Button>
+            </div>
+        );
+    };
 
-  // ===== Handlers CRUD =====
-  const handleSalvarFila = async () => {
-    const errs = validarFilaForm(filaForm); if (Object.keys(errs).length) { setErrors(errs); return; }
-    try {
-      if (editingFila) {
-        await filaService.atualizarParcialmente(editingFila.id, { nome: filaForm.nome, setorId: filaForm.setorId, unidadeAtendimentoId: filaForm.unidadeAtendimentoId });
-        toast({ title: 'Sucesso', description: 'Fila atualizada com sucesso' });
-      } else { await filaService.criar(filaForm); toast({ title: 'Sucesso', description: 'Fila criada com sucesso' }); }
-      setFilaModalOpen(false); setErrors({}); setEditingFila(null); setFilaForm({ nome: '', setorId: '', unidadeAtendimentoId: '' }); carregarDados();
-    } catch { toast({ title: 'Erro', description: 'Erro ao salvar fila', variant: 'destructive' }); }
-  };
-  const handleEditarFila = (fila: FilaResponseDTO) => { setEditingFila(fila); setFilaForm({ nome: fila.nome, setorId: fila.setor.id, unidadeAtendimentoId: fila.unidade.id }); setFilaModalOpen(true); };
-  const handleExcluirFila = async (id: string) => { if (confirm('Tem certeza que deseja excluir esta fila?')) { try { await filaService.desativar(id); toast({ title: 'Sucesso', description: 'Fila excluída com sucesso' }); carregarDados(); } catch { toast({ title: 'Erro', description: 'Erro ao excluir fila', variant: 'destructive' }); } } };
+    const AddressFields = ({ baseKey = 'endereco' }: { baseKey?: string }) => (
+        <div className="grid gap-4">
+            <div className="grid md:grid-cols-3 gap-4">
+                <div className="grid gap-2">
+                    <Label>CEP</Label>
+                    <Input value={formData[baseKey]?.cep || ''} onChange={(e) => setFormData({ ...formData, [baseKey]: { ...formData[baseKey], cep: e.target.value } })} />
+                </div>
+                <div className="grid gap-2">
+                    <Label>Logradouro</Label>
+                    <Input value={formData[baseKey]?.logradouro || ''} onChange={(e) => setFormData({ ...formData, [baseKey]: { ...formData[baseKey], logradouro: e.target.value } })} />
+                </div>
+                <div className="grid gap-2">
+                    <Label>Número</Label>
+                    <Input value={formData[baseKey]?.numero || ''} onChange={(e) => setFormData({ ...formData, [baseKey]: { ...formData[baseKey], numero: e.target.value } })} />
+                </div>
+            </div>
+            <div className="grid md:grid-cols-3 gap-4">
+                <div className="grid gap-2">
+                    <Label>Complemento</Label>
+                    <Input value={formData[baseKey]?.complemento || ''} onChange={(e) => setFormData({ ...formData, [baseKey]: { ...formData[baseKey], complemento: e.target.value } })} />
+                </div>
+                <div className="grid gap-2">
+                    <Label>Bairro</Label>
+                    <Input value={formData[baseKey]?.bairro || ''} onChange={(e) => setFormData({ ...formData, [baseKey]: { ...formData[baseKey], bairro: e.target.value } })} />
+                </div>
+                <div className="grid gap-2">
+                    <Label>Cidade</Label>
+                    <Input value={formData[baseKey]?.cidade || ''} onChange={(e) => setFormData({ ...formData, [baseKey]: { ...formData[baseKey], cidade: e.target.value } })} />
+                </div>
+            </div>
+            <div className="grid md:grid-cols-4 gap-4">
+                <div className="grid gap-2">
+                    <Label>UF</Label>
+                    <Select value={formData[baseKey]?.uf || ''} onValueChange={(v) => setFormData({ ...formData, [baseKey]: { ...formData[baseKey], uf: v } })}>
+                        <SelectTrigger><SelectValue placeholder="UF" /></SelectTrigger>
+                        <SelectContent>
+                            {Object.values(UF).map((uf) => (
+                                <SelectItem key={uf} value={uf}>{uf}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+                {/* Campo de Endereço Formatado removido dos formulários conforme requisito */}
+            </div>
+        </div>
+    );
 
-  const handleSalvarSetor = async () => {
-    const errs = validarSetorForm(setorForm); if (Object.keys(errs).length) { setErrors(errs); return; }
-    try {
-      if (editingSetor) { await setorService.substituir(editingSetor.id, setorForm); toast({ title: 'Sucesso', description: 'Setor atualizado com sucesso' }); }
-      else { await setorService.criar(setorForm); toast({ title: 'Sucesso', description: 'Setor criado com sucesso' }); }
-      setSetorModalOpen(false); setErrors({}); setEditingSetor(null); setSetorForm({ nome: '' }); carregarDados();
-    } catch { toast({ title: 'Erro', description: 'Erro ao salvar setor', variant: 'destructive' }); }
-  };
-  const handleEditarSetor = (setor: SetorResponseDTO) => { setEditingSetor(setor); setSetorForm({ nome: setor.nome }); setSetorModalOpen(true); };
-  const handleExcluirSetor = async (id: string) => { if (confirm('Tem certeza que deseja excluir este setor?')) { try { await setorService.desativar(id); toast({ title: 'Sucesso', description: 'Setor excluído com sucesso' }); carregarDados(); } catch { toast({ title: 'Erro', description: 'Erro ao excluir setor', variant: 'destructive' }); } } };
+    const PhonesFields = ({ baseKey = 'telefones' }: { baseKey?: string }) => {
+        const list = formData[baseKey] || [];
+        const update = (idx: number, patch: any) => {
+            const arr = [...list];
+            arr[idx] = { ...arr[idx], ...patch };
+            setFormData({ ...formData, [baseKey]: arr });
+        };
+        const add = () => setFormData({ ...formData, [baseKey]: [...list, { tipo: 'CELULAR', ddd: 11, numero: 999999999 }] });
+        const remove = (idx: number) => setFormData({ ...formData, [baseKey]: list.filter((_: any, i: number) => i !== idx) });
+        return (
+            <div className="grid gap-3">
+                <div className="flex items-center justify-between">
+                    <Label>Telefones</Label>
+                    <Button type="button" variant="outline" size="sm" onClick={add}>Adicionar</Button>
+                </div>
+                {list.length === 0 && <p className="text-xs text-muted-foreground">Nenhum telefone adicionado.</p>}
+                {list.map((tel: any, idx: number) => (
+                    <div key={idx} className="grid md:grid-cols-4 gap-2 items-end">
+                        <div className="grid gap-1">
+                            <Label>Tipo</Label>
+                            <Select value={tel.tipo} onValueChange={(v) => update(idx, { tipo: v })}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="FIXO">Fixo</SelectItem>
+                                    <SelectItem value="CELULAR">Celular</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="grid gap-1">
+                            <Label>DDD</Label>
+                            <Input type="number" value={tel.ddd ?? ''} onChange={(e) => update(idx, { ddd: Number(e.target.value) })} />
+                        </div>
+                        <div className="grid gap-1 md:col-span-2">
+                            <Label>Número</Label>
+                            <Input type="number" value={tel.numero ?? ''} onChange={(e) => update(idx, { numero: Number(e.target.value) })} />
+                        </div>
+                        <div className="flex justify-end">
+                            <Button type="button" variant="ghost" size="sm" onClick={() => remove(idx)}>Remover</Button>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        );
+    };
 
-  const handleSalvarUnidade = async () => {
-    const errs = validarUnidadeForm(unidadeForm); if (Object.keys(errs).length) { setErrors(errs); return; }
-    try {
-      const enderecoSan: any = { ...unidadeForm.endereco };
-      if (enderecoSan?.cep) enderecoSan.cep = String(enderecoSan.cep).replace(/\D/g, '');
-      const payload = { ...unidadeForm, endereco: enderecoSan };
-      if (editingUnidade) { await unidadeService.atualizarParcialmente(editingUnidade.id, payload); toast({ title: 'Sucesso', description: 'Unidade atualizada com sucesso' }); }
-      else { await unidadeService.criar(payload); toast({ title: 'Sucesso', description: 'Unidade criada com sucesso' }); }
-      setUnidadeModalOpen(false); setErrors({}); setEditingUnidade(null);
-      setUnidadeForm({ nome: '', endereco: { logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', cep: '', uf: undefined }, telefones: [] });
-      carregarDados();
-    } catch { toast({ title: 'Erro', description: 'Erro ao salvar unidade', variant: 'destructive' }); }
-  };
-  const handleEditarUnidade = (unidade: UnidadeAtendimentoResponseDTO) => {
-    setEditingUnidade(unidade);
-    setUnidadeForm({ nome: unidade.nome, endereco: unidade.endereco || { logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', cep: '', uf: undefined }, telefones: unidade.telefones || [] });
-    setUnidadeModalOpen(true);
-  };
-  const handleExcluirUnidade = async (id: string) => { if (confirm('Tem certeza que deseja excluir esta unidade?')) { try { await unidadeService.desativar(id); toast({ title: 'Sucesso', description: 'Unidade excluída com sucesso' }); carregarDados(); } catch { toast({ title: 'Erro', description: 'Erro ao excluir unidade', variant: 'destructive' }); } } };
+    const handleOpenModal = (type: string, item: any | null = null) => {
+        setEditingItem(item);
+        const defaultUnitId = selectedUnitId || '';
+        let initialData: any = {};
+        switch (type) {
+            case 'fila':
+                initialData = item
+                    ? { nome: item.nome, setorId: item.setor.id, unidadeAtendimentoId: item.unidade.id }
+                    : { nome: '', setorId: '', unidadeAtendimentoId: defaultUnitId };
+                break;
+            case 'setor':
+                initialData = item ? { nome: item.nome } : { nome: '' };
+                break;
+            case 'unidade':
+                initialData = item
+                    ? { nome: item.nome, endereco: item.endereco || { cep: '', logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', uf: '', enderecoFormatado: '' }, telefones: item.telefones || [] }
+                    : { nome: '', endereco: { cep: '', logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', uf: '', enderecoFormatado: '' }, telefones: [] };
+                break;
+            case 'usuario':
+                initialData = item
+                    ? { nomeUsuario: item.nomeUsuario, email: item.email, senha: '', categoria: item.categoria, unidadesIds: item.unidadesIds || [] }
+                    : { nomeUsuario: '', email: '', senha: '', categoria: CategoriaUsuario.USUARIO, unidadesIds: [] };
+                break;
+            case 'cliente':
+                initialData = item
+                    ? { cpf: item.cpf, nome: item.nome, email: item.email || '', telefones: item.telefones || [], endereco: item.endereco || { cep: '', logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', uf: '', enderecoFormatado: '' } }
+                    : { cpf: '', nome: '', email: '', telefones: [], endereco: { cep: '', logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', uf: '', enderecoFormatado: '' } };
+                break;
+            case 'painel':
+                initialData = item
+                    ? { descricao: item.descricao, filasIds: item.filasIds || [] }
+                    : { descricao: '', unidadeAtendimentoId: defaultUnitId, filasIds: [] };
+                break;
+        }
+        setFormData(initialData);
+        setModalOpen(type);
+    };
 
-  const adicionarTelefone = () => { if (telefoneTemp.ddd && telefoneTemp.numero) { setUnidadeForm(p => ({ ...p, telefones: [...(p.telefones || []), telefoneTemp] })); setTelefoneTemp({ tipo: TipoTelefone.FIXO, ddd: 11, numero: 0 }); } };
+    const handleSave = async () => {
+        if (!modalOpen) return;
+        setLoading(true);
+        try {
+            switch (modalOpen) {
+                case 'fila': {
+                    if (editingItem) await filaService.atualizarParcialmente(editingItem.id, formData);
+                    else await filaService.criar({ ...formData, unidadeAtendimentoId: selectedUnitId! });
+                    break;
+                }
+                case 'setor': {
+                    if (editingItem) await setorService.substituir(editingItem.id, { nome: formData.nome });
+                    else await setorService.criar({ nome: formData.nome });
+                    break;
+                }
+                case 'unidade': {
+                    if (editingItem) await unidadeService.atualizarParcialmente(editingItem.id, formData);
+                    else await unidadeService.criar(formData);
+                    break;
+                }
+                case 'usuario': {
+                    if (editingItem) await usuarioService.atualizarParcialmente(editingItem.id, formData);
+                    else await usuarioService.criar(formData);
+                    break;
+                }
+                case 'cliente': {
+                    if (editingItem) await clienteService.atualizarParcialmente(editingItem.id, formData);
+                    else await clienteService.criar(formData);
+                    break;
+                }
+                case 'painel': {
+                    const payload = { ...formData, unidadeAtendimentoId: selectedUnitId };
+                    if (editingItem) await painelService.atualizar(editingItem.id, payload);
+                    else await painelService.criar(payload);
+                    break;
+                }
+            }
+            toast({ title: 'Sucesso', description: `Item ${editingItem ? 'atualizado' : 'criado'} com sucesso.` });
+            setModalOpen(null);
+            // Recarregar dados da aba ativa
+            if (activeTab === 'filas') await searchFilas(0);
+            if (activeTab === 'setores') await searchSetores(0);
+            if (activeTab === 'unidades') await searchUnidades(0);
+            if (activeTab === 'usuarios') await searchUsuarios(0);
+            if (activeTab === 'clientes') await searchClientes(0);
+            if (activeTab === 'paineis') await searchPaineis(0);
+        } catch (err: any) {
+            toast({ title: 'Erro', description: err.message || 'Falha ao salvar o item.', variant: 'destructive' });
+        } finally {
+            setLoading(false);
+        }
+    };
 
-  const handleSalvarUsuario = async () => {
-    const errs = validarUsuarioForm(usuarioForm);
-    if (Object.keys(errs).length) { setErrors(errs); return; }
-    try {
-      if (editingUsuario) {
-        await usuarioService.atualizarParcialmente(editingUsuario.id, {
-          nomeUsuario: usuarioForm.nomeUsuario,
-          email: usuarioForm.email,
-          categoria: usuarioForm.categoria,
-          unidadesIds: usuarioForm.unidadesIds
+    const handleDelete = async (type: string, id: string) => {
+        if (!confirm('Tem certeza que deseja excluir este item?')) return;
+        setLoading(true);
+        try {
+            switch (type) {
+                case 'fila': await filaService.desativar(id); break;
+                case 'setor': await setorService.desativar(id); break;
+                case 'unidade': await unidadeService.desativar(id); break;
+                case 'usuario': await usuarioService.desativar(id); break;
+                case 'cliente': await clienteService.desativar(id); break;
+                case 'painel': await painelService.desativar(id); break;
+            }
+            toast({ title: 'Sucesso', description: 'Item excluído com sucesso.' });
+            if (type === 'fila') await searchFilas(0);
+            if (type === 'setor') await searchSetores(0);
+            if (type === 'unidade') await searchUnidades(0);
+            if (type === 'usuario') await searchUsuarios(0);
+            if (type === 'cliente') await searchClientes(0);
+            if (type === 'painel') await searchPaineis(0);
+        } catch (err: any) {
+            toast({ title: 'Erro', description: err.message || 'Falha ao excluir o item.', variant: 'destructive' });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const renderFilaNames = (filaIds: string[]) => {
+        if (!filaIds || filaIds.length === 0) return <Badge variant="secondary">Nenhuma</Badge>;
+        return (
+            <div className="flex flex-wrap gap-1">
+                {filaIds.map((id) => {
+                    const fila = filaOptions.find((f) => f.id === id) || filas.find((f) => f.id === id);
+                    return <Badge key={id} variant="outline">{fila?.nome || 'Desconhecida'}</Badge>;
+                })}
+            </div>
+        );
+    };
+
+    const handleFilaCheckboxChange = (filaId: string, checked: boolean) => {
+        setFormData((prev: any) => {
+            const filasIds = prev.filasIds || [];
+            return {
+                ...prev,
+                filasIds: checked ? [...filasIds, filaId] : filasIds.filter((id: string) => id !== filaId)
+            };
         });
-        toast({ title: 'Sucesso', description: 'Usuário atualizado com sucesso' });
-      } else {
-        await usuarioService.criar(usuarioForm);
-        toast({ title: 'Sucesso', description: 'Usuário criado com sucesso' });
-      }
-      setUsuarioModalOpen(false);
-      setErrors({});
-      setEditingUsuario(null);
-      setUsuarioForm({ nomeUsuario: '', email: '', senha: '', categoria: CategoriaUsuario.USUARIO, unidadesIds: [] });
-      carregarDados();
-    } catch {
-      toast({ title: 'Erro', description: 'Erro ao salvar usuário', variant: 'destructive' });
-    }
-  };
+    };
 
-  const handleEditarUsuario = (usuario: UsuarioResponseDTO) => {
-    setEditingUsuario(usuario);
-    setUsuarioForm({
-      nomeUsuario: usuario.nomeUsuario,
-      email: usuario.email,
-      senha: '',
-      categoria: usuario.categoria,
-      unidadesIds: usuario.unidadesIds || []
-    });
-    setUsuarioModalOpen(true);
-  };
+    return (
+        <div className="container mx-auto p-6">
+            <h1 className="text-3xl font-bold mb-6">Gestão do Sistema</h1>
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+                <TabsList className="grid w-full grid-cols-6">
+                    <TabsTrigger value="filas">Filas</TabsTrigger>
+                    <TabsTrigger value="setores">Setores</TabsTrigger>
+                    <TabsTrigger value="unidades">Unidades</TabsTrigger>
+                    <TabsTrigger value="usuarios">Usuários</TabsTrigger>
+                    <TabsTrigger value="clientes">Clientes</TabsTrigger>
+                    <TabsTrigger value="paineis">Painéis</TabsTrigger>
+                </TabsList>
 
-  const handleExcluirUsuario = async (id: string) => {
-    if (confirm('Tem certeza que deseja excluir este usuário?')) {
-      try {
-        await usuarioService.desativar(id);
-        toast({ title: 'Sucesso', description: 'Usuário excluído com sucesso' });
-        carregarDados();
-      } catch {
-        toast({ title: 'Erro', description: 'Erro ao excluir usuário', variant: 'destructive' });
-      }
-    }
-  };
+                {/* Mantenha suas abas existentes aqui, elas não precisam de alteração */}
 
-  const handlePromoverUsuario = async (id: string) => {
-    if (confirm('Tem certeza que deseja promover este usuário para administrador?')) {
-      try {
-        await usuarioService.promoverParaAdministrador(id);
-        toast({ title: 'Sucesso', description: 'Usuário promovido com sucesso' });
-        carregarDados();
-      } catch {
-        toast({ title: 'Erro', description: 'Erro ao promover usuário', variant: 'destructive' });
-      }
-    }
-  };
-
-  const adicionarTelefoneCliente = () => {
-    if (telefoneClienteTemp.ddd && telefoneClienteTemp.numero) {
-      setClienteForm(p => ({ ...p, telefones: [...(p.telefones || []), telefoneClienteTemp] }));
-      setTelefoneClienteTemp({ tipo: TipoTelefone.CELULAR, ddd: 11, numero: 0 });
-    }
-  };
-
-  const handleSalvarCliente = async () => {
-    // Sanitização: enviar apenas campos realmente preenchidos
-    const end: Partial<Endereco> = (clienteForm.endereco || {});
-    const enderecoSan: any = {};
-    if (end.logradouro?.trim()) enderecoSan.logradouro = end.logradouro.trim();
-    if (end.numero?.trim()) enderecoSan.numero = end.numero.trim();
-    if (end.complemento?.trim()) enderecoSan.complemento = end.complemento.trim();
-    if (end.bairro?.trim()) enderecoSan.bairro = end.bairro.trim();
-    if (end.cidade?.trim()) enderecoSan.cidade = end.cidade.trim();
-    if (end.cep?.trim()) enderecoSan.cep = end.cep.replace(/[^0-9]/g, '');
-    if (end.uf) enderecoSan.uf = end.uf;
-
-    const telsSan = (clienteForm.telefones || [])
-      .filter(t => Number(t.ddd) > 0 && Number(t.numero) > 0)
-      .map(t => ({ tipo: t.tipo, ddd: Number(t.ddd), numero: Number(t.numero) }));
-
-    const payload: ClienteCreateDTO = {
-      cpf: clienteForm.cpf.trim(),
-      nome: clienteForm.nome.trim(),
-      email: clienteForm.email?.trim() || undefined,
-      endereco: Object.keys(enderecoSan).length ? enderecoSan : undefined,
-      telefones: telsSan.length ? telsSan : undefined,
-    } as ClienteCreateDTO;
-
-    const errs = validarClienteForm(payload);
-    if (Object.keys(errs).length) { setErrors(errs); return; }
-
-    try {
-      if (editingCliente) {
-        await clienteService.atualizarParcialmente(editingCliente.id, payload as any);
-        toast({ title: 'Sucesso', description: 'Cliente atualizado com sucesso' });
-      } else {
-        await clienteService.criar(payload);
-        toast({ title: 'Sucesso', description: 'Cliente criado com sucesso' });
-      }
-      setClienteModalOpen(false);
-      setErrors({});
-      setEditingCliente(null);
-      setClienteForm({ cpf: '', nome: '', email: '', telefones: [], endereco: { logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', cep: '', uf: undefined } });
-      carregarDados();
-    } catch {
-      toast({ title: 'Erro', description: 'Erro ao salvar cliente', variant: 'destructive' });
-    }
-  };
-
-  const handleEditarCliente = (cliente: ClienteResponseDTO) => {
-    setEditingCliente(cliente);
-    setClienteForm({
-      cpf: cliente.cpf || '',
-      nome: cliente.nome || '',
-      email: cliente.email || '',
-      telefones: cliente.telefones || [],
-      endereco: cliente.endereco || { logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', cep: '', uf: undefined }
-    });
-    setClienteModalOpen(true);
-  };
-
-  const handleExcluirCliente = async (id: string) => {
-    if (confirm('Tem certeza que deseja excluir este cliente?')) {
-      try {
-        await clienteService.desativar(id);
-        toast({ title: 'Sucesso', description: 'Cliente excluído com sucesso' });
-        carregarDados();
-      } catch {
-        toast({ title: 'Erro', description: 'Erro ao excluir cliente', variant: 'destructive' });
-      }
-    }
-  };
-
-  // ===== Handlers de Busca (reset dos filtros após buscar) =====
-  const handleBuscarFilas = async () => {
-    await loadFilasPage(0, filasSize);
-    setFilasSearchType('unidade');
-    setFilasSearchValue('');
-    setFilasSetorId('');
-    setFilasUnidadeId('');
-    setFilasPage(0);
-  };
-  const handleBuscarSetores = async () => {
-    await loadSetoresPage(0, setoresSize);
-    setSetoresSearchType('todos');
-    setSetoresSearchValue('');
-    setSetoresPage(0);
-  };
-  const handleBuscarUnidades = async () => {
-    await loadUnidadesPage(0, unidadesSize);
-    setUnidadesSearchType('todos');
-    setUnidadesSearchValue('');
-    setUnidadesPage(0);
-  };
-  const handleBuscarUsuarios = async () => {
-    await loadUsuariosPage(0, usuariosSize);
-    setUsuariosSearchType('todos');
-    setUsuariosSearchValue('');
-    setUsuariosPage(0);
-  };
-  const handleBuscarClientes = async () => {
-    await loadClientesPage(0, clientesSize);
-    setClientesSearchType('todos');
-    setClientesSearchValue('');
-    setClientesPage(0);
-  };
-
-  return (
-    <div className="container mx-auto p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">Gestão do Sistema</h1>
-      </div>
-
-      {loading ? (
-        <div className="flex justify-center items-center h-64"><p>Carregando...</p></div>
-      ) : (
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList className="grid w-full grid-cols-5">
-            <TabsTrigger value="filas">Filas</TabsTrigger>
-            <TabsTrigger value="setores">Setores</TabsTrigger>
-            <TabsTrigger value="unidades">Unidades</TabsTrigger>
-            <TabsTrigger value="usuarios">Usuários</TabsTrigger>
-            <TabsTrigger value="clientes">Clientes</TabsTrigger>
-          </TabsList>
-
-          {/* Tab Filas */}
-          <TabsContent value="filas">
-            <Card>
-              <CardHeader>
-                <div className="flex justify-between items-center">
-                  <div>
-                    <CardTitle>Gerenciar Filas</CardTitle>
-                    <CardDescription>Gerencie as filas de atendimento do sistema</CardDescription>
-                  </div>
-                  <Dialog open={filaModalOpen} onOpenChange={setFilaModalOpen}>
-                    <DialogTrigger asChild>
-                      <Button onClick={() => { setEditingFila(null); setFilaForm({ nome: '', setorId: '', unidadeAtendimentoId: '' }); setErrors({}); }}>
-                        <Plus className="w-4 h-4 mr-2" /> Nova Fila
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-[425px]">
-                      <DialogHeader>
-                        <DialogTitle>{editingFila ? 'Editar Fila' : 'Nova Fila'}</DialogTitle>
-                        <DialogDescription>{editingFila ? 'Edite os dados da fila' : 'Preencha os dados da nova fila'}</DialogDescription>
-                      </DialogHeader>
-                      <div className="grid gap-4 py-4">
-                        <div className="grid gap-2">
-                          <Label htmlFor="fila-nome">Nome da Fila *</Label>
-                          <Input id="fila-nome" value={filaForm.nome} onChange={(e)=> setFilaForm(p=>({ ...p, nome: e.target.value }))} placeholder="Digite o nome da fila" className={errors.nome ? 'border-red-500' : ''}/>
-                          {errors.nome && <p className="text-sm text-red-500">{errors.nome}</p>}
-                        </div>
-                        <div className="grid gap-2">
-                          <Label htmlFor="fila-setor">Setor *</Label>
-                          <Select value={filaForm.setorId} onValueChange={(v)=> setFilaForm(p=>({ ...p, setorId: v }))}>
-                            <SelectTrigger className={errors.setorId ? 'border-red-500' : ''}><SelectValue placeholder="Selecione um setor"/></SelectTrigger>
-                            <SelectContent>{setorOptions.map(s=> <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>)}</SelectContent>
-                          </Select>
-                          {errors.setorId && <p className="text-sm text-red-500">{errors.setorId}</p>}
-                        </div>
-                        <div className="grid gap-2">
-                          <Label htmlFor="fila-unidade">Unidade de Atendimento *</Label>
-                          <Select value={filaForm.unidadeAtendimentoId} onValueChange={(v)=> setFilaForm(p=>({ ...p, unidadeAtendimentoId: v }))}>
-                            <SelectTrigger className={errors.unidadeAtendimentoId ? 'border-red-500' : ''}><SelectValue placeholder="Selecione uma unidade"/></SelectTrigger>
-                            <SelectContent>{unidadeOptions.map(u=> <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>)}</SelectContent>
-                          </Select>
-                          {errors.unidadeAtendimentoId && <p className="text-sm text-red-500">{errors.unidadeAtendimentoId}</p>}
-                        </div>
-                      </div>
-                      <DialogFooter>
-                        <Button variant="outline" onClick={()=> setFilaModalOpen(false)}>Cancelar</Button>
-                        <Button onClick={handleSalvarFila}>{editingFila ? 'Atualizar' : 'Criar'}</Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-col gap-3 mb-4">
-                  <div className="flex flex-wrap items-end gap-3">
-                    <div className="flex flex-col min-w-[180px]">
-                      <Label className="mb-1">Tipo de busca</Label>
-                      <Select value={filasSearchType} onValueChange={(v:any)=> { setFilasSearchType(v); setFilasPage(0); }}>
-                        <SelectTrigger><SelectValue placeholder="Selecione o tipo de busca"/></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="unidade">Por Unidade</SelectItem>
-                          <SelectItem value="nome">Por Nome</SelectItem>
-                          <SelectItem value="setor">Por Setor</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {filasSearchType === 'unidade' && (
-                      <div className="flex flex-col min-w-[240px]">
-                        <Label className="mb-1">Unidade de Atendimento</Label>
-                        <Select value={filasUnidadeId} onValueChange={(v)=> { setFilasUnidadeId(v); setFilasPage(0); }}>
-                          <SelectTrigger><SelectValue placeholder="Selecione a unidade"/></SelectTrigger>
-                          <SelectContent>
-                            {unidadeOptions.map(u=> <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    )}
-
-                    {filasSearchType === 'nome' && (
-                      <>
-                        <div className="flex flex-col min-w-[240px]">
-                          <Label className="mb-1">Unidade (obrigatório)</Label>
-                          <Select value={filasUnidadeId} onValueChange={(v)=> { setFilasUnidadeId(v); setFilasPage(0); }}>
-                            <SelectTrigger><SelectValue placeholder="Selecione a unidade"/></SelectTrigger>
-                            <SelectContent>{unidadeOptions.map(u=> <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>)}</SelectContent>
-                          </Select>
-                        </div>
-                        <div className="flex flex-col min-w-[240px]">
-                          <Label className="mb-1">Nome da Fila</Label>
-                          <Input placeholder="Digite parte do nome da fila" value={filasSearchValue} onChange={(e)=> setFilasSearchValue(e.target.value)} />
-                        </div>
-                      </>
-                    )}
-
-                    {filasSearchType === 'setor' && (
-                      <>
-                        <div className="flex flex-col min-w-[240px]">
-                          <Label className="mb-1">Unidade (obrigatório)</Label>
-                          <Select value={filasUnidadeId} onValueChange={(v)=> { setFilasUnidadeId(v); setFilasPage(0); }}>
-                            <SelectTrigger><SelectValue placeholder="Selecione a unidade"/></SelectTrigger>
-                            <SelectContent>{unidadeOptions.map(u=> <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>)}</SelectContent>
-                          </Select>
-                        </div>
-                        <div className="flex flex-col min-w-[240px]">
-                          <Label className="mb-1">Setor</Label>
-                          <Select value={filasSetorId} onValueChange={(v)=> setFilasSetorId(v)}>
-                            <SelectTrigger><SelectValue placeholder="Selecione o setor"/></SelectTrigger>
-                            <SelectContent>{setorOptions.map(s=> <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>)}</SelectContent>
-                          </Select>
-                        </div>
-                      </>
-                    )}
-
-                    <div className="flex flex-col min-w-[130px]">
-                      <Label className="mb-1">Itens por página</Label>
-                      <Select value={String(filasSize)} defaultValue="10" onValueChange={(v)=> { const s=Number(v); setFilasSize(s); setFilasPage(0); }}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="10">10</SelectItem>
-                          <SelectItem value="25">25</SelectItem>
-                          <SelectItem value="50">50</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="pb-1">
-                      <Button variant="outline" onClick={handleBuscarFilas}>Buscar</Button>
-                    </div>
-                  </div>
-                </div>
-
-                {(() => { const d = pageDisplay(filasMeta, filasPage); return (
-                  <div className="flex items-center justify-between mb-3 text-sm text-muted-foreground">
-                    <div className="flex items-center gap-2">
-                      <span>Página {d.current} de {d.total}</span>
-                      <Input type="number" min={1} max={d.total} value={d.current} onChange={(e)=>{
-                        const n = Math.min(Math.max(1, Number(e.target.value)||1), d.total);
-                        const zero = n-1; setFilasPage(zero); loadFilasPage(zero);
-                      }} className="w-20 h-8" />
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm" onClick={()=> { setFilasPage(0); loadFilasPage(0); }} disabled={d.current<=1}>Primeira</Button>
-                      <Button variant="outline" size="sm" onClick={()=> {const p=Math.max(0,(filasMeta?.page ?? filasPage)-1); setFilasPage(p); loadFilasPage(p);}} disabled={(filasMeta?.page ?? filasPage) <= 0}>Anterior</Button>
-                      <Button variant="outline" size="sm" onClick={()=> {const next=(filasMeta?.page ?? filasPage)+1; if (next+1>d.total) return; setFilasPage(next); loadFilasPage(next);}} disabled={((filasMeta?.page ?? filasPage)+1) >= d.total}>Próxima</Button>
-                      <Button variant="outline" size="sm" onClick={()=> { const last = d.total-1; setFilasPage(last); loadFilasPage(last); }} disabled={d.current>=d.total}>Última</Button>
-                    </div>
-                  </div>
-                ); })()}
-
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>
-                        <div className="flex items-center gap-1">
-                          <span>Nome</span>
-                          <button aria-label="Ordenar" onClick={()=> { toggleSort(filasSort, 'nome', setFilasSort); loadFilasPage(filasMeta?.page ?? filasPage, filasMeta?.pageSize ?? filasSize); }} className="p-0.5">
-                            {filasSort.field==='nome' && filasSort.dir==='asc' ? '▲' : '▼'}
-                          </button>
-                        </div>
-                      </TableHead>
-                      <TableHead>
-                        <div className="flex items-center gap-1">
-                          <span>Setor</span>
-                          <button aria-label="Ordenar" onClick={()=> { toggleSort(filasSort, 'setor', setFilasSort); loadFilasPage(filasMeta?.page ?? filasPage, filasMeta?.pageSize ?? filasSize); }} className="p-0.5">
-                            {filasSort.field==='setor' && filasSort.dir==='asc' ? '▲' : '▼'}
-                          </button>
-                        </div>
-                      </TableHead>
-                      <TableHead>
-                        <div className="flex items-center gap-1">
-                          <span>Unidade</span>
-                          <button aria-label="Ordenar" onClick={()=> { toggleSort(filasSort, 'unidade', setFilasSort); loadFilasPage(filasMeta?.page ?? filasPage, filasMeta?.pageSize ?? filasSize); }} className="p-0.5">
-                            {filasSort.field==='unidade' && filasSort.dir==='asc' ? '▲' : '▼'}
-                          </button>
-                        </div>
-                      </TableHead>
-                      <TableHead className="text-right">Ações</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filas.map(fila => (
-                      <TableRow key={fila.id}>
-                        <TableCell>{fila.nome}</TableCell>
-                        <TableCell>{fila.setor.nome}</TableCell>
-                        <TableCell>{fila.unidade.nome}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex gap-2 justify-end">
-                            <Button variant="outline" size="sm" onClick={()=> handleEditarFila(fila)}><Edit className="w-4 h-4"/></Button>
-                            <Button variant="outline" size="sm" onClick={()=> handleExcluirFila(fila.id)}><Trash2 className="w-4 h-4"/></Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Tab Setores */}
-          <TabsContent value="setores">
-            <Card>
-              <CardHeader>
-                <div className="flex justify-between items-center">
-                  <div>
-                    <CardTitle>Gerenciar Setores</CardTitle>
-                    <CardDescription>Gerencie os setores de atendimento</CardDescription>
-                  </div>
-                  <Dialog open={setorModalOpen} onOpenChange={setSetorModalOpen}>
-                    <DialogTrigger asChild>
-                      <Button onClick={()=> { setEditingSetor(null); setSetorForm({ nome: '' }); setErrors({}); }}>
-                        <Plus className="w-4 h-4 mr-2" /> Novo Setor
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-[425px]">
-                      <DialogHeader>
-                        <DialogTitle>{editingSetor ? 'Editar Setor' : 'Novo Setor'}</DialogTitle>
-                        <DialogDescription>{editingSetor ? 'Edite os dados do setor' : 'Preencha os dados do novo setor'}</DialogDescription>
-                      </DialogHeader>
-                      <div className="grid gap-4 py-4">
-                        <div className="grid gap-2">
-                          <Label htmlFor="setor-nome">Nome do Setor *</Label>
-                          <Input id="setor-nome" value={setorForm.nome} onChange={(e)=> setSetorForm({ nome: e.target.value })} placeholder="Digite o nome do setor" className={errors.nome ? 'border-red-500' : ''}/>
-                          {errors.nome && <p className="text-sm text-red-500">{errors.nome}</p>}
-                        </div>
-                      </div>
-                      <DialogFooter>
-                        <Button variant="outline" onClick={()=> setSetorModalOpen(false)}>Cancelar</Button>
-                        <Button onClick={handleSalvarSetor}>{editingSetor ? 'Atualizar' : 'Criar'}</Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="flex flex-col min-w-[150px]">
-                    <Label className="mb-1">Tipo de busca</Label>
-                    <Select value={setoresSearchType} onValueChange={(v:any)=> setSetoresSearchType(v)}>
-                      <SelectTrigger><SelectValue placeholder="Selecione"/></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="todos">Todos</SelectItem>
-                        <SelectItem value="nome">Nome</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {setoresSearchType==='nome' && (
-                    <div className="flex flex-col min-w-[220px]">
-                      <Label className="mb-1">Nome do Setor</Label>
-                      <Input placeholder="Digite parte do nome" value={setoresSearchValue} onChange={(e)=> setSetoresSearchValue(e.target.value)}/>
-                    </div>
-                  )}
-                  <div className="flex flex-col min-w-[130px]">
-                    <Label className="mb-1">Itens por página</Label>
-                    <Select value={String(setoresSize)} defaultValue="10" onValueChange={(v)=> { const s=Number(v); setSetoresSize(s); setSetoresPage(0); }}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent><SelectItem value="10">10</SelectItem><SelectItem value="25">25</SelectItem><SelectItem value="50">50</SelectItem></SelectContent>
-                    </Select>
-                  </div>
-                  <div className="pb-1"><Button variant="outline" onClick={handleBuscarSetores}>Buscar</Button></div>
-                </div>
-                {(() => { const d = pageDisplay(setoresMeta, setoresPage); return (
-                  <div className="flex items-center justify-between mb-3 text-sm text-muted-foreground">
-                    <div className="flex items-center gap-2">
-                      <span>Página {d.current} de {d.total}</span>
-                      <Input type="number" min={1} max={d.total} value={d.current} onChange={(e)=>{ const n=Math.min(Math.max(1,Number(e.target.value)||1),d.total); const zero=n-1; setSetoresPage(zero); loadSetoresPage(zero); }} className="w-20 h-8"/>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm" onClick={()=> { setSetoresPage(0); loadSetoresPage(0); }} disabled={d.current<=1}>Primeira</Button>
-                      <Button variant="outline" size="sm" onClick={()=> { const p=Math.max(0,(setoresMeta?.page ?? setoresPage)-1); setSetoresPage(p); loadSetoresPage(p); }} disabled={(setoresMeta?.page ?? setoresPage) <= 0}>Anterior</Button>
-                      <Button variant="outline" size="sm" onClick={()=> { const next=(setoresMeta?.page ?? setoresPage)+1; if (next+1>d.total) return; setSetoresPage(next); loadSetoresPage(next); }} disabled={((setoresMeta?.page ?? setoresPage)+1)>=d.total}>Próxima</Button>
-                      <Button variant="outline" size="sm" onClick={()=> { const last=d.total-1; setSetoresPage(last); loadSetoresPage(last); }} disabled={d.current>=d.total}>Última</Button>
-                    </div>
-                  </div>
-                ); })()}
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>
-                        <div className="flex items-center gap-1">
-                          <span>Nome</span>
-                          <button aria-label="Ordenar" onClick={()=> { toggleSort(setoresSort, 'nome', setSetoresSort); loadSetoresPage(setoresMeta?.page ?? setoresPage, setoresMeta?.pageSize ?? setoresSize); }} className="p-0.5">
-                            {setoresSort.field==='nome' && setoresSort.dir==='asc' ? '▲' : '▼'}
-                          </button>
-                        </div>
-                      </TableHead>
-                      <TableHead className="text-right">Ações</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {setores.map(setor => (
-                      <TableRow key={setor.id}>
-                        <TableCell>{setor.nome}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex gap-2 justify-end">
-                            <Button variant="outline" size="sm" onClick={()=> handleEditarSetor(setor)}><Edit className="w-4 h-4"/></Button>
-                            <Button variant="outline" size="sm" onClick={()=> handleExcluirSetor(setor.id)}><Trash2 className="w-4 h-4"/></Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Tab Unidades */}
-          <TabsContent value="unidades">
-            <Card>
-              <CardHeader>
-                <div className="flex justify-between items-center">
-                  <div>
-                    <CardTitle>Gerenciar Unidades</CardTitle>
-                    <CardDescription>Gerencie as unidades de atendimento</CardDescription>
-                  </div>
-                  <Dialog open={unidadeModalOpen} onOpenChange={setUnidadeModalOpen}>
-                    <DialogTrigger asChild>
-                      <Button onClick={() => { setEditingUnidade(null); setErrors({}); setUnidadeForm({ nome: '', endereco: { logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', cep: '', uf: undefined }, telefones: [] }); }}>
-                        <Plus className="w-4 h-4 mr-2" /> Nova Unidade
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
-                      <DialogHeader>
-                        <DialogTitle>{editingUnidade ? 'Editar Unidade' : 'Nova Unidade'}</DialogTitle>
-                        <DialogDescription>{editingUnidade ? 'Edite os dados da unidade' : 'Preencha os dados da nova unidade'}</DialogDescription>
-                      </DialogHeader>
-                      <div className="grid gap-4 py-4">
-                        <div className="grid gap-2">
-                          <Label htmlFor="unidade-nome">Nome da Unidade *</Label>
-                          <Input id="unidade-nome" value={unidadeForm.nome} onChange={(e)=> setUnidadeForm(p=>({ ...p, nome: e.target.value }))} placeholder="Digite o nome da unidade" className={errors.nome ? 'border-red-500' : ''}/>
-                          {errors.nome && <p className="text-sm text-red-500">{errors.nome}</p>}
-                        </div>
-
-                        <div className="grid gap-2">
-                          <Label htmlFor="unidade-endereco">Endereço</Label>
-                          <Input id="unidade-endereco" value={unidadeForm.endereco.logradouro} onChange={(e)=> setUnidadeForm(p=>({ ...p, endereco: { ...p.endereco, logradouro: e.target.value } }))} placeholder="Digite o logradouro" />
-                        </div>
-                        <div className="grid gap-2 grid-cols-2">
-                          <div>
-                            <Label htmlFor="unidade-numero">Número</Label>
-                            <Input
-                              id="unidade-numero"
-                              value={unidadeForm.endereco.numero}
-                              onChange={(e)=> setUnidadeForm(p=>({ ...p, endereco: { ...p.endereco, numero: e.target.value } }))}
-                              placeholder="Digite o número"
-                            />
-                          </div>
-                          <div>
-                            <Label htmlFor="unidade-complemento">Complemento</Label>
-                            <Input id="unidade-complemento" value={unidadeForm.endereco.complemento} onChange={(e)=> setUnidadeForm(p=>({ ...p, endereco: { ...p.endereco, complemento: e.target.value } }))} placeholder="Digite o complemento" />
-                          </div>
-                        </div>
-                        <div className="grid gap-2">
-                          <Label htmlFor="unidade-bairro">Bairro</Label>
-                          <Input id="unidade-bairro" value={unidadeForm.endereco.bairro} onChange={(e)=> setUnidadeForm(p=>({ ...p, endereco: { ...p.endereco, bairro: e.target.value } }))} placeholder="Digite o bairro" />
-                        </div>
-                        <div className="grid gap-2 grid-cols-2">
-                          <div>
-                            <Label htmlFor="unidade-cidade">Cidade</Label>
-                            <Input id="unidade-cidade" value={unidadeForm.endereco.cidade} onChange={(e)=> setUnidadeForm(p=>({ ...p, endereco: { ...p.endereco, cidade: e.target.value } }))} placeholder="Digite a cidade" />
-                          </div>
-                          <div>
-                            <Label htmlFor="unidade-cep">CEP</Label>
-                            <Input id="unidade-cep" value={unidadeForm.endereco.cep} onChange={(e)=> setUnidadeForm(p=>({ ...p, endereco: { ...p.endereco, cep: formatCepMask(e.target.value) } }))} placeholder="Ex.: 14460-098" />
-                          </div>
-                        </div>
-
-                        <div className="grid gap-2">
-                          <Label htmlFor="unidade-telefones">Telefones</Label>
-                          <div className="flex flex-col gap-2">
-                            {unidadeForm.telefones?.map((t, i) => (
-                              <div key={i} className="flex gap-2 items-center">
-                                <Select value={t.tipo} onValueChange={(v) => setUnidadeForm(p => ({ ...p, telefones: (p.telefones || []).map((tel, idx) => idx === i ? { ...tel, tipo: v as TipoTelefone } : tel) }))}>
-                                  <SelectTrigger><SelectValue placeholder="Selecione o tipo"/></SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value={TipoTelefone.FIXO}>Fixo</SelectItem>
-                                    <SelectItem value={TipoTelefone.CELULAR}>Celular</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                                <Input value={t.ddd} onChange={e => setUnidadeForm(p => ({ ...p, telefones: (p.telefones || []).map((tel, idx) => idx === i ? { ...tel, ddd: parseInt(e.target.value || '0', 10) } : tel) }))} placeholder="DDD" className="w-16" />
-                                <Input value={t.numero} onChange={e => setUnidadeForm(p => ({ ...p, telefones: (p.telefones || []).map((tel, idx) => idx === i ? { ...tel, numero: parseInt(e.target.value || '0', 10) } : tel) }))} placeholder="Número" className="flex-1" />
-                                {(unidadeForm.telefones.length > 1 || (Number(t.ddd) > 0 || Number(t.numero) > 0)) && (
-                                  <Button variant="destructive" onClick={() => setUnidadeForm(p => ({ ...p, telefones: p.telefones?.filter((_, idx) => idx !== i) }))}>
-                                    <Trash2 className="w-4 h-4" />
-                                  </Button>
-                                )}
-                              </div>
-                            ))}
-                            <Button variant="outline" onClick={adicionarTelefone}>
-                              <Plus className="w-4 h-4 mr-2" /> Adicionar Telefone
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                      <DialogFooter>
-                        <Button variant="outline" onClick={()=> setUnidadeModalOpen(false)}>Cancelar</Button>
-                        <Button onClick={handleSalvarUnidade}>{editingUnidade ? 'Atualizar' : 'Criar'}</Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="flex flex-col min-w-[150px]">
-                    <Label className="mb-1">Tipo de busca</Label>
-                    <Select value={unidadesSearchType} onValueChange={(v:any)=> setUnidadesSearchType(v)}>
-                      <SelectTrigger><SelectValue placeholder="Selecione"/></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="todos">Todos</SelectItem>
-                        <SelectItem value="nome">Nome</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {unidadesSearchType==='nome' && (
-                    <div className="flex flex-col min-w-[220px]">
-                      <Label className="mb-1">Nome da Unidade</Label>
-                      <Input placeholder="Digite parte do nome" value={unidadesSearchValue} onChange={(e)=> setUnidadesSearchValue(e.target.value)}/>
-                    </div>
-                  )}
-                  <div className="flex flex-col min-w-[130px]">
-                    <Label className="mb-1">Itens por página</Label>
-                    <Select value={String(unidadesSize)} defaultValue="10" onValueChange={(v)=> { const s=Number(v); setUnidadesSize(s); setUnidadesPage(0); }}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent><SelectItem value="10">10</SelectItem><SelectItem value="25">25</SelectItem><SelectItem value="50">50</SelectItem></SelectContent>
-                    </Select>
-                  </div>
-                  <div className="pb-1"><Button variant="outline" onClick={handleBuscarUnidades}>Buscar</Button></div>
-                </div>
-                {(() => { const d = pageDisplay(unidadesMeta, unidadesPage); return (
-                  <div className="flex items-center justify-between mb-3 text-sm text-muted-foreground">
-                    <div className="flex items-center gap-2">
-                      <span>Página {d.current} de {d.total}</span>
-                      <Input type="number" min={1} max={d.total} value={d.current} onChange={(e)=>{ const n=Math.min(Math.max(1,Number(e.target.value)||1),d.total); const zero=n-1; setUnidadesPage(zero); loadUnidadesPage(zero); }} className="w-20 h-8"/>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm" onClick={()=> { setUnidadesPage(0); loadUnidadesPage(0); }} disabled={d.current<=1}>Primeira</Button>
-                      <Button variant="outline" size="sm" onClick={()=> { const p=Math.max(0,(unidadesMeta?.page ?? unidadesPage)-1); setUnidadesPage(p); loadUnidadesPage(p); }} disabled={(unidadesMeta?.page ?? unidadesPage) <= 0}>Anterior</Button>
-                      <Button variant="outline" size="sm" onClick={()=> { const next=(unidadesMeta?.page ?? unidadesPage)+1; if (next+1>d.total) return; setUnidadesPage(next); loadUnidadesPage(next); }} disabled={((unidadesMeta?.page ?? unidadesPage)+1)>=d.total}>Próxima</Button>
-                      <Button variant="outline" size="sm" onClick={()=> { const last=d.total-1; setUnidadesPage(last); loadUnidadesPage(last); }} disabled={d.current>=d.total}>Última</Button>
-                    </div>
-                  </div>
-                ); })()}
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>
-                        <div className="flex items-center gap-1">
-                          <span>Nome</span>
-                          <button aria-label="Ordenar" onClick={()=> { toggleSort(unidadesSort, 'nome', setUnidadesSort); loadUnidadesPage(unidadesMeta?.page ?? unidadesPage, unidadesMeta?.pageSize ?? unidadesSize); }} className="p-0.5">
-                            {unidadesSort.field==='nome' && unidadesSort.dir==='asc' ? '▲' : '▼'}
-                          </button>
-                        </div>
-                      </TableHead>
-                      <TableHead>
-                        <div className="flex items-center gap-1">
-                          <span>Endereço</span>
-                          <button aria-label="Ordenar" onClick={()=> { toggleSort(unidadesSort, 'endereco', setUnidadesSort); loadUnidadesPage(unidadesMeta?.page ?? unidadesPage, unidadesMeta?.pageSize ?? unidadesSize); }} className="p-0.5">
-                            {unidadesSort.field==='endereco' && unidadesSort.dir==='asc' ? '▲' : '▼'}
-                          </button>
-                        </div>
-                      </TableHead>
-                      <TableHead>Telefones</TableHead>
-                      <TableHead className="text-right">Ações</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {unidades.map(unidade => (
-                      <TableRow key={unidade.id}>
-                        <TableCell>{unidade.nome}</TableCell>
-                        <TableCell>{unidade.endereco?.enderecoFormatado || `${unidade.endereco?.logradouro}, ${unidade.endereco?.numero}` || 'Não informado'}</TableCell>
-                        <TableCell>{unidade.telefones?.map((t,i)=> <div key={i} className="text-sm">{t.tipo}: ({t.ddd}) {t.numero}</div>) || 'Nenhum'}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex gap-2 justify-end">
-                            <Button variant="outline" size="sm" onClick={()=> handleEditarUnidade(unidade)}><Edit className="w-4 h-4"/></Button>
-                            <Button variant="outline" size="sm" onClick={()=> handleExcluirUnidade(unidade.id)}><Trash2 className="w-4 h-4"/></Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Tab Usuários */}
-          <TabsContent value="usuarios">
-            <Card>
-              <CardHeader>
-                <div className="flex justify-between items-center">
-                  <div>
-                    <CardTitle>Gerenciar Usuários</CardTitle>
-                    <CardDescription>Gerencie os usuários do sistema</CardDescription>
-                  </div>
-                  <Dialog open={usuarioModalOpen} onOpenChange={setUsuarioModalOpen}>
-                    <DialogTrigger asChild>
-                      <Button onClick={() => { setEditingUsuario(null); setErrors({}); setUsuarioForm({ nomeUsuario: '', email: '', senha: '', categoria: CategoriaUsuario.USUARIO, unidadesIds: [] }); }}>
-                        <Plus className="w-4 h-4 mr-2" /> Novo Usuário
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-[500px]">
-                      <DialogHeader>
-                        <DialogTitle>{editingUsuario ? 'Editar Usuário' : 'Novo Usuário'}</DialogTitle>
-                        <DialogDescription>{editingUsuario ? 'Edite os dados do usuário' : 'Preencha os dados do novo usuário'}</DialogDescription>
-                      </DialogHeader>
-                      <div className="grid gap-4 py-4">
-                        <div className="grid gap-2">
-                          <Label htmlFor="usuario-nome">Nome do Usuário *</Label>
-                          <Input id="usuario-nome" value={usuarioForm.nomeUsuario} onChange={(e)=> setUsuarioForm(p=>({ ...p, nomeUsuario: e.target.value }))} placeholder="Digite o nome do usuário" className={errors.nomeUsuario ? 'border-red-500' : ''}/>
-                          {errors.nomeUsuario && <p className="text-sm text-red-500">{errors.nomeUsuario}</p>}
-                        </div>
-                        <div className="grid gap-2">
-                          <Label htmlFor="usuario-email">Email *</Label>
-                          <Input id="usuario-email" value={usuarioForm.email} onChange={(e)=> setUsuarioForm(p=>({ ...p, email: e.target.value }))} placeholder="Digite o email" className={errors.email ? 'border-red-500' : ''}/>
-                          {errors.email && <p className="text-sm text-red-500">{errors.email}</p>}
-                        </div>
-                        <div className="grid gap-2">
-                          <Label htmlFor="usuario-senha">Senha {editingUsuario ? '' : '*'} </Label>
-                          <Input id="usuario-senha" type="password" value={usuarioForm.senha} onChange={(e)=> setUsuarioForm(p=>({ ...p, senha: e.target.value }))} placeholder="Digite a senha" className={errors.senha ? 'border-red-500' : ''}/>
-                          {errors.senha && <p className="text-sm text-red-500">{errors.senha}</p>}
-                        </div>
-                        <div className="grid gap-2">
-                          <Label htmlFor="usuario-categoria">Categoria *</Label>
-                          <Select value={usuarioForm.categoria} onValueChange={(v)=> setUsuarioForm(p=>({ ...p, categoria: v as CategoriaUsuario }))}>
-                            <SelectTrigger><SelectValue placeholder="Selecione a categoria"/></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value={CategoriaUsuario.ADMINISTRADOR}>Administrador</SelectItem>
-                              <SelectItem value={CategoriaUsuario.USUARIO}>Usuário Comum</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <div className="grid gap-2">
-                          <Label>Unidades de Acesso</Label>
-                          <div className="space-y-2">
-                            {unidadeOptions.map(u => (
-                              <div key={u.id} className="flex items-center space-x-2">
-                                <input
-                                  type="checkbox"
-                                  id={`unidade-${u.id}`}
-                                  checked={usuarioForm.unidadesIds?.includes(u.id) || false}
-                                  onChange={(e) => {
-                                    if (e.target.checked) {
-                                      setUsuarioForm(prev => ({ ...prev, unidadesIds: [...(prev.unidadesIds || []), u.id] }));
-                                    } else {
-                                      setUsuarioForm(prev => ({ ...prev, unidadesIds: (prev.unidadesIds || []).filter(id => id !== u.id) }));
-                                    }
-                                  }}
-                                />
-                                <Label htmlFor={`unidade-${u.id}`}>{u.nome}</Label>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                      <DialogFooter>
-                        <Button variant="outline" onClick={()=> setUsuarioModalOpen(false)}>Cancelar</Button>
-                        <Button onClick={handleSalvarUsuario}>{editingUsuario ? 'Atualizar' : 'Criar'}</Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="flex flex-col min-w-[150px]">
-                    <Label className="mb-1">Tipo de busca</Label>
-                    <Select value={usuariosSearchType} onValueChange={(v:any)=> setUsuariosSearchType(v)}>
-                      <SelectTrigger><SelectValue placeholder="Selecione"/></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="todos">Todos</SelectItem>
-                        <SelectItem value="email">Email</SelectItem>
-                        <SelectItem value="nome">Nome</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {usuariosSearchType!=='todos' && (
-                    <div className="flex flex-col min-w-[220px]">
-                      <Label className="mb-1">{usuariosSearchType==='email' ? 'Email' : 'Nome'}</Label>
-                      <Input placeholder={usuariosSearchType==='email' ? 'usuario@email.com' : 'Digite parte do nome'} value={usuariosSearchValue} onChange={(e)=> setUsuariosSearchValue(e.target.value)}/>
-                    </div>
-                  )}
-                  <div className="flex flex-col min-w-[130px]">
-                    <Label className="mb-1">Itens por página</Label>
-                    <Select value={String(usuariosSize)} defaultValue="10" onValueChange={(v)=> { const s=Number(v); setUsuariosSize(s); setUsuariosPage(0); }}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent><SelectItem value="10">10</SelectItem><SelectItem value="25">25</SelectItem><SelectItem value="50">50</SelectItem></SelectContent>
-                    </Select>
-                  </div>
-                  <div className="pb-1"><Button variant="outline" onClick={handleBuscarUsuarios}>Buscar</Button></div>
-                </div>
-
-                {(() => { const d = pageDisplay(usuariosMeta, usuariosPage); return (
-                  <div className="flex items-center justify-between mb-3 text-sm text-muted-foreground">
-                    <div className="flex items-center gap-2">
-                      <span>Página {d.current} de {d.total}</span>
-                      <Input type="number" min={1} max={d.total} value={d.current} onChange={(e)=>{ const n=Math.min(Math.max(1,Number(e.target.value)||1),d.total); const zero=n-1; setUsuariosPage(zero); loadUsuariosPage(zero); }} className="w-20 h-8"/>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm" onClick={()=> { setUsuariosPage(0); loadUsuariosPage(0); }} disabled={d.current<=1}>Primeira</Button>
-                      <Button variant="outline" size="sm" onClick={()=> { const p=Math.max(0,(usuariosMeta?.page ?? usuariosPage)-1); setUsuariosPage(p); loadUsuariosPage(p); }} disabled={(usuariosMeta?.page ?? usuariosPage)<=0}>Anterior</Button>
-                      <Button variant="outline" size="sm" onClick={()=> { const next=(usuariosMeta?.page ?? usuariosPage)+1; if (next+1>d.total) return; setUsuariosPage(next); loadUsuariosPage(next); }} disabled={((usuariosMeta?.page ?? usuariosPage)+1) >= d.total}>Próxima</Button>
-                      <Button variant="outline" size="sm" onClick={()=> { const last = d.total-1; setUsuariosPage(last); loadUsuariosPage(last); }} disabled={d.current>=d.total}>Última</Button>
-                    </div>
-                  </div>
-                ); })()}
-
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>
-                        <div className="flex items-center gap-1">
-                          <span>Nome</span>
-                          <button aria-label="Ordenar" onClick={()=> { toggleSort(usuariosSort, 'nomeUsuario', setUsuariosSort); loadUsuariosPage(usuariosMeta?.page ?? usuariosPage, usuariosMeta?.pageSize ?? usuariosSize); }} className="p-0.5">
-                            {usuariosSort.field==='nomeUsuario' && usuariosSort.dir==='asc' ? '▲' : '▼'}
-                          </button>
-                        </div>
-                      </TableHead>
-                      <TableHead>
-                        <div className="flex items-center gap-1">
-                          <span>Email</span>
-                          <button aria-label="Ordenar" onClick={()=> { toggleSort(usuariosSort, 'email', setUsuariosSort); loadUsuariosPage(usuariosMeta?.page ?? usuariosPage, usuariosMeta?.pageSize ?? usuariosSize); }} className="p-0.5">
-                            {usuariosSort.field==='email' && usuariosSort.dir==='asc' ? '▲' : '▼'}
-                          </button>
-                        </div>
-                      </TableHead>
-                      <TableHead>
-                        <div className="flex items-center gap-1">
-                          <span>Categoria</span>
-                          <button aria-label="Ordenar" onClick={()=> { toggleSort(usuariosSort, 'categoria', setUsuariosSort); loadUsuariosPage(usuariosMeta?.page ?? usuariosPage, usuariosMeta?.pageSize ?? usuariosSize); }} className="p-0.5">
-                            {usuariosSort.field==='categoria' && usuariosSort.dir==='asc' ? '▲' : '▼'}
-                          </button>
-                        </div>
-                      </TableHead>
-                      <TableHead>
-                        <div className="flex items-center gap-1">
-                          <span>Unidades</span>
-                        </div>
-                      </TableHead>
-                      <TableHead className="text-right">Ações</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {usuarios.map(usuario => (
-                      <TableRow key={usuario.id}>
-                        <TableCell>{usuario.nomeUsuario}</TableCell>
-                        <TableCell>{usuario.email}</TableCell>
-                        <TableCell>
-                          <Badge variant={usuario.categoria === CategoriaUsuario.ADMINISTRADOR ? 'default' : 'secondary'}>
-                            {usuario.categoria === CategoriaUsuario.ADMINISTRADOR ? (<>Admin</>) : (<>Usuário</>)}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <ScrollArea className="max-h-16 w-full">
-                            <div className="flex flex-wrap gap-1">
-                              {(usuario.unidadesIds || []).map((uid)=> {
-                                const nome = unidadeOptions.find(u=> u.id===uid)?.nome || uid;
-                                return <Badge key={uid} variant="secondary" className="whitespace-nowrap">{nome}</Badge>;
-                              })}
+                {/* TAB FILAS (exemplo de como ficaria) */}
+                <TabsContent value="filas">
+                    <Card>
+                        <CardHeader className="space-y-4">
+                            <div className="flex items-start justify-between gap-2">
+                                <div>
+                                    <CardTitle>Gerenciar Filas</CardTitle>
+                                    <CardDescription>Adicione, edite e remova as filas de atendimento.</CardDescription>
+                                </div>
+                                <Button onClick={() => handleOpenModal('fila')}><Plus className="w-4 h-4 mr-2" /> Nova Fila</Button>
                             </div>
-                          </ScrollArea>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex gap-2 justify-end">
-                            <Button variant="outline" size="sm" onClick={()=> handleEditarUsuario(usuario)}><Edit className="w-4 h-4"/></Button>
-                            {usuario.categoria !== CategoriaUsuario.ADMINISTRADOR && (
-                              <Button variant="outline" size="sm" onClick={()=> handlePromoverUsuario(usuario.id)}><UserPlus className="w-4 h-4"/></Button>
-                            )}
-                            <Button variant="outline" size="sm" onClick={()=> handleExcluirUsuario(usuario.id)}><Trash2 className="w-4 h-4"/></Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Tab Clientes */}
-          <TabsContent value="clientes">
-            <Card>
-              <CardHeader>
-                <div className="flex justify-between items-center">
-                  <div>
-                    <CardTitle>Gerenciar Clientes</CardTitle>
-                    <CardDescription>Cadastre e edite clientes</CardDescription>
-                  </div>
-                  <Dialog open={clienteModalOpen} onOpenChange={setClienteModalOpen}>
-                    <DialogTrigger asChild>
-                      <Button onClick={()=> { setEditingCliente(null); setErrors({}); setClienteForm({ cpf: '', nome: '', email: '', telefones: [ { tipo: TipoTelefone.CELULAR, ddd: 16, numero: 0 } ], endereco: { logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', cep: '', uf: undefined } }); }}>
-                        <Plus className="w-4 h-4 mr-2" /> Novo Cliente
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
-                      <DialogHeader>
-                        <DialogTitle>{editingCliente ? 'Editar Cliente' : 'Novo Cliente'}</DialogTitle>
-                        <DialogDescription>{editingCliente ? 'Edite os dados do cliente' : 'Preencha os dados do novo cliente'}</DialogDescription>
-                      </DialogHeader>
-                      <div className="grid gap-4 py-4">
-                        <div className="grid gap-2">
-                          <Label htmlFor="cliente-cpf">CPF *</Label>
-                          <Input id="cliente-cpf" value={clienteForm.cpf} onChange={(e)=> setClienteForm(p=>({ ...p, cpf: e.target.value }))} placeholder="Digite o CPF" className={errors.cpf ? 'border-red-500' : ''}/>
-                          {errors.cpf && <p className="text-sm text-red-500">{errors.cpf}</p>}
-                        </div>
-                        <div className="grid gap-2">
-                          <Label htmlFor="cliente-nome">Nome *</Label>
-                          <Input id="cliente-nome" value={clienteForm.nome} onChange={(e)=> setClienteForm(p=>({ ...p, nome: e.target.value }))} placeholder="Digite o nome" className={errors.nome ? 'border-red-500' : ''}/>
-                          {errors.nome && <p className="text-sm text-red-500">{errors.nome}</p>}
-                        </div>
-                        <div className="grid gap-2">
-                          <Label htmlFor="cliente-email">Email</Label>
-                          <Input id="cliente-email" value={clienteForm.email} onChange={(e)=> setClienteForm(p=>({ ...p, email: e.target.value }))} placeholder="Digite o email" className={errors.email ? 'border-red-500' : ''}/>
-                          {errors.email && <p className="text-sm text-red-500">{errors.email}</p>}
-                        </div>
-
-                        <div className="grid gap-2">
-                          <Label htmlFor="cliente-endereco">Endereço</Label>
-                          <Input id="cliente-endereco" value={clienteForm.endereco.logradouro} onChange={(e)=> setClienteForm(p=>({ ...p, endereco: { ...p.endereco, logradouro: e.target.value } }))} placeholder="Digite o logradouro" />
-                        </div>
-                        <div className="flex gap-2">
-                          <div className="shrink-0">
-                            <Label htmlFor="cliente-numero">Número</Label>
-                            <Input
-                              id="cliente-numero"
-                              value={clienteForm.endereco.numero}
-                              onChange={(e)=> setClienteForm(p=>({ ...p, endereco: { ...p.endereco, numero: e.target.value.replace(/[^0-9]/g,'').slice(0,6) } }))}
-                              placeholder="Ex.: 123456"
-                              maxLength={6}
-                              inputMode="numeric"
-                              pattern="\\d*"
-                              className="w-28"
-                            />
-                          </div>
-                          <div className="flex-1">
-                            <Label htmlFor="cliente-complemento">Complemento</Label>
-                            <Input id="cliente-complemento" value={clienteForm.endereco.complemento} onChange={(e)=> setClienteForm(p=>({ ...p, endereco: { ...p.endereco, complemento: e.target.value } }))} placeholder="Ex.: Apto 12, Bloco B" />
-                          </div>
-                        </div>
-                        <div className="grid gap-2">
-                          <Label htmlFor="cliente-bairro">Bairro</Label>
-                          <Input id="cliente-bairro" value={clienteForm.endereco.bairro} onChange={(e)=> setClienteForm(p=>({ ...p, endereco: { ...p.endereco, bairro: e.target.value } }))} placeholder="Digite o bairro" />
-                        </div>
-                        <div className="flex gap-2">
-                          <div className="flex-1">
-                            <Label htmlFor="cliente-cidade">Cidade</Label>
-                            <Input id="cliente-cidade" value={clienteForm.endereco.cidade} onChange={(e)=> setClienteForm(p=>({ ...p, endereco: { ...p.endereco, cidade: e.target.value } }))} placeholder="Ex.: Cristais Paulista" />
-                          </div>
-                          <div className="shrink-0">
-                            <Label htmlFor="cliente-cep">CEP</Label>
-                            <Input
-                              id="cliente-cep"
-                              value={clienteForm.endereco.cep}
-                              onChange={(e)=> setClienteForm(p=>({ ...p, endereco: { ...p.endereco, cep: formatCepMask(e.target.value) } }))}
-                              placeholder="Ex.: 14460-098"
-                              maxLength={9}
-                              inputMode="numeric"
-                              pattern="\\d{5}-?\\d{0,3}"
-                              className="w-32"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="grid gap-2">
-                          <Label htmlFor="cliente-telefones">Telefones</Label>
-                          <div className="flex flex-col gap-2">
-                            {clienteForm.telefones?.map((t, i) => (
-                              <div key={i} className="flex gap-2 items-center">
-                                <Select value={t.tipo} onValueChange={(v) => setClienteForm(p => ({ ...p, telefones: (p.telefones || []).map((tel, idx) => idx === i ? { ...tel, tipo: v as TipoTelefone } : tel) }))}>
-                                  <SelectTrigger className="w-28"><SelectValue placeholder="Tipo"/></SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value={TipoTelefone.FIXO}>Fixo</SelectItem>
-                                    <SelectItem value={TipoTelefone.CELULAR}>Celular</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                                <Input
-                                  value={String(t.ddd ?? '')}
-                                  onChange={e => setClienteForm(p => ({ ...p, telefones: (p.telefones || []).map((tel, idx) => idx === i ? { ...tel, ddd: parseInt(e.target.value.replace(/[^0-9]/g,'').slice(0,2) || '0', 10) } : tel) }))}
-                                  placeholder="DDD (ex.: 16)"
-                                  className="w-16"
-                                  maxLength={2}
-                                  inputMode="numeric"
-                                  pattern="\\d*"
-                                />
-                                <Input
-                                  value={String(t.numero ?? '')}
-                                  onChange={e => setClienteForm(p => ({ ...p, telefones: (p.telefones || []).map((tel, idx) => idx === i ? { ...tel, numero: parseInt(e.target.value.replace(/[^0-9]/g,'').slice(0,11) || '0', 10) } : tel) }))}
-                                  placeholder="Número (ex.: 98836-2410)"
-                                  className="flex-1"
-                                  maxLength={11}
-                                  inputMode="numeric"
-                                  pattern="\\d*"
-                                />
-                                {(clienteForm.telefones.length > 1 || (Number(t.ddd) > 0 || Number(t.numero) > 0)) && (
-                                  <Button variant="destructive" onClick={() => setClienteForm(p => ({ ...p, telefones: p.telefones?.filter((_, idx) => idx !== i) }))}>
-                                    <Trash2 className="w-4 h-4" />
-                                  </Button>
+                            <div className="flex items-center gap-3">
+                                <div className="flex-1">
+                                    <SearchBar
+                                        value={filaQuery}
+                                        onChange={setFilaQuery}
+                                        onSubmit={() => searchFilas(0)}
+                                        placeholder="Buscar..."
+                                        loading={filaLoading}
+                                        modes={[{ value: 'porUnidade', label: 'Por Unidade' }, { value: 'todas', label: 'Todas as Filas' }]}
+                                        mode={filaMode}
+                                        onModeChange={(v) => setFilaMode(v as any)}
+                                        onClear={() => { setFilaQuery(''); setFilaMode('porUnidade'); setFilaUnidadeFilter(''); searchFilas(0); }}
+                                        unitFilter={{
+                                            options: unidadeOptions.map(u => ({ value: u.id, label: u.nome })),
+                                            value: filaUnidadeFilter || selectedUnitId || '',
+                                            onChange: setFilaUnidadeFilter,
+                                            title: 'Selecione a unidade',
+                                        }}
+                                    />
+                                </div>
+                                {filaMetaState && (
+                                    <PaginationIconNav
+                                        meta={filaMetaState}
+                                        onFirst={() => searchFilas(0)}
+                                        onPrev={() => searchFilas(Math.max(0, filaPage - 1))}
+                                        onNext={() => searchFilas(filaPage + 1)}
+                                        onLast={() => filaMetaState ? searchFilas(filaMetaState.totalPages - 1) : null}
+                                        inline
+                                    />
                                 )}
-                              </div>
-                            ))}
-                            <Button variant="outline" onClick={()=> setClienteForm(p => ({ ...p, telefones: [...(p.telefones || []), { tipo: TipoTelefone.CELULAR, ddd: 0, numero: 0 }] }))}>
-                              <Plus className="w-4 h-4 mr-2" /> Adicionar Telefone
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                      <DialogFooter>
-                        <Button variant="outline" onClick={()=> setClienteModalOpen(false)}>Cancelar</Button>
-                        <Button onClick={handleSalvarCliente}>{editingCliente ? 'Atualizar' : 'Criar'}</Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="flex flex-col min-w-[150px]">
-                    <Label className="mb-1">Tipo de busca</Label>
-                    <Select value={clientesSearchType} onValueChange={(v:any)=> setClientesSearchType(v)}>
-                      <SelectTrigger><SelectValue placeholder="Selecione"/></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="todos">Todos</SelectItem>
-                        <SelectItem value="nome">Nome</SelectItem>
-                        <SelectItem value="cpf">Cpf</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {clientesSearchType!=='todos' && (
-                    <div className="flex flex-col min-w-[220px]">
-                      <Label className="mb-1">{clientesSearchType==='nome' ? 'Nome' : 'CPF'}</Label>
-                      <Input placeholder={clientesSearchType==='nome' ? 'Digite parte do nome' : '000.000.000-00'} value={clientesSearchValue} onChange={(e)=> setClientesSearchValue(e.target.value)}/>
-                    </div>
-                  )}
-                  <div className="flex flex-col min-w-[130px]">
-                    <Label className="mb-1">Itens por página</Label>
-                    <Select value={String(clientesSize)} defaultValue="10" onValueChange={(v)=> { const s=Number(v); setClientesSize(s); setClientesPage(0); }}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent><SelectItem value="10">10</SelectItem><SelectItem value="25">25</SelectItem><SelectItem value="50">50</SelectItem></SelectContent>
-                    </Select>
-                  </div>
-                  <div className="pb-1"><Button variant="outline" onClick={handleBuscarClientes}>Buscar</Button></div>
-                </div>
+                            </div>
+                        </CardHeader>
+                        <CardContent>
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead className="w-1/2">Nome</TableHead>
+                                        <TableHead className="w-1/4">Setor</TableHead>
+                                        <TableHead className="w-1/4">Unidade</TableHead>
+                                        <TableHead className="text-right">Ações</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {filas.length === 0 && (
+                                        <TableRow>
+                                            <TableCell colSpan={4} className="text-center text-muted-foreground py-6">Nenhuma fila cadastrada.</TableCell>
+                                        </TableRow>
+                                    )}
+                                    {filas.map(fila => (
+                                        <TableRow key={fila.id}>
+                                            <TableCell className="truncate max-w-[0]">{fila.nome}</TableCell>
+                                            <TableCell className="truncate max-w-[0]">{fila.setor.nome}</TableCell>
+                                            <TableCell className="truncate max-w-[0]">{fila.unidade.nome}</TableCell>
+                                            <TableCell className="text-right">
+                                                <div className="flex gap-2 justify-end">
+                                                    <Button variant="outline" size="sm" onClick={() => handleOpenModal('fila', fila)}><Edit className="w-4 h-4"/></Button>
+                                                    <Button variant="destructive" size="sm" onClick={() => handleDelete('fila', fila.id)}><Trash2 className="w-4 h-4"/></Button>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
 
-                {(() => { const d = pageDisplay(clientesMeta, clientesPage); return (
-                  <div className="flex items-center justify-between mb-3 text-sm text-muted-foreground">
-                    <div className="flex items-center gap-2">
-                      <span>Página {d.current} de {d.total}</span>
-                      <Input type="number" min={1} max={d.total} value={d.current} onChange={(e)=>{ const n=Math.min(Math.max(1,Number(e.target.value)||1),d.total); const zero=n-1; setClientesPage(zero); loadClientesPage(zero); }} className="w-20 h-8"/>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm" onClick={()=> { setClientesPage(0); loadClientesPage(0); }} disabled={d.current<=1}>Primeira</Button>
-                      <Button variant="outline" size="sm" onClick={()=> {const p=Math.max(0,(clientesMeta?.page ?? clientesPage)-1); setClientesPage(p); loadClientesPage(p);}} disabled={(clientesMeta?.page ?? clientesPage) <= 0}>Anterior</Button>
-                      <Button variant="outline" size="sm" onClick={()=> {const next=(clientesMeta?.page ?? clientesPage)+1; if (next+1>d.total) return; setClientesPage(next); loadClientesPage(next);}} disabled={((clientesMeta?.page ?? clientesPage)+1) >= d.total}>Próxima</Button>
-                      <Button variant="outline" size="sm" onClick={()=> { const last = d.total-1; setClientesPage(last); loadClientesPage(last); }} disabled={d.current>=d.total}>Última</Button>
-                    </div>
-                  </div>
-                ); })()}
+                {/* TAB SETORES */}
+                <TabsContent value="setores">
+                    <Card>
+                        <CardHeader className="space-y-4">
+                            <div className="flex items-start justify-between gap-2">
+                                <div>
+                                    <CardTitle>Gerenciar Setores</CardTitle>
+                                    <CardDescription>Categorize as filas por setores.</CardDescription>
+                                </div>
+                                <Button onClick={() => handleOpenModal('setor')}><Plus className="w-4 h-4 mr-2" /> Novo Setor</Button>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <div className="flex-1">
+                                    <SearchBar
+                                        value={setQuery}
+                                        onChange={setSetQuery}
+                                        onSubmit={() => searchSetores(0)}
+                                        placeholder="Buscar..."
+                                        loading={setoresLoading}
+                                        modes={[{ value: 'todas', label: 'Todos os Setores' }, { value: 'nome', label: 'Por Nome' }]}
+                                        mode={setMode}
+                                        onModeChange={(v) => setSetMode(v as any)}
+                                        onClear={() => { setSetQuery(''); setSetMode('todas'); searchSetores(0); }}
+                                    />
+                                </div>
+                                {setMeta && (
+                                    <PaginationIconNav
+                                        meta={setMeta}
+                                        onFirst={() => searchSetores(0)}
+                                        onPrev={() => searchSetores(Math.max(0, setPage - 1))}
+                                        onNext={() => searchSetores(setPage + 1)}
+                                        onLast={() => setMeta ? searchSetores(setMeta.totalPages - 1) : null}
+                                        inline
+                                    />
+                                )}
+                            </div>
+                        </CardHeader>
+                        <CardContent>
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead className="w-2/3">Nome</TableHead>
+                                        <TableHead className="text-right">Ações</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {setores.length === 0 && (
+                                        <TableRow>
+                                            <TableCell colSpan={2} className="text-center text-muted-foreground py-6">Nenhum setor cadastrado.</TableCell>
+                                        </TableRow>
+                                    )}
+                                    {setores.map(setor => (
+                                        <TableRow key={setor.id}>
+                                            <TableCell className="truncate max-w-[0]">{setor.nome}</TableCell>
+                                            <TableCell className="text-right">
+                                                <div className="flex gap-2 justify-end">
+                                                    <Button variant="outline" size="sm" onClick={() => handleOpenModal('setor', setor)}><Edit className="w-4 h-4"/></Button>
+                                                    <Button variant="destructive" size="sm" onClick={() => handleDelete('setor', setor.id)}><Trash2 className="w-4 h-4"/></Button>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
 
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>
-                        <div className="flex items-center gap-1">
-                          <span>Nome</span>
-                          <button aria-label="Ordenar" onClick={()=> { toggleSort(clientesSort, 'nome', setClientesSort); loadClientesPage(clientesMeta?.page ?? clientesPage, clientesMeta?.pageSize ?? clientesSize); }} className="p-0.5">
-                            {clientesSort.field==='nome' && clientesSort.dir==='asc' ? '▲' : '▼'}
-                          </button>
+                {/* TAB UNIDADES */}
+                <TabsContent value="unidades">
+                    <Card>
+                        <CardHeader className="space-y-4">
+                            <div className="flex items-start justify-between gap-2">
+                                <div>
+                                    <CardTitle>Gerenciar Unidades</CardTitle>
+                                    <CardDescription>Cadastre locais de atendimento.</CardDescription>
+                                </div>
+                                <Button onClick={() => handleOpenModal('unidade')}><Plus className="w-4 h-4 mr-2" /> Nova Unidade</Button>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <div className="flex-1">
+                                    <SearchBar
+                                        value={uniQuery}
+                                        onChange={setUniQuery}
+                                        onSubmit={() => searchUnidades(0)}
+                                        placeholder="Buscar..."
+                                        loading={uniLoading}
+                                        modes={[{ value: 'todas', label: 'Todas as Unidades' }, { value: 'nome', label: 'Por Nome' }]}
+                                        mode={uniMode}
+                                        onModeChange={(v) => setUniMode(v as any)}
+                                        onClear={() => { setUniQuery(''); setUniMode('todas'); searchUnidades(0); }}
+                                    />
+                                </div>
+                                {uniMeta && (
+                                    <PaginationIconNav
+                                        meta={uniMeta}
+                                        onFirst={() => searchUnidades(0)}
+                                        onPrev={() => searchUnidades(Math.max(0, uniPage - 1))}
+                                        onNext={() => searchUnidades(uniPage + 1)}
+                                        onLast={() => uniMeta ? searchUnidades(uniMeta.totalPages - 1) : null}
+                                        inline
+                                    />
+                                )}
+                            </div>
+                        </CardHeader>
+                        <CardContent>
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead className="w-1/3">Nome</TableHead>
+                                        <TableHead className="w-1/2">Endereço</TableHead>
+                                        <TableHead className="text-right">Ações</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {unidades.length === 0 && (
+                                        <TableRow>
+                                            <TableCell colSpan={3} className="text-center text-muted-foreground py-6">Nenhuma unidade cadastrada.</TableCell>
+                                        </TableRow>
+                                    )}
+                                    {unidades.map(un => (
+                                        <TableRow key={un.id}>
+                                            <TableCell className="truncate max-w-[0]">{un.nome}</TableCell>
+                                            <TableCell className="text-sm text-muted-foreground truncate max-w-[0]">
+                                                {un.endereco?.enderecoFormatado
+                                                    ? un.endereco.enderecoFormatado
+                                                    : (un.endereco ? `${un.endereco.logradouro || ''} ${un.endereco.numero || ''}` : '—')}
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                <div className="flex gap-2 justify-end">
+                                                    <Button variant="outline" size="sm" onClick={() => handleOpenModal('unidade', un)}><Edit className="w-4 h-4"/></Button>
+                                                    <Button variant="destructive" size="sm" onClick={() => handleDelete('unidade', un.id)}><Trash2 className="w-4 h-4"/></Button>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                {/* TAB USUÁRIOS */}
+                <TabsContent value="usuarios">
+                    <Card>
+                        <CardHeader className="space-y-4">
+                            <div className="flex items-start justify-between gap-2">
+                                <div>
+                                    <CardTitle>Gerenciar Usuários</CardTitle>
+                                    <CardDescription>Controle de acesso ao sistema.</CardDescription>
+                                </div>
+                                <Button onClick={() => handleOpenModal('usuario')}><UserPlus className="w-4 h-4 mr-2" /> Novo Usuário</Button>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <div className="flex-1">
+                                    <SearchBar
+                                        value={usrQuery}
+                                        onChange={setUsrQuery}
+                                        onSubmit={() => searchUsuarios(0)}
+                                        placeholder="Buscar..."
+                                        loading={usrLoading}
+                                        modes={[{ value: 'todas', label: 'Todos os Usuários' }, { value: 'email', label: 'Por E-mail' }]}
+                                        mode={usrMode}
+                                        onModeChange={(v) => setUsrMode(v as any)}
+                                        onClear={() => { setUsrQuery(''); setUsrMode('todas'); searchUsuarios(0); }}
+                                    />
+                                </div>
+                                {usrMeta && (
+                                    <PaginationIconNav
+                                        meta={usrMeta}
+                                        onFirst={() => searchUsuarios(0)}
+                                        onPrev={() => searchUsuarios(Math.max(0, usrPage - 1))}
+                                        onNext={() => searchUsuarios(usrPage + 1)}
+                                        onLast={() => usrMeta ? searchUsuarios(usrMeta.totalPages - 1) : null}
+                                        inline
+                                    />
+                                )}
+                            </div>
+                        </CardHeader>
+                        <CardContent>
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Nome</TableHead>
+                                        <TableHead>Email</TableHead>
+                                        <TableHead>Categoria</TableHead>
+                                        <TableHead className="text-right">Ações</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {usuarios.length === 0 && (
+                                        <TableRow>
+                                            <TableCell colSpan={4} className="text-center text-muted-foreground py-6">Nenhum usuário cadastrado.</TableCell>
+                                        </TableRow>
+                                    )}
+                                    {usuarios.map(us => (
+                                        <TableRow key={us.id}>
+                                            <TableCell>{us.nomeUsuario}</TableCell>
+                                            <TableCell>{us.email}</TableCell>
+                                            <TableCell>
+                                                <Badge variant={us.categoria === 'ADMINISTRADOR' ? 'default' : 'secondary'}>
+                                                    {us.categoria}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                <div className="flex gap-2 justify-end">
+                                                    <Button variant="outline" size="sm" onClick={() => handleOpenModal('usuario', us)}><Edit className="w-4 h-4"/></Button>
+                                                    <Button variant="destructive" size="sm" onClick={() => handleDelete('usuario', us.id)}><Trash2 className="w-4 h-4"/></Button>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                {/* TAB CLIENTES */}
+                <TabsContent value="clientes">
+                    <Card>
+                        <CardHeader className="space-y-4">
+                            <div className="flex items-start justify-between gap-2">
+                                <div>
+                                    <CardTitle>Gerenciar Clientes</CardTitle>
+                                    <CardDescription>Cadastro de pacientes/clientes.</CardDescription>
+                                </div>
+                                <Button onClick={() => handleOpenModal('cliente')}><Plus className="w-4 h-4 mr-2" /> Novo Cliente</Button>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <div className="flex-1">
+                                    <SearchBar
+                                        value={cliQuery}
+                                        onChange={setCliQuery}
+                                        onSubmit={() => searchClientes(0)}
+                                        placeholder="Buscar..."
+                                        loading={cliLoading}
+                                        modes={[{ value: 'todas', label: 'Todos' }, { value: 'nome', label: 'Por Nome' }, { value: 'email', label: 'Por E-mail' }, { value: 'telefone', label: 'Por Telefone' }, { value: 'cpf', label: 'Por CPF' }]}
+                                        mode={cliMode}
+                                        onModeChange={(v) => setCliMode(v as any)}
+                                        onClear={() => { setCliQuery(''); setCliMode('todas'); searchClientes(0); }}
+                                    />
+                                </div>
+                                {cliMeta && (
+                                    <PaginationIconNav
+                                        meta={cliMeta}
+                                        onFirst={() => searchClientes(0)}
+                                        onPrev={() => searchClientes(Math.max(0, cliPage - 1))}
+                                        onNext={() => searchClientes(cliPage + 1)}
+                                        onLast={() => cliMeta ? searchClientes(cliMeta.totalPages - 1) : null}
+                                        inline
+                                    />
+                                )}
+                            </div>
+                        </CardHeader>
+                        <CardContent>
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Nome</TableHead>
+                                        <TableHead>CPF</TableHead>
+                                        <TableHead>Email</TableHead>
+                                        <TableHead className="text-right">Ações</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {clientes.length === 0 && (
+                                        <TableRow>
+                                            <TableCell colSpan={4} className="text-center text-muted-foreground py-6">Nenhum cliente cadastrado.</TableCell>
+                                        </TableRow>
+                                    )}
+                                    {clientes.map(cl => (
+                                        <TableRow key={cl.id}>
+                                            <TableCell>{cl.nome}</TableCell>
+                                            <TableCell>{cl.cpf}</TableCell>
+                                            <TableCell>{cl.email || '—'}</TableCell>
+                                            <TableCell className="text-right">
+                                                <div className="flex gap-2 justify-end">
+                                                    <Button variant="outline" size="sm" onClick={() => handleOpenModal('cliente', cl)}><Edit className="w-4 h-4"/></Button>
+                                                    <Button variant="destructive" size="sm" onClick={() => handleDelete('cliente', cl.id)}><Trash2 className="w-4 h-4"/></Button>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                {/* NOVA TAB PAINÉIS */}
+                <TabsContent value="paineis">
+                    <Card>
+                        <CardHeader className="space-y-4">
+                            <div className="flex items-start justify-between gap-2">
+                                <div>
+                                    <CardTitle>Gerenciar Painéis</CardTitle>
+                                    <CardDescription>Crie e configure os painéis de exibição pública.</CardDescription>
+                                </div>
+                                <Button onClick={() => handleOpenModal('painel')}>
+                                    <Plus className="w-4 h-4 mr-2" /> Novo Painel
+                                </Button>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <div className="flex-1">
+                                    <SearchBar
+                                        value={''}
+                                        onChange={() => {}}
+                                        onSubmit={() => searchPaineis(0)}
+                                        placeholder="Buscar..."
+                                        loading={painelLoading}
+                                        modes={[{ value: 'porUnidade', label: 'Por Unidade' }]}
+                                        mode={'porUnidade'}
+                                        onModeChange={() => {}}
+                                        onClear={() => { setPainelUnidadeFilter(''); searchPaineis(0); }}
+                                        unitFilter={{
+                                            options: unidadeOptions.map(u => ({ value: u.id, label: u.nome })),
+                                            value: painelUnidadeFilter || selectedUnitId || '',
+                                            onChange: setPainelUnidadeFilter,
+                                            title: 'Selecione a unidade',
+                                        }}
+                                    />
+                                </div>
+                                {painelMeta && (
+                                    <PaginationIconNav
+                                        meta={painelMeta}
+                                        onFirst={() => searchPaineis(0)}
+                                        onPrev={() => searchPaineis(Math.max(0, painelPage - 1))}
+                                        onNext={() => searchPaineis(painelPage + 1)}
+                                        onLast={() => painelMeta ? searchPaineis((painelMeta.totalPages ?? 1) - 1) : null}
+                                        inline
+                                    />
+                                )}
+                            </div>
+                        </CardHeader>
+                        <CardContent>
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Descrição</TableHead>
+                                        <TableHead>Filas Vinculadas</TableHead>
+                                        <TableHead className="text-right">Ações</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {paineis.length === 0 && (
+                                        <TableRow>
+                                            <TableCell colSpan={3} className="text-center text-muted-foreground py-6">Nenhum painel cadastrado.</TableCell>
+                                        </TableRow>
+                                    )}
+                                    {paineis.map(painel => (
+                                        <TableRow key={painel.id}>
+                                            <TableCell className="font-medium">{painel.descricao}</TableCell>
+                                            <TableCell>{renderFilaNames(painel.filasIds)}</TableCell>
+                                            <TableCell className="text-right">
+                                                <div className="flex gap-2 justify-end">
+                                                    <Button variant="outline" size="sm" onClick={() => handleOpenModal('painel', painel)}><Edit className="w-4 h-4"/></Button>
+                                                    <Button variant="destructive" size="sm" onClick={() => handleDelete('painel', painel.id)}><Trash2 className="w-4 h-4"/></Button>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+            </Tabs>
+
+            {/* MODAL PARA PAINEL */}
+            <Dialog open={modalOpen === 'painel'} onOpenChange={() => setModalOpen(null)}>
+                <DialogContent className="sm:max-w-[500px]">
+                    <DialogHeader>
+                        <DialogTitle>{editingItem ? 'Editar Painel' : 'Novo Painel'}</DialogTitle>
+                        <DialogDescription>
+                            {editingItem ? 'Altere a descrição e as filas associadas.' : 'Crie um novo painel para exibição pública.'}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <div className="grid gap-2">
+                            <Label htmlFor="painel-descricao">Descrição do Painel *</Label>
+                            <Input
+                                id="painel-descricao"
+                                value={formData.descricao || ''}
+                                onChange={(e) => setFormData({ ...formData, descricao: e.target.value })}
+                                placeholder="Ex: Painel da Recepção Principal"
+                            />
                         </div>
-                      </TableHead>
-                      <TableHead>
-                        <div className="flex items-center gap-1">
-                          <span>CPF</span>
-                          <button aria-label="Ordenar" onClick={()=> { toggleSort(clientesSort, 'cpf', setClientesSort); loadClientesPage(clientesMeta?.page ?? clientesPage, clientesMeta?.pageSize ?? clientesSize); }} className="p-0.5">
-                            {clientesSort.field==='cpf' && clientesSort.dir==='asc' ? '▲' : '▼'}
-                          </button>
+                        <div className="grid gap-2">
+                            <Label>Filas a Exibir neste Painel</Label>
+                            <ScrollArea className="h-48 rounded-md border p-4">
+                                <div className="space-y-2">
+                                    {filaOptions.length === 0 && (
+                                        <p className="text-sm text-muted-foreground text-center py-4">Nenhuma fila encontrada nesta unidade.</p>
+                                    )}
+                                    {filaOptions.map(fila => (
+                                        <div key={fila.id} className="flex items-center space-x-2">
+                                            <Checkbox
+                                                id={`fila-checkbox-${fila.id}`}
+                                                checked={formData.filasIds?.includes(fila.id)}
+                                                onCheckedChange={(checked) => handleFilaCheckboxChange(fila.id, !!checked)}
+                                            />
+                                            <Label htmlFor={`fila-checkbox-${fila.id}`} className="cursor-pointer">{fila.nome}</Label>
+                                        </div>
+                                    ))}
+                                </div>
+                            </ScrollArea>
                         </div>
-                      </TableHead>
-                      <TableHead>
-                        <div className="flex items-center gap-1">
-                          <span>Email</span>
-                          <button aria-label="Ordenar" onClick={()=> { toggleSort(clientesSort, 'email', setClientesSort); loadClientesPage(clientesMeta?.page ?? clientesPage, clientesMeta?.pageSize ?? clientesSize); }} className="p-0.5">
-                            {clientesSort.field==='email' && clientesSort.dir==='asc' ? '▲' : '▼'}
-                          </button>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setModalOpen(null)}>Cancelar</Button>
+                        <Button onClick={handleSave} disabled={loading}>{loading ? 'Salvando...' : 'Salvar'}</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* MODAL FILA */}
+            <Dialog open={modalOpen === 'fila'} onOpenChange={() => setModalOpen(null)}>
+                <DialogContent className="sm:max-w-[480px]">
+                    <DialogHeader>
+                        <DialogTitle>{editingItem ? 'Editar Fila' : 'Nova Fila'}</DialogTitle>
+                        <DialogDescription>Defina o nome e associe setor e unidade.</DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <div className="grid gap-2">
+                            <Label>Nome *</Label>
+                            <Input value={formData.nome || ''} onChange={(e) => setFormData({ ...formData, nome: e.target.value })} />
                         </div>
-                      </TableHead>
-                      <TableHead>Telefones</TableHead>
-                      <TableHead className="text-right">Ações</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {clientes.map(cliente => (
-                      <TableRow key={cliente.id}>
-                        <TableCell>{cliente.nome}</TableCell>
-                        <TableCell>{cliente.cpf}</TableCell>
-                        <TableCell>{cliente.email || '-'}</TableCell>
-                        <TableCell>
-                          {cliente.telefones && cliente.telefones.length>0 ? (
-                            <div className="space-y-1">{cliente.telefones.map((t,i)=> <div key={i} className="text-sm">{t.tipo}: ({t.ddd}) {t.numero}</div>)}</div>
-                          ) : 'Nenhum'}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex gap-2 justify-end">
-                            <Button variant="outline" size="sm" onClick={()=> handleEditarCliente(cliente)}><Edit className="w-4 h-4"/></Button>
-                            <Button variant="outline" size="sm" onClick={()=> handleExcluirCliente(cliente.id)}><Trash2 className="w-4 h-4"/></Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
-      )}
-    </div>
-  );
+                        <div className="grid gap-2">
+                            <Label>Setor *</Label>
+                            <Select value={formData.setorId || ''} onValueChange={(v) => setFormData({ ...formData, setorId: v })}>
+                                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                                <SelectContent>
+                                    {setorOptions.map(s => <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="grid gap-2">
+                            <Label>Unidade *</Label>
+                            <Select value={formData.unidadeAtendimentoId || selectedUnitId || ''} onValueChange={(v) => setFormData({ ...formData, unidadeAtendimentoId: v })}>
+                                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                                <SelectContent>
+                                    {unidadeOptions.map(u => <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setModalOpen(null)}>Cancelar</Button>
+                        <Button onClick={handleSave} disabled={loading}>{loading ? 'Salvando...' : 'Salvar'}</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* MODAL SETOR */}
+            <Dialog open={modalOpen === 'setor'} onOpenChange={() => setModalOpen(null)}>
+                <DialogContent className="sm:max-w-[420px]">
+                    <DialogHeader>
+                        <DialogTitle>{editingItem ? 'Editar Setor' : 'Novo Setor'}</DialogTitle>
+                        <DialogDescription>Informe o nome do setor.</DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <div className="grid gap-2">
+                            <Label>Nome *</Label>
+                            <Input value={formData.nome || ''} onChange={(e) => setFormData({ ...formData, nome: e.target.value })} />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setModalOpen(null)}>Cancelar</Button>
+                        <Button onClick={handleSave} disabled={loading}>{loading ? 'Salvando...' : 'Salvar'}</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* MODAL UNIDADE */}
+            <Dialog open={modalOpen === 'unidade'} onOpenChange={() => setModalOpen(null)}>
+                <DialogContent className="sm:max-w-[720px]">
+                    <DialogHeader>
+                        <DialogTitle>{editingItem ? 'Editar Unidade' : 'Nova Unidade'}</DialogTitle>
+                        <DialogDescription>Cadastre dados básicos da unidade.</DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <div className="grid gap-2">
+                            <Label>Nome *</Label>
+                            <Input value={formData.nome || ''} onChange={(e) => setFormData({ ...formData, nome: e.target.value })} />
+                        </div>
+                        <AddressFields baseKey="endereco" />
+                        <PhonesFields baseKey="telefones" />
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setModalOpen(null)}>Cancelar</Button>
+                        <Button onClick={handleSave} disabled={loading}>{loading ? 'Salvando...' : 'Salvar'}</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* MODAL USUÁRIO */}
+            <Dialog open={modalOpen === 'usuario'} onOpenChange={() => setModalOpen(null)}>
+                <DialogContent className="sm:max-w-[560px]">
+                    <DialogHeader>
+                        <DialogTitle>{editingItem ? 'Editar Usuário' : 'Novo Usuário'}</DialogTitle>
+                        <DialogDescription>Defina os dados de acesso.</DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <div className="grid md:grid-cols-2 gap-4">
+                            <div className="grid gap-2">
+                                <Label>Nome *</Label>
+                                <Input value={formData.nomeUsuario || ''} onChange={(e) => setFormData({ ...formData, nomeUsuario: e.target.value })} />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label>Email *</Label>
+                                <Input type="email" value={formData.email || ''} onChange={(e) => setFormData({ ...formData, email: e.target.value })} />
+                            </div>
+                        </div>
+                        {!editingItem && (
+                            <div className="grid gap-2">
+                                <Label>Senha *</Label>
+                                <Input type="password" value={formData.senha || ''} onChange={(e) => setFormData({ ...formData, senha: e.target.value })} />
+                            </div>
+                        )}
+                        <div className="grid gap-2">
+                            <Label>Categoria *</Label>
+                            <Select value={formData.categoria || CategoriaUsuario.USUARIO} onValueChange={(v) => setFormData({ ...formData, categoria: v })}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value={CategoriaUsuario.ADMINISTRADOR}>Administrador</SelectItem>
+                                    <SelectItem value={CategoriaUsuario.USUARIO}>Usuário</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="grid gap-2">
+                            <Label>Unidades (opcional)</Label>
+                            <ScrollArea className="h-32 rounded border p-2">
+                                <div className="space-y-2">
+                                    {unidadeOptions.map(u => {
+                                        const checked = (formData.unidadesIds || []).includes(u.id);
+                                        return (
+                                            <div key={u.id} className="flex items-center space-x-2">
+                                                <Checkbox
+                                                    id={`unid-${u.id}`}
+                                                    checked={checked}
+                                                    onCheckedChange={(ck) => {
+                                                        setFormData((prev: any) => {
+                                                            const ids = prev.unidadesIds || [];
+                                                            return {
+                                                                ...prev,
+                                                                unidadesIds: ck ? [...ids, u.id] : ids.filter((i: string) => i !== u.id)
+                                                            };
+                                                        });
+                                                    }}
+                                                />
+                                                <Label htmlFor={`unid-${u.id}`} className="cursor-pointer">{u.nome}</Label>
+                                            </div>
+                                        );
+                                    })}
+                                    {unidadeOptions.length === 0 && (
+                                        <p className="text-xs text-muted-foreground text-center">Nenhuma unidade.</p>
+                                    )}
+                                </div>
+                            </ScrollArea>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setModalOpen(null)}>Cancelar</Button>
+                        <Button onClick={handleSave} disabled={loading}>{loading ? 'Salvando...' : 'Salvar'}</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* MODAL CLIENTE */}
+            <Dialog open={modalOpen === 'cliente'} onOpenChange={() => setModalOpen(null)}>
+                <DialogContent className="sm:max-w-[720px]">
+                    <DialogHeader>
+                        <DialogTitle>{editingItem ? 'Editar Cliente' : 'Novo Cliente'}</DialogTitle>
+                        <DialogDescription>Cadastre dados do cliente/paciente.</DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <div className="grid md:grid-cols-2 gap-4">
+                            <div className="grid gap-2">
+                                <Label>CPF *</Label>
+                                <Input value={formData.cpf || ''} onChange={(e) => setFormData({ ...formData, cpf: e.target.value })} />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label>Nome *</Label>
+                                <Input value={formData.nome || ''} onChange={(e) => setFormData({ ...formData, nome: e.target.value })} />
+                            </div>
+                        </div>
+                        <div className="grid gap-2">
+                            <Label>Email</Label>
+                            <Input type="email" value={formData.email || ''} onChange={(e) => setFormData({ ...formData, email: e.target.value })} />
+                        </div>
+                        <AddressFields baseKey="endereco" />
+                        <PhonesFields baseKey="telefones" />
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setModalOpen(null)}>Cancelar</Button>
+                        <Button onClick={handleSave} disabled={loading}>{loading ? 'Salvando...' : 'Salvar'}</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+        </div>
+    );
 }
 
 export default Gestao;
-

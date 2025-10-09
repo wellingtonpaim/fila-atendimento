@@ -1,5 +1,6 @@
 import { ApiResponse, SetorCreateDTO, SetorResponseDTO, SetorUpdateDTO } from '@/types';
 import { authService } from './authService';
+import { parsePaginationMeta, PaginationMeta } from '@/lib/pagination';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8899';
 
@@ -33,6 +34,18 @@ export const setorService = {
     return response.json();
   },
 
+  // Listar todos os setores com paginação
+  async listarTodosPaginado(page: number, size: number): Promise<{ data: SetorResponseDTO[]; meta: PaginationMeta | null; }> {
+    const response = await fetch(`${API_BASE_URL}/api/setores?page=${page}&size=${size}`, {
+      method: 'GET',
+      headers: authService.getAuthHeaders()
+    });
+    if (!response.ok) throw new Error(`Erro ao listar setores: ${response.statusText}`);
+    const body: ApiResponse<SetorResponseDTO[]> = await response.json();
+    const meta = parsePaginationMeta(response, page, size, body?.data?.length ?? 0);
+    return { data: body?.data || [], meta };
+  },
+
   // Buscar setor por ID
   async buscarPorId(id: string): Promise<ApiResponse<SetorResponseDTO>> {
     const response = await fetch(`${API_BASE_URL}/api/setores/${id}`, {
@@ -59,6 +72,18 @@ export const setorService = {
     }
 
     return response.json();
+  },
+
+  // Buscar setores por nome com paginação
+  async buscarPorNomePaginado(nome: string, page: number, size: number): Promise<{ data: SetorResponseDTO[]; meta: PaginationMeta | null; }> {
+    const response = await fetch(`${API_BASE_URL}/api/setores/nome/${encodeURIComponent(nome)}?page=${page}&size=${size}`, {
+      method: 'GET',
+      headers: authService.getAuthHeaders()
+    });
+    if (!response.ok) throw new Error(`Erro ao buscar setores por nome: ${response.statusText}`);
+    const body: ApiResponse<SetorResponseDTO[]> = await response.json();
+    const meta = parsePaginationMeta(response, page, size, body?.data?.length ?? 0);
+    return { data: body?.data || [], meta };
   },
 
   // Substituir setor completamente

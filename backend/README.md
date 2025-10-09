@@ -27,7 +27,7 @@
   - [Setores (/api/setores)](#setores-apisetores)
   - [Filas (/api/filas)](#filas-apifilas)
   - [Entrada na Fila (/api/entrada-fila)](#entrada-na-fila-apientrada-fila)
-  - [Painéis (/painel)](#painéis-painel)
+  - [Painéis (/api/paineis)](#painéis-apipaineis)
   - [Clientes (/api/clientes)](#clientes-apiclientes)
   - [Usuários (/api/usuarios)](#usuários-apiusuarios)
   - [Dashboard (/api/dashboard)](#dashboard-apidashboard)
@@ -149,13 +149,15 @@ Endpoints com paginação:
 - `GET /api/usuarios`
 - `GET /api/clientes`
 - `GET /api/clientes/nome/{nome}`
+- `GET /api/clientes/email/{email}`
+- `GET /api/clientes/telefone/{telefone}`
 - `GET /api/setores`
 - `GET /api/setores/nome/{nome}`
 - `GET /api/unidades-atendimento`
 - `GET /api/unidades-atendimento/nome/{nome}`
 - `GET /api/unidades-atendimento/public/login`
-- `GET /painel?unidadeAtendimentoId={id}`
-- `GET /painel/unidade/{unidadeId}`
+- `GET /api/paineis?unidadeAtendimentoId={id}`
+- `GET /api/paineis/unidade/{unidadeId}`
 - `GET /api/filas`              
 - `GET /api/filas/unidade/{unidadeId}`
 - `GET /api/entrada-fila/aguardando/{filaId}`
@@ -174,9 +176,12 @@ curl -i "http://localhost:8899/api/clientes/nome/Ana?page=1&size=25"
 ## Recursos da API por Módulo
 
 ### Autenticação (/auth)
-- `POST /auth/login` – Autenticação com validação de acesso por unidade
-- `POST /auth/register` – Registro público com envio de e-mail de confirmação
-- `GET /auth/confirmar` – Página HTML de confirmação (ver seção Auth)
+- `POST /auth/login` – Autenticação com validação de acesso por unidade. Envia parâmetros como query/form (`username`, `password`, `unidadeAtendimentoId`). Exemplo:
+  ```bash
+  curl -X POST "http://localhost:8899/auth/login?username=admin@teste.com&password=123456&unidadeAtendimentoId=<UUID>"
+  ```
+- `POST /auth/register` – Registro público com envio de e-mail de confirmação (JSON body)
+- `GET /auth/confirmar?token=...` – Página HTML de confirmação de e-mail
 - `DELETE /auth/delete/{email}` – Desativar usuário por e-mail
 
 ### Unidades de Atendimento (/api/unidades-atendimento)
@@ -214,32 +219,27 @@ curl -i "http://localhost:8899/api/clientes/nome/Ana?page=1&size=25"
 - `POST /api/entrada-fila/encaminhar/{entradaFilaIdOrigem}` – Encaminhar para outra fila
 - `GET /api/entrada-fila/aguardando/{filaId}` – Listar aguardando (paginação opcional)
 
-### Painéis (/painel)
-- `GET /painel?unidadeAtendimentoId={id}` – Listar (paginação opcional)
-- `GET /painel/{id}` – Buscar por ID (params: `unidadeAtendimentoId`)
-- `GET /painel/unidade/{unidadeId}` – Listar por unidade (paginação opcional)
-- `POST /painel` – Criar
-- `PUT /painel/{id}` – Atualizar
-- `DELETE /painel/{id}` – Desativar
+### Painéis (/api/paineis)
+- `GET /api/paineis?unidadeAtendimentoId={id}` – Listar (paginação opcional; parâmetro obrigatório unidadeAtendimentoId)
+- `GET /api/paineis/{id}?unidadeAtendimentoId={unidadeAtendimentoId}` – Buscar por ID (valida unidade)
+- `GET /api/paineis/unidade/{unidadeId}` – Listar por unidade (paginação opcional)
+- `POST /api/paineis` – Criar
+- `PUT /api/paineis/{id}` – Atualizar
+- `DELETE /api/paineis/{id}` – Desativar
+- `POST /api/paineis/{painelId}/filas/{filaId}` – Associar fila ao painel
+- `DELETE /api/paineis/{painelId}/filas/{filaId}` – Remover fila do painel
 
 ### Clientes (/api/clientes)
-
-#### Listar todos os clientes
-`GET /api/clientes`
-- Retorna todos os clientes cadastrados.
-- Suporta paginação opcional via query params: `?page=0&size=20`
-
-#### Buscar clientes por e-mail (busca parcial)
-`GET /api/clientes/email/{email}`
-- Retorna uma lista de clientes cujo e-mail contenha o valor informado (busca parcial, case-insensitive).
-- Parâmetros opcionais de paginação: `?page=0&size=20`
-- Exemplo: `/api/clientes/email/jose?size=10&page=0` retorna todos os clientes com "jose" no e-mail.
-
-#### Buscar clientes por telefone (busca parcial)
-`GET /api/clientes/telefone/{telefone}`
-- Retorna uma lista de clientes cujo telefone contenha o valor informado (busca parcial).
-- Parâmetros opcionais de paginação: `?page=0&size=20`
-- Exemplo: `/api/clientes/telefone/98836?size=10&page=0` retorna todos os clientes com "98836" no telefone.
+- `GET /api/clientes` – Listar todos (paginação opcional)
+- `GET /api/clientes/{id}` – Buscar por ID
+- `GET /api/clientes/cpf/{cpf}` – Buscar por CPF (retorna único)
+- `GET /api/clientes/nome/{nome}` – Buscar por nome (semelhante, paginação opcional)
+- `GET /api/clientes/email/{email}` – Buscar por e-mail (parcial, paginação opcional)
+- `GET /api/clientes/telefone/{telefone}` – Buscar por telefone (parcial, paginação opcional)
+- `POST /api/clientes` – Criar
+- `PUT /api/clientes/{id}` – Substituir
+- `PATCH /api/clientes/{id}` – Atualização parcial
+- `DELETE /api/clientes/{id}` – Desativar
 
 ### Usuários (/api/usuarios)
 - `GET /api/usuarios` – Listar (paginação opcional)
@@ -282,9 +282,9 @@ Esta seção orienta o desenvolvedor React a consumir o canal em tempo real de c
 5. Recebe payloads JSON (DTOs) e atualiza a UI. Quando houver nova chamada, `sinalizacaoSonora=true` e `mensagemVocalizacao` conterá texto para síntese de voz.
 
 ### Como obter IDs necessários
-- Listar painéis de uma unidade: `GET /painel?unidadeAtendimentoId={unidadeId}` → use o `id` de cada painel para assinar `/topic/painel-publico/{painelId}`.
+- Listar painéis de uma unidade: `GET /api/paineis?unidadeAtendimentoId={unidadeId}` → use o `id` de cada painel para assinar `/topic/painel-publico/{painelId}`.
 - Listar filas vinculadas a um painel (indiretamente): cada atualização de painel inclui `filaId` no payload `PainelPublicoDTO`.
-- Listar painéis por unidade (alternativo): `GET /painel/unidade/{unidadeId}`.
+- Listar painéis por unidade (alternativo): `GET /api/paineis/unidade/{unidadeId}`.
 - Listar filas de um setor: `GET /api/filas?setorId=...` (se implementar filtro) ou correlacionar via entidades.
 
 ### Endpoints e Prefixos
@@ -473,6 +473,7 @@ Relações (resumo):
 - Fila 1..* EntradaFila
 - Cliente 1..* EntradaFila
 - Usuario *..* UnidadeAtendimento
+- Painel *..* Fila (tabela de junção `painel_fila`)
 
 ---
 
@@ -526,13 +527,15 @@ Endpoints com paginação
 - GET /api/usuarios
 - GET /api/clientes
 - GET /api/clientes/nome/{nome}
+- GET /api/clientes/email/{email}
+- GET /api/clientes/telefone/{telefone}
 - GET /api/setores
 - GET /api/setores/nome/{nome}
 - GET /api/unidades-atendimento
 - GET /api/unidades-atendimento/nome/{nome}
 - GET /api/unidades-atendimento/public/login
-- GET /painel?unidadeAtendimentoId={id}
-- GET /painel/unidade/{unidadeId}
+- GET /api/paineis?unidadeAtendimentoId={id}
+- GET /api/paineis/unidade/{unidadeId}
 - GET /api/filas
 - GET /api/filas/unidade/{unidadeId}
 - GET /api/entrada-fila/aguardando/{filaId}

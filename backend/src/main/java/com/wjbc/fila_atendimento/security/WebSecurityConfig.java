@@ -84,11 +84,11 @@ public class WebSecurityConfig {
     @Bean
     CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of("*")); // TODO: restringir em produção (ex.: List.of("https://app.seudominio.com"))
-        config.setAllowedMethods(List.of("*"));
+        config.setAllowedOriginPatterns(List.of("http://localhost:[*]", "http://192.168.1.6:[*]"));
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
-        // Permitir envio de Authorization no frame CONNECT (STOMP) via SockJS -> cabeçalho nativo
-        config.setExposedHeaders(List.of("Authorization"));
+        config.setAllowCredentials(true); // Permitir credenciais
+        config.setExposedHeaders(List.of("Authorization", "X-Total-Count", "X-Total-Pages", "X-Page", "X-Page-Size", "Content-Range"));
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);

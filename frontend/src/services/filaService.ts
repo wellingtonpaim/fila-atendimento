@@ -1,5 +1,6 @@
 import { ApiResponse, FilaCreateDTO, FilaResponseDTO, FilaUpdateDTO } from '@/types';
 import { authService } from './authService';
+import { parsePaginationMeta, PaginationMeta } from '@/lib/pagination';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8899';
 
@@ -45,6 +46,30 @@ export const filaService = {
     }
 
     return response.json();
+  },
+
+  // Listar todas filas com paginação
+  async listarTodasPaginado(page: number, size: number): Promise<{ data: FilaResponseDTO[]; meta: PaginationMeta | null; }> {
+    const response = await fetch(`${API_BASE_URL}/api/filas?page=${page}&size=${size}`, {
+      method: 'GET',
+      headers: authService.getAuthHeaders()
+    });
+    if (!response.ok) throw new Error(`Erro ao listar filas: ${response.statusText}`);
+    const body: ApiResponse<FilaResponseDTO[]> = await response.json();
+    const meta = parsePaginationMeta(response, page, size, body?.data?.length ?? 0);
+    return { data: body?.data || [], meta };
+  },
+
+  // Listar filas por unidade com paginação
+  async listarPorUnidadePaginado(unidadeId: string, page: number, size: number): Promise<{ data: FilaResponseDTO[]; meta: PaginationMeta | null; }> {
+    const response = await fetch(`${API_BASE_URL}/api/filas/unidade/${unidadeId}?page=${page}&size=${size}`, {
+      method: 'GET',
+      headers: authService.getAuthHeaders()
+    });
+    if (!response.ok) throw new Error(`Erro ao listar filas: ${response.statusText}`);
+    const body: ApiResponse<FilaResponseDTO[]> = await response.json();
+    const meta = parsePaginationMeta(response, page, size, body?.data?.length ?? 0);
+    return { data: body?.data || [], meta };
   },
 
   // Atualizar fila parcialmente

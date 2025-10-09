@@ -1,5 +1,6 @@
 import { ApiResponse, UnidadeAtendimentoCreateDTO, UnidadeAtendimentoResponseDTO, UnidadeAtendimentoUpdateDTO, UnidadeAtendimentoPublicDTO } from '@/types';
 import { authService } from './authService';
+import { parsePaginationMeta, PaginationMeta } from '@/lib/pagination';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8899';
 
@@ -53,6 +54,18 @@ export const unidadeService = {
     return response.json();
   },
 
+  // Listar todas as unidades com paginação
+  async listarTodasPaginado(page: number, size: number): Promise<{ data: UnidadeAtendimentoResponseDTO[]; meta: PaginationMeta | null; }> {
+    const response = await fetch(`${API_BASE_URL}/api/unidades-atendimento?page=${page}&size=${size}`, {
+      method: 'GET',
+      headers: authService.getAuthHeaders()
+    });
+    if (!response.ok) throw new Error(`Erro ao listar unidades: ${response.statusText}`);
+    const body: ApiResponse<UnidadeAtendimentoResponseDTO[]> = await response.json();
+    const meta = parsePaginationMeta(response, page, size, body?.data?.length ?? 0);
+    return { data: body?.data || [], meta };
+  },
+
   // Buscar unidade por ID
   async buscarPorId(id: string): Promise<ApiResponse<UnidadeAtendimentoResponseDTO>> {
     const response = await fetch(`${API_BASE_URL}/api/unidades-atendimento/${id}`, {
@@ -79,6 +92,18 @@ export const unidadeService = {
     }
 
     return response.json();
+  },
+
+  // Buscar unidades por nome com paginação
+  async buscarPorNomePaginado(nome: string, page: number, size: number): Promise<{ data: UnidadeAtendimentoResponseDTO[]; meta: PaginationMeta | null; }> {
+    const response = await fetch(`${API_BASE_URL}/api/unidades-atendimento/nome/${encodeURIComponent(nome)}?page=${page}&size=${size}`, {
+      method: 'GET',
+      headers: authService.getAuthHeaders()
+    });
+    if (!response.ok) throw new Error(`Erro ao buscar unidades por nome: ${response.statusText}`);
+    const body: ApiResponse<UnidadeAtendimentoResponseDTO[]> = await response.json();
+    const meta = parsePaginationMeta(response, page, size, body?.data?.length ?? 0);
+    return { data: body?.data || [], meta };
   },
 
   // Substituir unidade completamente
