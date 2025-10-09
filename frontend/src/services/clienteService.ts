@@ -12,7 +12,7 @@ export interface PaginationMeta {
 
 export const clienteService = {
   /**
-   * Lista todos os clientes
+   * Lista todos os clientes (sem paginação explícita)
    */
   async listarTodos(): Promise<ApiResponse<ClienteResponseDTO[]>> {
     const res = await fetch(`${API_BASE_URL}/api/clientes`, {
@@ -21,6 +21,21 @@ export const clienteService = {
     });
     if (!res.ok) throw new Error(`Erro ao listar clientes: ${res.statusText}`);
     return res.json();
+  },
+
+  /**
+   * Lista todos os clientes paginado (endpoint correto para modo "Todos os Clientes")
+   */
+  async listarTodosPaginado(page: number, size: number): Promise<{ data: ClienteResponseDTO[]; meta: PaginationMeta | null; }> {
+    const url = `${API_BASE_URL}/api/clientes?page=${page}&size=${size}`;
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: authService.getAuthHeaders(),
+    });
+    if (!res.ok) throw new Error(`Erro ao listar clientes: ${res.statusText}`);
+    const body: ApiResponse<ClienteResponseDTO[]> = await res.json();
+    const meta = this.parsePaginationMeta(res, page, size, body?.data?.length ?? 0);
+    return { data: body?.data || [], meta };
   },
 
   /**

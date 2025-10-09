@@ -101,7 +101,7 @@ const Gestao = () => {
 
     // Filas
     const [filaQuery, setFilaQuery] = useState('');
-    const [filaMode, setFilaMode] = useState<'todas' | 'porUnidade'>('porUnidade');
+    const [filaMode, setFilaMode] = useState<'todas' | 'porUnidade'>('todas'); // default agora 'todas'
     const [filaPage, setFilaPage] = useState(0);
     const [filaSize, setFilaSize] = useState(10);
     const [filaMetaState, setFilaMetaState] = useState<any | null>(null);
@@ -148,7 +148,7 @@ const Gestao = () => {
         loadFilasDaUnidade();
     }, [selectedUnitId, toast]);
 
-    // Carregar dados da aba ativa quando trocar de aba ou quando unidade selecionada mudar
+    // Carregar dados da aba ativa quando trocar de aba ou quando filtros relevantes mudarem
     useEffect(() => {
         const loadActiveTab = async () => {
             try {
@@ -161,12 +161,14 @@ const Gestao = () => {
                 } else if (activeTab === 'clientes') {
                     await searchClientes(0);
                 } else if (activeTab === 'filas') {
-                    if (filaMode === 'todas' || selectedUnitId) {
-                        await searchFilas(0);
-                    }
+                    // sempre buscar conforme modo atual; default agora é 'todas'
+                    await searchFilas(0);
                 } else if (activeTab === 'paineis') {
-                    if (selectedUnitId) {
+                    // se já houver filtro de unidade, busca; senão tenta usar a primeira unidade disponível
+                    if (painelUnidadeFilter) {
                         await searchPaineis(0);
+                    } else if (unidadeOptions.length > 0) {
+                        setPainelUnidadeFilter(unidadeOptions[0].id);
                     }
                 }
             } catch (e) {
@@ -175,7 +177,15 @@ const Gestao = () => {
         };
         loadActiveTab();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [activeTab, selectedUnitId, filaMode]);
+    }, [activeTab]);
+
+    // Ao carregar opções de unidades e se estiver na aba painéis, definir a primeira unidade por padrão
+    useEffect(() => {
+        if (activeTab === 'paineis' && !painelUnidadeFilter && unidadeOptions.length > 0) {
+            setPainelUnidadeFilter(unidadeOptions[0].id);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [unidadeOptions]);
 
     // Reagir à troca de filtros de unidade em Filas e Painéis
     useEffect(() => {
@@ -183,10 +193,10 @@ const Gestao = () => {
             searchFilas(0);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [filaUnidadeFilter]);
+    }, [filaUnidadeFilter, filaMode]);
 
     useEffect(() => {
-        if (activeTab === 'paineis') {
+        if (activeTab === 'paineis' && painelUnidadeFilter) {
             searchPaineis(0);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -248,20 +258,25 @@ const Gestao = () => {
     const searchClientes = async (page = cliPage) => {
         setCliLoading(true);
         try {
+            const q = (cliQuery ?? '').trim();
             if (cliMode === 'todas') {
-                const { data, meta } = await clienteService.buscarPorNomePaginado('', page, cliSize); // backend não tem listarTodos paginado dedicado; usar nome vazio
+                const { data, meta } = await clienteService.listarTodosPaginado(page, cliSize);
                 setClientes(data); setCliMeta(meta); setCliPage(page);
             } else if (cliMode === 'nome') {
-                const { data, meta } = await clienteService.buscarPorNomePaginado(cliQuery, page, cliSize);
+                if (q === '') { setClientes([]); setCliMeta(null); setCliPage(0); return; }
+                const { data, meta } = await clienteService.buscarPorNomePaginado(q, page, cliSize);
                 setClientes(data); setCliMeta(meta); setCliPage(page);
             } else if (cliMode === 'email') {
-                const { data, meta } = await clienteService.buscarPorEmailPaginado(cliQuery, page, cliSize);
+                if (q === '') { setClientes([]); setCliMeta(null); setCliPage(0); return; }
+                const { data, meta } = await clienteService.buscarPorEmailPaginado(q, page, cliSize);
                 setClientes(data); setCliMeta(meta); setCliPage(page);
             } else if (cliMode === 'telefone') {
-                const { data, meta } = await clienteService.buscarPorTelefonePaginado(cliQuery, page, cliSize);
+                if (q === '') { setClientes([]); setCliMeta(null); setCliPage(0); return; }
+                const { data, meta } = await clienteService.buscarPorTelefonePaginado(q, page, cliSize);
                 setClientes(data); setCliMeta(meta); setCliPage(page);
             } else if (cliMode === 'cpf') {
-                const item = await clienteService.buscarPorCpf(cliQuery);
+                if (q === '') { setClientes([]); setCliMeta(null); setCliPage(0); return; }
+                const item = await clienteService.buscarPorCpf(q);
                 setClientes(item ? [item] : []); setCliMeta(null); setCliPage(0);
             }
         } catch (e: any) {
@@ -565,9 +580,7 @@ const Gestao = () => {
                     <TabsTrigger value="paineis">Painéis</TabsTrigger>
                 </TabsList>
 
-                {/* Mantenha suas abas existentes aqui, elas não precisam de alteração */}
-
-                {/* TAB FILAS (exemplo de como ficaria) */}
+                {/* TAB FILAS */}
                 <TabsContent value="filas">
                     <Card>
                         <CardHeader className="space-y-4">
@@ -589,7 +602,7 @@ const Gestao = () => {
                                         modes={[{ value: 'porUnidade', label: 'Por Unidade' }, { value: 'todas', label: 'Todas as Filas' }]}
                                         mode={filaMode}
                                         onModeChange={(v) => setFilaMode(v as any)}
-                                        onClear={() => { setFilaQuery(''); setFilaMode('porUnidade'); setFilaUnidadeFilter(''); searchFilas(0); }}
+                                        onClear={() => { setFilaQuery(''); setFilaMode('todas'); setFilaUnidadeFilter(''); setFilas([]); setFilaMetaState(null); setFilaPage(0); }}
                                         unitFilter={{
                                             options: unidadeOptions.map(u => ({ value: u.id, label: u.nome })),
                                             value: filaUnidadeFilter || selectedUnitId || '',
@@ -667,7 +680,7 @@ const Gestao = () => {
                                         modes={[{ value: 'todas', label: 'Todos os Setores' }, { value: 'nome', label: 'Por Nome' }]}
                                         mode={setMode}
                                         onModeChange={(v) => setSetMode(v as any)}
-                                        onClear={() => { setSetQuery(''); setSetMode('todas'); searchSetores(0); }}
+                                        onClear={() => { setSetQuery(''); setSetMode('todas'); setSetores([]); setSetMeta(null); setSetPage(0); }}
                                     />
                                 </div>
                                 {setMeta && (
@@ -735,7 +748,7 @@ const Gestao = () => {
                                         modes={[{ value: 'todas', label: 'Todas as Unidades' }, { value: 'nome', label: 'Por Nome' }]}
                                         mode={uniMode}
                                         onModeChange={(v) => setUniMode(v as any)}
-                                        onClear={() => { setUniQuery(''); setUniMode('todas'); searchUnidades(0); }}
+                                        onClear={() => { setUniQuery(''); setUniMode('todas'); setUnidades([]); setUniMeta(null); setUniPage(0); }}
                                     />
                                 </div>
                                 {uniMeta && (
@@ -809,7 +822,7 @@ const Gestao = () => {
                                         modes={[{ value: 'todas', label: 'Todos os Usuários' }, { value: 'email', label: 'Por E-mail' }]}
                                         mode={usrMode}
                                         onModeChange={(v) => setUsrMode(v as any)}
-                                        onClear={() => { setUsrQuery(''); setUsrMode('todas'); searchUsuarios(0); }}
+                                        onClear={() => { setUsrQuery(''); setUsrMode('todas'); setUsuarios([]); setUsrMeta(null); setUsrPage(0); }}
                                     />
                                 </div>
                                 {usrMeta && (
@@ -882,10 +895,10 @@ const Gestao = () => {
                                         onSubmit={() => searchClientes(0)}
                                         placeholder="Buscar..."
                                         loading={cliLoading}
-                                        modes={[{ value: 'todas', label: 'Todos' }, { value: 'nome', label: 'Por Nome' }, { value: 'email', label: 'Por E-mail' }, { value: 'telefone', label: 'Por Telefone' }, { value: 'cpf', label: 'Por CPF' }]}
+                                        modes={[{ value: 'todas', label: 'Todos os Clientes' }, { value: 'nome', label: 'Por Nome' }, { value: 'email', label: 'Por E-mail' }, { value: 'telefone', label: 'Por Telefone' }, { value: 'cpf', label: 'Por CPF' }]}
                                         mode={cliMode}
                                         onModeChange={(v) => setCliMode(v as any)}
-                                        onClear={() => { setCliQuery(''); setCliMode('todas'); searchClientes(0); }}
+                                        onClear={() => { setCliQuery(''); setCliMode('todas'); setClientes([]); setCliMeta(null); setCliPage(0); }}
                                     />
                                 </div>
                                 {cliMeta && (
@@ -935,7 +948,7 @@ const Gestao = () => {
                     </Card>
                 </TabsContent>
 
-                {/* NOVA TAB PAINÉIS */}
+                {/* TAB PAINÉIS */}
                 <TabsContent value="paineis">
                     <Card>
                         <CardHeader className="space-y-4">
@@ -959,10 +972,10 @@ const Gestao = () => {
                                         modes={[{ value: 'porUnidade', label: 'Por Unidade' }]}
                                         mode={'porUnidade'}
                                         onModeChange={() => {}}
-                                        onClear={() => { setPainelUnidadeFilter(''); searchPaineis(0); }}
+                                        onClear={() => { setPainelUnidadeFilter(''); setPaineis([]); setPainelMeta(null); setPainelPage(0); }}
                                         unitFilter={{
                                             options: unidadeOptions.map(u => ({ value: u.id, label: u.nome })),
-                                            value: painelUnidadeFilter || selectedUnitId || '',
+                                            value: painelUnidadeFilter || '',
                                             onChange: setPainelUnidadeFilter,
                                             title: 'Selecione a unidade',
                                         }}
