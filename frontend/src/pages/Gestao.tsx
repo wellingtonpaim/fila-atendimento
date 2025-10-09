@@ -308,10 +308,10 @@ const Gestao = () => {
     };
 
     // ===== Componentes internos =====
-    const PaginationIconNav = ({ meta, onFirst, onPrev, onNext, onLast }: any) => {
+    const PaginationIconNav = ({ meta, onFirst, onPrev, onNext, onLast, inline = false }: any) => {
         if (!meta) return null;
         return (
-            <div className="flex items-center justify-end gap-1 mt-3">
+            <div className={`flex items-center ${inline ? 'justify-end mt-0' : 'justify-end mt-3'} gap-1`}>
                 <Button variant="ghost" size="icon" onClick={onFirst} disabled={meta.page <= 0} aria-label="Primeira página"><ChevronsLeft className="h-4 w-4" /></Button>
                 <Button variant="ghost" size="icon" onClick={onPrev} disabled={meta.page <= 0} aria-label="Página anterior"><ChevronLeft className="h-4 w-4" /></Button>
                 <span className="text-xs text-muted-foreground px-2">Página {meta.page + 1} de {meta.totalPages}</span>
@@ -517,7 +517,7 @@ const Gestao = () => {
                 case 'painel': await painelService.desativar(id); break;
             }
             toast({ title: 'Sucesso', description: 'Item excluído com sucesso.' });
-            if (type === 'filas') await searchFilas(0);
+            if (type === 'fila') await searchFilas(0);
             if (type === 'setor') await searchSetores(0);
             if (type === 'unidade') await searchUnidades(0);
             if (type === 'usuario') await searchUsuarios(0);
@@ -570,30 +570,34 @@ const Gestao = () => {
                 {/* TAB FILAS (exemplo de como ficaria) */}
                 <TabsContent value="filas">
                     <Card>
-                        <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                            <div>
-                                <CardTitle>Gerenciar Filas</CardTitle>
-                                <CardDescription>Adicione, edite e remova as filas de atendimento.</CardDescription>
+                        <CardHeader className="space-y-4">
+                            <div className="flex items-start justify-between gap-2">
+                                <div>
+                                    <CardTitle>Gerenciar Filas</CardTitle>
+                                    <CardDescription>Adicione, edite e remova as filas de atendimento.</CardDescription>
+                                </div>
+                                <Button onClick={() => handleOpenModal('fila')}><Plus className="w-4 h-4 mr-2" /> Nova Fila</Button>
                             </div>
-                            <div className="flex flex-col gap-2 w-full md:w-auto">
-                                <SearchBar
-                                    value={filaQuery}
-                                    onChange={setFilaQuery}
-                                    onSubmit={() => searchFilas(0)}
-                                    placeholder="Buscar..."
-                                    loading={filaLoading}
-                                    modes={[{ value: 'porUnidade', label: 'Por Unidade' }, { value: 'todas', label: 'Todas as Filas' }]}
-                                    mode={filaMode}
-                                    onModeChange={(v) => setFilaMode(v as any)}
-                                    rightSlot={
-                                        <Select value={filaUnidadeFilter || selectedUnitId || ''} onValueChange={setFilaUnidadeFilter}>
-                                            <SelectTrigger className="w-56"><SelectValue placeholder="Unidade" /></SelectTrigger>
-                                            <SelectContent>
-                                                {unidadeOptions.map(u => <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>)}
-                                            </SelectContent>
-                                        </Select>
-                                    }
-                                />
+                            <div className="flex items-center gap-3">
+                                <div className="flex-1">
+                                    <SearchBar
+                                        value={filaQuery}
+                                        onChange={setFilaQuery}
+                                        onSubmit={() => searchFilas(0)}
+                                        placeholder="Buscar..."
+                                        loading={filaLoading}
+                                        modes={[{ value: 'porUnidade', label: 'Por Unidade' }, { value: 'todas', label: 'Todas as Filas' }]}
+                                        mode={filaMode}
+                                        onModeChange={(v) => setFilaMode(v as any)}
+                                        onClear={() => { setFilaQuery(''); setFilaMode('porUnidade'); setFilaUnidadeFilter(''); searchFilas(0); }}
+                                        unitFilter={{
+                                            options: unidadeOptions.map(u => ({ value: u.id, label: u.nome })),
+                                            value: filaUnidadeFilter || selectedUnitId || '',
+                                            onChange: setFilaUnidadeFilter,
+                                            title: 'Selecione a unidade',
+                                        }}
+                                    />
+                                </div>
                                 {filaMetaState && (
                                     <PaginationIconNav
                                         meta={filaMetaState}
@@ -601,18 +605,18 @@ const Gestao = () => {
                                         onPrev={() => searchFilas(Math.max(0, filaPage - 1))}
                                         onNext={() => searchFilas(filaPage + 1)}
                                         onLast={() => filaMetaState ? searchFilas(filaMetaState.totalPages - 1) : null}
+                                        inline
                                     />
                                 )}
                             </div>
-                            <Button onClick={() => handleOpenModal('fila')}><Plus className="w-4 h-4 mr-2" /> Nova Fila</Button>
                         </CardHeader>
                         <CardContent>
                             <Table>
                                 <TableHeader>
                                     <TableRow>
-                                        <TableHead>Nome</TableHead>
-                                        <TableHead>Setor</TableHead>
-                                        <TableHead>Unidade</TableHead>
+                                        <TableHead className="w-1/2">Nome</TableHead>
+                                        <TableHead className="w-1/4">Setor</TableHead>
+                                        <TableHead className="w-1/4">Unidade</TableHead>
                                         <TableHead className="text-right">Ações</TableHead>
                                     </TableRow>
                                 </TableHeader>
@@ -624,9 +628,9 @@ const Gestao = () => {
                                     )}
                                     {filas.map(fila => (
                                         <TableRow key={fila.id}>
-                                            <TableCell>{fila.nome}</TableCell>
-                                            <TableCell>{fila.setor.nome}</TableCell>
-                                            <TableCell>{fila.unidade.nome}</TableCell>
+                                            <TableCell className="truncate max-w-[0]">{fila.nome}</TableCell>
+                                            <TableCell className="truncate max-w-[0]">{fila.setor.nome}</TableCell>
+                                            <TableCell className="truncate max-w-[0]">{fila.unidade.nome}</TableCell>
                                             <TableCell className="text-right">
                                                 <div className="flex gap-2 justify-end">
                                                     <Button variant="outline" size="sm" onClick={() => handleOpenModal('fila', fila)}><Edit className="w-4 h-4"/></Button>
@@ -644,22 +648,28 @@ const Gestao = () => {
                 {/* TAB SETORES */}
                 <TabsContent value="setores">
                     <Card>
-                        <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                            <div>
-                                <CardTitle>Gerenciar Setores</CardTitle>
-                                <CardDescription>Categorize as filas por setores.</CardDescription>
+                        <CardHeader className="space-y-4">
+                            <div className="flex items-start justify-between gap-2">
+                                <div>
+                                    <CardTitle>Gerenciar Setores</CardTitle>
+                                    <CardDescription>Categorize as filas por setores.</CardDescription>
+                                </div>
+                                <Button onClick={() => handleOpenModal('setor')}><Plus className="w-4 h-4 mr-2" /> Novo Setor</Button>
                             </div>
-                            <div className="flex flex-col gap-2 w-full md:w-auto">
-                                <SearchBar
-                                    value={setQuery}
-                                    onChange={setSetQuery}
-                                    onSubmit={() => searchSetores(0)}
-                                    placeholder="Buscar..."
-                                    loading={setoresLoading}
-                                    modes={[{ value: 'todas', label: 'Todos os Setores' }, { value: 'nome', label: 'Por Nome' }]}
-                                    mode={setMode}
-                                    onModeChange={(v) => setSetMode(v as any)}
-                                />
+                            <div className="flex items-center gap-3">
+                                <div className="flex-1">
+                                    <SearchBar
+                                        value={setQuery}
+                                        onChange={setSetQuery}
+                                        onSubmit={() => searchSetores(0)}
+                                        placeholder="Buscar..."
+                                        loading={setoresLoading}
+                                        modes={[{ value: 'todas', label: 'Todos os Setores' }, { value: 'nome', label: 'Por Nome' }]}
+                                        mode={setMode}
+                                        onModeChange={(v) => setSetMode(v as any)}
+                                        onClear={() => { setSetQuery(''); setSetMode('todas'); searchSetores(0); }}
+                                    />
+                                </div>
                                 {setMeta && (
                                     <PaginationIconNav
                                         meta={setMeta}
@@ -667,16 +677,16 @@ const Gestao = () => {
                                         onPrev={() => searchSetores(Math.max(0, setPage - 1))}
                                         onNext={() => searchSetores(setPage + 1)}
                                         onLast={() => setMeta ? searchSetores(setMeta.totalPages - 1) : null}
+                                        inline
                                     />
                                 )}
                             </div>
-                            <Button onClick={() => handleOpenModal('setor')}><Plus className="w-4 h-4 mr-2" /> Novo Setor</Button>
                         </CardHeader>
                         <CardContent>
                             <Table>
                                 <TableHeader>
                                     <TableRow>
-                                        <TableHead>Nome</TableHead>
+                                        <TableHead className="w-2/3">Nome</TableHead>
                                         <TableHead className="text-right">Ações</TableHead>
                                     </TableRow>
                                 </TableHeader>
@@ -688,7 +698,7 @@ const Gestao = () => {
                                     )}
                                     {setores.map(setor => (
                                         <TableRow key={setor.id}>
-                                            <TableCell>{setor.nome}</TableCell>
+                                            <TableCell className="truncate max-w-[0]">{setor.nome}</TableCell>
                                             <TableCell className="text-right">
                                                 <div className="flex gap-2 justify-end">
                                                     <Button variant="outline" size="sm" onClick={() => handleOpenModal('setor', setor)}><Edit className="w-4 h-4"/></Button>
@@ -706,22 +716,28 @@ const Gestao = () => {
                 {/* TAB UNIDADES */}
                 <TabsContent value="unidades">
                     <Card>
-                        <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                            <div>
-                                <CardTitle>Gerenciar Unidades</CardTitle>
-                                <CardDescription>Cadastre locais de atendimento.</CardDescription>
+                        <CardHeader className="space-y-4">
+                            <div className="flex items-start justify-between gap-2">
+                                <div>
+                                    <CardTitle>Gerenciar Unidades</CardTitle>
+                                    <CardDescription>Cadastre locais de atendimento.</CardDescription>
+                                </div>
+                                <Button onClick={() => handleOpenModal('unidade')}><Plus className="w-4 h-4 mr-2" /> Nova Unidade</Button>
                             </div>
-                            <div className="flex flex-col gap-2 w-full md:w-auto">
-                                <SearchBar
-                                    value={uniQuery}
-                                    onChange={setUniQuery}
-                                    onSubmit={() => searchUnidades(0)}
-                                    placeholder="Buscar..."
-                                    loading={uniLoading}
-                                    modes={[{ value: 'todas', label: 'Todas as Unidades' }, { value: 'nome', label: 'Por Nome' }]}
-                                    mode={uniMode}
-                                    onModeChange={(v) => setUniMode(v as any)}
-                                />
+                            <div className="flex items-center gap-3">
+                                <div className="flex-1">
+                                    <SearchBar
+                                        value={uniQuery}
+                                        onChange={setUniQuery}
+                                        onSubmit={() => searchUnidades(0)}
+                                        placeholder="Buscar..."
+                                        loading={uniLoading}
+                                        modes={[{ value: 'todas', label: 'Todas as Unidades' }, { value: 'nome', label: 'Por Nome' }]}
+                                        mode={uniMode}
+                                        onModeChange={(v) => setUniMode(v as any)}
+                                        onClear={() => { setUniQuery(''); setUniMode('todas'); searchUnidades(0); }}
+                                    />
+                                </div>
                                 {uniMeta && (
                                     <PaginationIconNav
                                         meta={uniMeta}
@@ -729,17 +745,17 @@ const Gestao = () => {
                                         onPrev={() => searchUnidades(Math.max(0, uniPage - 1))}
                                         onNext={() => searchUnidades(uniPage + 1)}
                                         onLast={() => uniMeta ? searchUnidades(uniMeta.totalPages - 1) : null}
+                                        inline
                                     />
                                 )}
                             </div>
-                            <Button onClick={() => handleOpenModal('unidade')}><Plus className="w-4 h-4 mr-2" /> Nova Unidade</Button>
                         </CardHeader>
                         <CardContent>
                             <Table>
                                 <TableHeader>
                                     <TableRow>
-                                        <TableHead>Nome</TableHead>
-                                        <TableHead>Endereço</TableHead>
+                                        <TableHead className="w-1/3">Nome</TableHead>
+                                        <TableHead className="w-1/2">Endereço</TableHead>
                                         <TableHead className="text-right">Ações</TableHead>
                                     </TableRow>
                                 </TableHeader>
@@ -751,8 +767,8 @@ const Gestao = () => {
                                     )}
                                     {unidades.map(un => (
                                         <TableRow key={un.id}>
-                                            <TableCell>{un.nome}</TableCell>
-                                            <TableCell className="text-sm text-muted-foreground">
+                                            <TableCell className="truncate max-w-[0]">{un.nome}</TableCell>
+                                            <TableCell className="text-sm text-muted-foreground truncate max-w-[0]">
                                                 {un.endereco?.enderecoFormatado
                                                     ? un.endereco.enderecoFormatado
                                                     : (un.endereco ? `${un.endereco.logradouro || ''} ${un.endereco.numero || ''}` : '—')}
@@ -774,22 +790,28 @@ const Gestao = () => {
                 {/* TAB USUÁRIOS */}
                 <TabsContent value="usuarios">
                     <Card>
-                        <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                            <div>
-                                <CardTitle>Gerenciar Usuários</CardTitle>
-                                <CardDescription>Controle de acesso ao sistema.</CardDescription>
+                        <CardHeader className="space-y-4">
+                            <div className="flex items-start justify-between gap-2">
+                                <div>
+                                    <CardTitle>Gerenciar Usuários</CardTitle>
+                                    <CardDescription>Controle de acesso ao sistema.</CardDescription>
+                                </div>
+                                <Button onClick={() => handleOpenModal('usuario')}><UserPlus className="w-4 h-4 mr-2" /> Novo Usuário</Button>
                             </div>
-                            <div className="flex flex-col gap-2 w-full md:w-auto">
-                                <SearchBar
-                                    value={usrQuery}
-                                    onChange={setUsrQuery}
-                                    onSubmit={() => searchUsuarios(0)}
-                                    placeholder="Buscar..."
-                                    loading={usrLoading}
-                                    modes={[{ value: 'todas', label: 'Todos os Usuários' }, { value: 'email', label: 'Por E-mail' }]}
-                                    mode={usrMode}
-                                    onModeChange={(v) => setUsrMode(v as any)}
-                                />
+                            <div className="flex items-center gap-3">
+                                <div className="flex-1">
+                                    <SearchBar
+                                        value={usrQuery}
+                                        onChange={setUsrQuery}
+                                        onSubmit={() => searchUsuarios(0)}
+                                        placeholder="Buscar..."
+                                        loading={usrLoading}
+                                        modes={[{ value: 'todas', label: 'Todos os Usuários' }, { value: 'email', label: 'Por E-mail' }]}
+                                        mode={usrMode}
+                                        onModeChange={(v) => setUsrMode(v as any)}
+                                        onClear={() => { setUsrQuery(''); setUsrMode('todas'); searchUsuarios(0); }}
+                                    />
+                                </div>
                                 {usrMeta && (
                                     <PaginationIconNav
                                         meta={usrMeta}
@@ -797,10 +819,10 @@ const Gestao = () => {
                                         onPrev={() => searchUsuarios(Math.max(0, usrPage - 1))}
                                         onNext={() => searchUsuarios(usrPage + 1)}
                                         onLast={() => usrMeta ? searchUsuarios(usrMeta.totalPages - 1) : null}
+                                        inline
                                     />
                                 )}
                             </div>
-                            <Button onClick={() => handleOpenModal('usuario')}><UserPlus className="w-4 h-4 mr-2" /> Novo Usuário</Button>
                         </CardHeader>
                         <CardContent>
                             <Table>
@@ -844,22 +866,28 @@ const Gestao = () => {
                 {/* TAB CLIENTES */}
                 <TabsContent value="clientes">
                     <Card>
-                        <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                            <div>
-                                <CardTitle>Gerenciar Clientes</CardTitle>
-                                <CardDescription>Cadastro de pacientes/clientes.</CardDescription>
+                        <CardHeader className="space-y-4">
+                            <div className="flex items-start justify-between gap-2">
+                                <div>
+                                    <CardTitle>Gerenciar Clientes</CardTitle>
+                                    <CardDescription>Cadastro de pacientes/clientes.</CardDescription>
+                                </div>
+                                <Button onClick={() => handleOpenModal('cliente')}><Plus className="w-4 h-4 mr-2" /> Novo Cliente</Button>
                             </div>
-                            <div className="flex flex-col gap-2 w-full md:w-auto">
-                                <SearchBar
-                                    value={cliQuery}
-                                    onChange={setCliQuery}
-                                    onSubmit={() => searchClientes(0)}
-                                    placeholder="Buscar..."
-                                    loading={cliLoading}
-                                    modes={[{ value: 'todas', label: 'Todos' }, { value: 'nome', label: 'Por Nome' }, { value: 'email', label: 'Por E-mail' }, { value: 'telefone', label: 'Por Telefone' }, { value: 'cpf', label: 'Por CPF' }]}
-                                    mode={cliMode}
-                                    onModeChange={(v) => setCliMode(v as any)}
-                                />
+                            <div className="flex items-center gap-3">
+                                <div className="flex-1">
+                                    <SearchBar
+                                        value={cliQuery}
+                                        onChange={setCliQuery}
+                                        onSubmit={() => searchClientes(0)}
+                                        placeholder="Buscar..."
+                                        loading={cliLoading}
+                                        modes={[{ value: 'todas', label: 'Todos' }, { value: 'nome', label: 'Por Nome' }, { value: 'email', label: 'Por E-mail' }, { value: 'telefone', label: 'Por Telefone' }, { value: 'cpf', label: 'Por CPF' }]}
+                                        mode={cliMode}
+                                        onModeChange={(v) => setCliMode(v as any)}
+                                        onClear={() => { setCliQuery(''); setCliMode('todas'); searchClientes(0); }}
+                                    />
+                                </div>
                                 {cliMeta && (
                                     <PaginationIconNav
                                         meta={cliMeta}
@@ -867,10 +895,10 @@ const Gestao = () => {
                                         onPrev={() => searchClientes(Math.max(0, cliPage - 1))}
                                         onNext={() => searchClientes(cliPage + 1)}
                                         onLast={() => cliMeta ? searchClientes(cliMeta.totalPages - 1) : null}
+                                        inline
                                     />
                                 )}
                             </div>
-                            <Button onClick={() => handleOpenModal('cliente')}><Plus className="w-4 h-4 mr-2" /> Novo Cliente</Button>
                         </CardHeader>
                         <CardContent>
                             <Table>
@@ -910,30 +938,36 @@ const Gestao = () => {
                 {/* NOVA TAB PAINÉIS */}
                 <TabsContent value="paineis">
                     <Card>
-                        <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                            <div>
-                                <CardTitle>Gerenciar Painéis</CardTitle>
-                                <CardDescription>Crie e configure os painéis de exibição pública.</CardDescription>
+                        <CardHeader className="space-y-4">
+                            <div className="flex items-start justify-between gap-2">
+                                <div>
+                                    <CardTitle>Gerenciar Painéis</CardTitle>
+                                    <CardDescription>Crie e configure os painéis de exibição pública.</CardDescription>
+                                </div>
+                                <Button onClick={() => handleOpenModal('painel')}>
+                                    <Plus className="w-4 h-4 mr-2" /> Novo Painel
+                                </Button>
                             </div>
-                            <div className="flex flex-col gap-2 w-full md:w-auto">
-                                <SearchBar
-                                    value={''}
-                                    onChange={() => {}}
-                                    onSubmit={() => searchPaineis(0)}
-                                    placeholder="Buscar..."
-                                    loading={painelLoading}
-                                    modes={[{ value: 'porUnidade', label: 'Por Unidade' }]}
-                                    mode={'porUnidade'}
-                                    onModeChange={() => {}}
-                                    rightSlot={
-                                        <Select value={painelUnidadeFilter || selectedUnitId || ''} onValueChange={setPainelUnidadeFilter}>
-                                            <SelectTrigger className="w-56"><SelectValue placeholder="Unidade" /></SelectTrigger>
-                                            <SelectContent>
-                                                {unidadeOptions.map(u => <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>)}
-                                            </SelectContent>
-                                        </Select>
-                                    }
-                                />
+                            <div className="flex items-center gap-3">
+                                <div className="flex-1">
+                                    <SearchBar
+                                        value={''}
+                                        onChange={() => {}}
+                                        onSubmit={() => searchPaineis(0)}
+                                        placeholder="Buscar..."
+                                        loading={painelLoading}
+                                        modes={[{ value: 'porUnidade', label: 'Por Unidade' }]}
+                                        mode={'porUnidade'}
+                                        onModeChange={() => {}}
+                                        onClear={() => { setPainelUnidadeFilter(''); searchPaineis(0); }}
+                                        unitFilter={{
+                                            options: unidadeOptions.map(u => ({ value: u.id, label: u.nome })),
+                                            value: painelUnidadeFilter || selectedUnitId || '',
+                                            onChange: setPainelUnidadeFilter,
+                                            title: 'Selecione a unidade',
+                                        }}
+                                    />
+                                </div>
                                 {painelMeta && (
                                     <PaginationIconNav
                                         meta={painelMeta}
@@ -941,12 +975,10 @@ const Gestao = () => {
                                         onPrev={() => searchPaineis(Math.max(0, painelPage - 1))}
                                         onNext={() => searchPaineis(painelPage + 1)}
                                         onLast={() => painelMeta ? searchPaineis((painelMeta.totalPages ?? 1) - 1) : null}
+                                        inline
                                     />
                                 )}
                             </div>
-                            <Button onClick={() => handleOpenModal('painel')}>
-                                <Plus className="w-4 h-4 mr-2" /> Novo Painel
-                            </Button>
                         </CardHeader>
                         <CardContent>
                             <Table>
