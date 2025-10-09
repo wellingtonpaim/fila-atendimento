@@ -322,6 +322,24 @@ const Gestao = () => {
         }
     };
 
+    // ===== Helpers de formatação =====
+    const formatPhones = (telefones?: Array<{ ddd?: number; numero?: number }>) => {
+        if (!Array.isArray(telefones) || telefones.length === 0) return '—';
+        return telefones
+            .filter((t) => t && t.ddd !== undefined && t.numero !== undefined)
+            .map((t) => `${t.ddd}-${t.numero}`)
+            .join(', ');
+    };
+
+    const formatAddress = (endereco?: { enderecoFormatado?: string; logradouro?: string; numero?: string }) => {
+        if (!endereco) return '—';
+        if (endereco.enderecoFormatado && endereco.enderecoFormatado.trim() !== '') return endereco.enderecoFormatado;
+        const log = endereco.logradouro || '';
+        const num = endereco.numero || '';
+        const base = `${log} ${num}`.trim();
+        return base !== '' ? base : '—';
+    };
+
     // ===== Componentes internos =====
     const PaginationIconNav = ({ meta, onFirst, onPrev, onNext, onLast, inline = false }: any) => {
         if (!meta) return null;
@@ -551,7 +569,7 @@ const Gestao = () => {
             <div className="flex flex-wrap gap-1">
                 {filaIds.map((id) => {
                     const fila = filaOptions.find((f) => f.id === id) || filas.find((f) => f.id === id);
-                    return <Badge key={id} variant="outline">{fila?.nome || 'Desconhecida'}</Badge>;
+                    return <Badge key={id} variant="secondary">{fila?.nome || 'Desconhecida'}</Badge>;
                 })}
             </div>
         );
@@ -625,15 +643,15 @@ const Gestao = () => {
                         </CardHeader>
                         <CardContent>
                             <Table>
-                                <TableHeader>
+                                <TableHeader className="[&_th]:bg-muted/50 [&_th]:text-foreground [&_th]:font-semibold">
                                     <TableRow>
-                                        <TableHead className="w-1/2">Nome</TableHead>
-                                        <TableHead className="w-1/4">Setor</TableHead>
-                                        <TableHead className="w-1/4">Unidade</TableHead>
-                                        <TableHead className="text-right">Ações</TableHead>
+                                        <TableHead className="min-w-[220px]">Nome</TableHead>
+                                        <TableHead className="min-w-[200px]">Setor</TableHead>
+                                        <TableHead className="min-w-[200px]">Unidade</TableHead>
+                                        <TableHead className="text-right min-w-[140px]">Ações</TableHead>
                                     </TableRow>
                                 </TableHeader>
-                                <TableBody>
+                                <TableBody className="[&_td]:text-sm [&_td]:font-semibold [&_td]:text-foreground">
                                     {filas.length === 0 && (
                                         <TableRow>
                                             <TableCell colSpan={4} className="text-center text-muted-foreground py-6">Nenhuma fila cadastrada.</TableCell>
@@ -641,9 +659,9 @@ const Gestao = () => {
                                     )}
                                     {filas.map(fila => (
                                         <TableRow key={fila.id}>
-                                            <TableCell className="truncate max-w-[0]">{fila.nome}</TableCell>
-                                            <TableCell className="truncate max-w-[0]">{fila.setor.nome}</TableCell>
-                                            <TableCell className="truncate max-w-[0]">{fila.unidade.nome}</TableCell>
+                                            <TableCell>{fila.nome}</TableCell>
+                                            <TableCell>{fila.setor.nome}</TableCell>
+                                            <TableCell>{fila.unidade.nome}</TableCell>
                                             <TableCell className="text-right">
                                                 <div className="flex gap-2 justify-end">
                                                     <Button variant="outline" size="sm" onClick={() => handleOpenModal('fila', fila)}><Edit className="w-4 h-4"/></Button>
@@ -697,13 +715,13 @@ const Gestao = () => {
                         </CardHeader>
                         <CardContent>
                             <Table>
-                                <TableHeader>
+                                <TableHeader className="[&_th]:bg-muted/50 [&_th]:text-foreground [&_th]:font-semibold">
                                     <TableRow>
-                                        <TableHead className="w-2/3">Nome</TableHead>
-                                        <TableHead className="text-right">Ações</TableHead>
+                                        <TableHead className="min-w-[260px]">Nome</TableHead>
+                                        <TableHead className="text-right min-w-[140px]">Ações</TableHead>
                                     </TableRow>
                                 </TableHeader>
-                                <TableBody>
+                                <TableBody className="[&_td]:text-sm [&_td]:font-semibold [&_td]:text-foreground">
                                     {setores.length === 0 && (
                                         <TableRow>
                                             <TableCell colSpan={2} className="text-center text-muted-foreground py-6">Nenhum setor cadastrado.</TableCell>
@@ -711,7 +729,7 @@ const Gestao = () => {
                                     )}
                                     {setores.map(setor => (
                                         <TableRow key={setor.id}>
-                                            <TableCell className="truncate max-w-[0]">{setor.nome}</TableCell>
+                                            <TableCell>{setor.nome}</TableCell>
                                             <TableCell className="text-right">
                                                 <div className="flex gap-2 justify-end">
                                                     <Button variant="outline" size="sm" onClick={() => handleOpenModal('setor', setor)}><Edit className="w-4 h-4"/></Button>
@@ -765,27 +783,25 @@ const Gestao = () => {
                         </CardHeader>
                         <CardContent>
                             <Table>
-                                <TableHeader>
+                                <TableHeader className="[&_th]:bg-muted/50 [&_th]:text-foreground [&_th]:font-semibold">
                                     <TableRow>
-                                        <TableHead className="w-1/3">Nome</TableHead>
-                                        <TableHead className="w-1/2">Endereço</TableHead>
-                                        <TableHead className="text-right">Ações</TableHead>
+                                        <TableHead className="min-w-[220px]">Nome</TableHead>
+                                        <TableHead className="min-w-[320px]">Endereço</TableHead>
+                                        <TableHead className="min-w-[220px]">Telefones</TableHead>
+                                        <TableHead className="text-right min-w-[140px]">Ações</TableHead>
                                     </TableRow>
                                 </TableHeader>
-                                <TableBody>
+                                <TableBody className="[&_td]:text-sm [&_td]:font-semibold [&_td]:text-foreground">
                                     {unidades.length === 0 && (
                                         <TableRow>
-                                            <TableCell colSpan={3} className="text-center text-muted-foreground py-6">Nenhuma unidade cadastrada.</TableCell>
+                                            <TableCell colSpan={4} className="text-center text-muted-foreground py-6">Nenhuma unidade cadastrada.</TableCell>
                                         </TableRow>
                                     )}
                                     {unidades.map(un => (
                                         <TableRow key={un.id}>
-                                            <TableCell className="truncate max-w-[0]">{un.nome}</TableCell>
-                                            <TableCell className="text-sm text-muted-foreground truncate max-w-[0]">
-                                                {un.endereco?.enderecoFormatado
-                                                    ? un.endereco.enderecoFormatado
-                                                    : (un.endereco ? `${un.endereco.logradouro || ''} ${un.endereco.numero || ''}` : '—')}
-                                            </TableCell>
+                                            <TableCell>{un.nome}</TableCell>
+                                            <TableCell>{formatAddress(un.endereco)}</TableCell>
+                                            <TableCell>{formatPhones(un.telefones)}</TableCell>
                                             <TableCell className="text-right">
                                                 <div className="flex gap-2 justify-end">
                                                     <Button variant="outline" size="sm" onClick={() => handleOpenModal('unidade', un)}><Edit className="w-4 h-4"/></Button>
@@ -839,15 +855,15 @@ const Gestao = () => {
                         </CardHeader>
                         <CardContent>
                             <Table>
-                                <TableHeader>
+                                <TableHeader className="[&_th]:bg-muted/50 [&_th]:text-foreground [&_th]:font-semibold">
                                     <TableRow>
-                                        <TableHead>Nome</TableHead>
-                                        <TableHead>Email</TableHead>
-                                        <TableHead>Categoria</TableHead>
-                                        <TableHead className="text-right">Ações</TableHead>
+                                        <TableHead className="min-w-[220px]">Nome</TableHead>
+                                        <TableHead className="min-w-[260px]">Email</TableHead>
+                                        <TableHead className="min-w-[160px]">Categoria</TableHead>
+                                        <TableHead className="text-right min-w-[140px]">Ações</TableHead>
                                     </TableRow>
                                 </TableHeader>
-                                <TableBody>
+                                <TableBody className="[&_td]:text-sm [&_td]:font-semibold [&_td]:text-foreground">
                                     {usuarios.length === 0 && (
                                         <TableRow>
                                             <TableCell colSpan={4} className="text-center text-muted-foreground py-6">Nenhum usuário cadastrado.</TableCell>
@@ -915,18 +931,20 @@ const Gestao = () => {
                         </CardHeader>
                         <CardContent>
                             <Table>
-                                <TableHeader>
+                                <TableHeader className="[&_th]:bg-muted/50 [&_th]:text-foreground [&_th]:font-semibold">
                                     <TableRow>
-                                        <TableHead>Nome</TableHead>
-                                        <TableHead>CPF</TableHead>
-                                        <TableHead>Email</TableHead>
-                                        <TableHead className="text-right">Ações</TableHead>
+                                        <TableHead className="min-w-[220px]">Nome</TableHead>
+                                        <TableHead className="min-w-[160px]">CPF</TableHead>
+                                        <TableHead className="min-w-[260px]">Email</TableHead>
+                                        <TableHead className="min-w-[220px]">Telefones</TableHead>
+                                        <TableHead className="min-w-[320px]">Endereço</TableHead>
+                                        <TableHead className="text-right min-w-[140px]">Ações</TableHead>
                                     </TableRow>
                                 </TableHeader>
-                                <TableBody>
+                                <TableBody className="[&_td]:text-sm [&_td]:font-semibold [&_td]:text-foreground">
                                     {clientes.length === 0 && (
                                         <TableRow>
-                                            <TableCell colSpan={4} className="text-center text-muted-foreground py-6">Nenhum cliente cadastrado.</TableCell>
+                                            <TableCell colSpan={6} className="text-center text-muted-foreground py-6">Nenhum cliente cadastrado.</TableCell>
                                         </TableRow>
                                     )}
                                     {clientes.map(cl => (
@@ -934,6 +952,8 @@ const Gestao = () => {
                                             <TableCell>{cl.nome}</TableCell>
                                             <TableCell>{cl.cpf}</TableCell>
                                             <TableCell>{cl.email || '—'}</TableCell>
+                                            <TableCell>{formatPhones(cl.telefones)}</TableCell>
+                                            <TableCell>{formatAddress(cl.endereco)}</TableCell>
                                             <TableCell className="text-right">
                                                 <div className="flex gap-2 justify-end">
                                                     <Button variant="outline" size="sm" onClick={() => handleOpenModal('cliente', cl)}><Edit className="w-4 h-4"/></Button>
@@ -995,14 +1015,14 @@ const Gestao = () => {
                         </CardHeader>
                         <CardContent>
                             <Table>
-                                <TableHeader>
+                                <TableHeader className="[&_th]:bg-muted/50 [&_th]:text-foreground [&_th]:font-semibold">
                                     <TableRow>
-                                        <TableHead>Descrição</TableHead>
-                                        <TableHead>Filas Vinculadas</TableHead>
-                                        <TableHead className="text-right">Ações</TableHead>
+                                        <TableHead className="min-w-[280px]">Descrição</TableHead>
+                                        <TableHead className="min-w-[280px]">Filas Vinculadas</TableHead>
+                                        <TableHead className="text-right min-w-[140px]">Ações</TableHead>
                                     </TableRow>
                                 </TableHeader>
-                                <TableBody>
+                                <TableBody className="[&_td]:text-sm [&_td]:font-semibold [&_td]:text-foreground">
                                     {paineis.length === 0 && (
                                         <TableRow>
                                             <TableCell colSpan={3} className="text-center text-muted-foreground py-6">Nenhum painel cadastrado.</TableCell>
@@ -1010,7 +1030,7 @@ const Gestao = () => {
                                     )}
                                     {paineis.map(painel => (
                                         <TableRow key={painel.id}>
-                                            <TableCell className="font-medium">{painel.descricao}</TableCell>
+                                            <TableCell className="font-semibold">{painel.descricao}</TableCell>
                                             <TableCell>{renderFilaNames(painel.filasIds)}</TableCell>
                                             <TableCell className="text-right">
                                                 <div className="flex gap-2 justify-end">
@@ -1213,9 +1233,6 @@ const Gestao = () => {
                                             </div>
                                         );
                                     })}
-                                    {unidadeOptions.length === 0 && (
-                                        <p className="text-xs text-muted-foreground text-center">Nenhuma unidade.</p>
-                                    )}
                                 </div>
                             </ScrollArea>
                         </div>
@@ -1232,7 +1249,7 @@ const Gestao = () => {
                 <DialogContent className="sm:max-w-[720px]">
                     <DialogHeader>
                         <DialogTitle>{editingItem ? 'Editar Cliente' : 'Novo Cliente'}</DialogTitle>
-                        <DialogDescription>Cadastre dados do cliente/paciente.</DialogDescription>
+                        <DialogDescription>Cadastre os dados do cliente.</DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
                         <div className="grid md:grid-cols-2 gap-4">
@@ -1249,8 +1266,8 @@ const Gestao = () => {
                             <Label>Email</Label>
                             <Input type="email" value={formData.email || ''} onChange={(e) => setFormData({ ...formData, email: e.target.value })} />
                         </div>
-                        <AddressFields baseKey="endereco" />
                         <PhonesFields baseKey="telefones" />
+                        <AddressFields baseKey="endereco" />
                     </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setModalOpen(null)}>Cancelar</Button>
@@ -1258,9 +1275,8 @@ const Gestao = () => {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
-
         </div>
     );
-}
+};
 
 export default Gestao;
