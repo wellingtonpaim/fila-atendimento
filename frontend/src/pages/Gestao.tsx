@@ -648,7 +648,7 @@ const Gestao = () => {
                                         <TableHead className="min-w-[220px]">Nome</TableHead>
                                         <TableHead className="min-w-[200px]">Setor</TableHead>
                                         <TableHead className="min-w-[200px]">Unidade</TableHead>
-                                        <TableHead className="text-right min-w-[140px]">Ações</TableHead>
+                                        <TableHead className="sticky right-0 z-20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shadow-[inset_1px_0_0_theme(colors.border)] text-right w-[112px] min-w-[112px] whitespace-nowrap px-2">Ações</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody className="[&_td]:text-sm [&_td]:font-semibold [&_td]:text-foreground">
@@ -662,7 +662,7 @@ const Gestao = () => {
                                             <TableCell>{fila.nome}</TableCell>
                                             <TableCell>{fila.setor.nome}</TableCell>
                                             <TableCell>{fila.unidade.nome}</TableCell>
-                                            <TableCell className="text-right">
+                                            <TableCell className="sticky right-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shadow-[inset_1px_0_0_theme(colors.border)] text-right w-[112px] min-w-[112px] px-2">
                                                 <div className="flex gap-2 justify-end">
                                                     <Button variant="outline" size="sm" onClick={() => handleOpenModal('fila', fila)}><Edit className="w-4 h-4"/></Button>
                                                     <Button variant="destructive" size="sm" onClick={() => handleDelete('fila', fila.id)}><Trash2 className="w-4 h-4"/></Button>
@@ -718,7 +718,7 @@ const Gestao = () => {
                                 <TableHeader className="[&_th]:bg-muted/50 [&_th]:text-foreground [&_th]:font-semibold">
                                     <TableRow>
                                         <TableHead className="min-w-[260px]">Nome</TableHead>
-                                        <TableHead className="text-right min-w-[140px]">Ações</TableHead>
+                                        <TableHead className="sticky right-0 z-20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shadow-[inset_1px_0_0_theme(colors.border)] text-right w-[112px] min-w-[112px] whitespace-nowrap px-2">Ações</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody className="[&_td]:text-sm [&_td]:font-semibold [&_td]:text-foreground">
@@ -730,7 +730,7 @@ const Gestao = () => {
                                     {setores.map(setor => (
                                         <TableRow key={setor.id}>
                                             <TableCell>{setor.nome}</TableCell>
-                                            <TableCell className="text-right">
+                                            <TableCell className="sticky right-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shadow-[inset_1px_0_0_theme(colors.border)] text-right w-[112px] min-w-[112px] px-2">
                                                 <div className="flex gap-2 justify-end">
                                                     <Button variant="outline" size="sm" onClick={() => handleOpenModal('setor', setor)}><Edit className="w-4 h-4"/></Button>
                                                     <Button variant="destructive" size="sm" onClick={() => handleDelete('setor', setor.id)}><Trash2 className="w-4 h-4"/></Button>
@@ -788,7 +788,7 @@ const Gestao = () => {
                                         <TableHead className="min-w-[220px]">Nome</TableHead>
                                         <TableHead className="min-w-[320px]">Endereço</TableHead>
                                         <TableHead className="min-w-[220px]">Telefones</TableHead>
-                                        <TableHead className="text-right min-w-[140px]">Ações</TableHead>
+                                        <TableHead className="sticky right-0 z-20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shadow-[inset_1px_0_0_theme(colors.border)] text-right w-[112px] min-w-[112px] whitespace-nowrap px-2">Ações</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody className="[&_td]:text-sm [&_td]:font-semibold [&_td]:text-foreground">
@@ -802,7 +802,7 @@ const Gestao = () => {
                                             <TableCell>{un.nome}</TableCell>
                                             <TableCell>{formatAddress(un.endereco)}</TableCell>
                                             <TableCell>{formatPhones(un.telefones)}</TableCell>
-                                            <TableCell className="text-right">
+                                            <TableCell className="sticky right-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shadow-[inset_1px_0_0_theme(colors.border)] text-right w-[112px] min-w-[112px] px-2">
                                                 <div className="flex gap-2 justify-end">
                                                     <Button variant="outline" size="sm" onClick={() => handleOpenModal('unidade', un)}><Edit className="w-4 h-4"/></Button>
                                                     <Button variant="destructive" size="sm" onClick={() => handleDelete('unidade', un.id)}><Trash2 className="w-4 h-4"/></Button>
@@ -860,7 +860,7 @@ const Gestao = () => {
                                         <TableHead className="min-w-[220px]">Nome</TableHead>
                                         <TableHead className="min-w-[260px]">Email</TableHead>
                                         <TableHead className="min-w-[160px]">Categoria</TableHead>
-                                        <TableHead className="text-right min-w-[140px]">Ações</TableHead>
+                                        <TableHead className="sticky right-0 z-20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shadow-[inset_1px_0_0_theme(colors.border)] text-right w-[112px] min-w-[112px] whitespace-nowrap px-2">Ações</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody className="[&_td]:text-sm [&_td]:font-semibold [&_td]:text-foreground">
@@ -878,7 +878,7 @@ const Gestao = () => {
                                                     {us.categoria}
                                                 </Badge>
                                             </TableCell>
-                                            <TableCell className="text-right">
+                                            <TableCell className="sticky right-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shadow-[inset_1px_0_0_theme(colors.border)] text-right w-[112px] min-w-[112px] px-2">
                                                 <div className="flex gap-2 justify-end">
                                                     <Button variant="outline" size="sm" onClick={() => handleOpenModal('usuario', us)}><Edit className="w-4 h-4"/></Button>
                                                     <Button variant="destructive" size="sm" onClick={() => handleDelete('usuario', us.id)}><Trash2 className="w-4 h-4"/></Button>
@@ -938,7 +938,7 @@ const Gestao = () => {
                                         <TableHead className="min-w-[260px]">Email</TableHead>
                                         <TableHead className="min-w-[220px]">Telefones</TableHead>
                                         <TableHead className="min-w-[320px]">Endereço</TableHead>
-                                        <TableHead className="text-right min-w-[140px]">Ações</TableHead>
+                                        <TableHead className="sticky right-0 z-20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shadow-[inset_1px_0_0_theme(colors.border)] text-right w-[112px] min-w-[112px] whitespace-nowrap px-2">Ações</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody className="[&_td]:text-sm [&_td]:font-semibold [&_td]:text-foreground">
@@ -954,7 +954,7 @@ const Gestao = () => {
                                             <TableCell>{cl.email || '—'}</TableCell>
                                             <TableCell>{formatPhones(cl.telefones)}</TableCell>
                                             <TableCell>{formatAddress(cl.endereco)}</TableCell>
-                                            <TableCell className="text-right">
+                                            <TableCell className="sticky right-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shadow-[inset_1px_0_0_theme(colors.border)] text-right w-[112px] min-w-[112px] px-2">
                                                 <div className="flex gap-2 justify-end">
                                                     <Button variant="outline" size="sm" onClick={() => handleOpenModal('cliente', cl)}><Edit className="w-4 h-4"/></Button>
                                                     <Button variant="destructive" size="sm" onClick={() => handleDelete('cliente', cl.id)}><Trash2 className="w-4 h-4"/></Button>
@@ -1019,7 +1019,7 @@ const Gestao = () => {
                                     <TableRow>
                                         <TableHead className="min-w-[280px]">Descrição</TableHead>
                                         <TableHead className="min-w-[280px]">Filas Vinculadas</TableHead>
-                                        <TableHead className="text-right min-w-[140px]">Ações</TableHead>
+                                        <TableHead className="sticky right-0 z-20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shadow-[inset_1px_0_0_theme(colors.border)] text-right w-[112px] min-w-[112px] whitespace-nowrap px-2">Ações</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody className="[&_td]:text-sm [&_td]:font-semibold [&_td]:text-foreground">
@@ -1032,7 +1032,7 @@ const Gestao = () => {
                                         <TableRow key={painel.id}>
                                             <TableCell className="font-semibold">{painel.descricao}</TableCell>
                                             <TableCell>{renderFilaNames(painel.filasIds)}</TableCell>
-                                            <TableCell className="text-right">
+                                            <TableCell className="sticky right-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shadow-[inset_1px_0_0_theme(colors.border)] text-right w-[112px] min-w-[112px] px-2">
                                                 <div className="flex gap-2 justify-end">
                                                     <Button variant="outline" size="sm" onClick={() => handleOpenModal('painel', painel)}><Edit className="w-4 h-4"/></Button>
                                                     <Button variant="destructive" size="sm" onClick={() => handleDelete('painel', painel.id)}><Trash2 className="w-4 h-4"/></Button>
