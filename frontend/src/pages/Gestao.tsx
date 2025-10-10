@@ -101,7 +101,7 @@ const Gestao = () => {
 
     // Filas
     const [filaQuery, setFilaQuery] = useState('');
-    const [filaMode, setFilaMode] = useState<'todas' | 'porUnidade'>('porUnidade');
+    const [filaMode, setFilaMode] = useState<'todas' | 'porUnidade'>('todas'); // default agora 'todas'
     const [filaPage, setFilaPage] = useState(0);
     const [filaSize, setFilaSize] = useState(10);
     const [filaMetaState, setFilaMetaState] = useState<any | null>(null);
@@ -148,7 +148,7 @@ const Gestao = () => {
         loadFilasDaUnidade();
     }, [selectedUnitId, toast]);
 
-    // Carregar dados da aba ativa quando trocar de aba ou quando unidade selecionada mudar
+    // Carregar dados da aba ativa quando trocar de aba ou quando filtros relevantes mudarem
     useEffect(() => {
         const loadActiveTab = async () => {
             try {
@@ -161,12 +161,14 @@ const Gestao = () => {
                 } else if (activeTab === 'clientes') {
                     await searchClientes(0);
                 } else if (activeTab === 'filas') {
-                    if (filaMode === 'todas' || selectedUnitId) {
-                        await searchFilas(0);
-                    }
+                    // sempre buscar conforme modo atual; default agora é 'todas'
+                    await searchFilas(0);
                 } else if (activeTab === 'paineis') {
-                    if (selectedUnitId) {
+                    // se já houver filtro de unidade, busca; senão tenta usar a primeira unidade disponível
+                    if (painelUnidadeFilter) {
                         await searchPaineis(0);
+                    } else if (unidadeOptions.length > 0) {
+                        setPainelUnidadeFilter(unidadeOptions[0].id);
                     }
                 }
             } catch (e) {
@@ -175,7 +177,15 @@ const Gestao = () => {
         };
         loadActiveTab();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [activeTab, selectedUnitId, filaMode]);
+    }, [activeTab]);
+
+    // Ao carregar opções de unidades e se estiver na aba painéis, definir a primeira unidade por padrão
+    useEffect(() => {
+        if (activeTab === 'paineis' && !painelUnidadeFilter && unidadeOptions.length > 0) {
+            setPainelUnidadeFilter(unidadeOptions[0].id);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [unidadeOptions]);
 
     // Reagir à troca de filtros de unidade em Filas e Painéis
     useEffect(() => {
@@ -183,10 +193,10 @@ const Gestao = () => {
             searchFilas(0);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [filaUnidadeFilter]);
+    }, [filaUnidadeFilter, filaMode]);
 
     useEffect(() => {
-        if (activeTab === 'paineis') {
+        if (activeTab === 'paineis' && painelUnidadeFilter) {
             searchPaineis(0);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -248,20 +258,25 @@ const Gestao = () => {
     const searchClientes = async (page = cliPage) => {
         setCliLoading(true);
         try {
+            const q = (cliQuery ?? '').trim();
             if (cliMode === 'todas') {
-                const { data, meta } = await clienteService.buscarPorNomePaginado('', page, cliSize); // backend não tem listarTodos paginado dedicado; usar nome vazio
+                const { data, meta } = await clienteService.listarTodosPaginado(page, cliSize);
                 setClientes(data); setCliMeta(meta); setCliPage(page);
             } else if (cliMode === 'nome') {
-                const { data, meta } = await clienteService.buscarPorNomePaginado(cliQuery, page, cliSize);
+                if (q === '') { setClientes([]); setCliMeta(null); setCliPage(0); return; }
+                const { data, meta } = await clienteService.buscarPorNomePaginado(q, page, cliSize);
                 setClientes(data); setCliMeta(meta); setCliPage(page);
             } else if (cliMode === 'email') {
-                const { data, meta } = await clienteService.buscarPorEmailPaginado(cliQuery, page, cliSize);
+                if (q === '') { setClientes([]); setCliMeta(null); setCliPage(0); return; }
+                const { data, meta } = await clienteService.buscarPorEmailPaginado(q, page, cliSize);
                 setClientes(data); setCliMeta(meta); setCliPage(page);
             } else if (cliMode === 'telefone') {
-                const { data, meta } = await clienteService.buscarPorTelefonePaginado(cliQuery, page, cliSize);
+                if (q === '') { setClientes([]); setCliMeta(null); setCliPage(0); return; }
+                const { data, meta } = await clienteService.buscarPorTelefonePaginado(q, page, cliSize);
                 setClientes(data); setCliMeta(meta); setCliPage(page);
             } else if (cliMode === 'cpf') {
-                const item = await clienteService.buscarPorCpf(cliQuery);
+                if (q === '') { setClientes([]); setCliMeta(null); setCliPage(0); return; }
+                const item = await clienteService.buscarPorCpf(q);
                 setClientes(item ? [item] : []); setCliMeta(null); setCliPage(0);
             }
         } catch (e: any) {
@@ -305,6 +320,24 @@ const Gestao = () => {
         } finally {
             setPainelLoading(false);
         }
+    };
+
+    // ===== Helpers de formatação =====
+    const formatPhones = (telefones?: Array<{ ddd?: number; numero?: number }>) => {
+        if (!Array.isArray(telefones) || telefones.length === 0) return '—';
+        return telefones
+            .filter((t) => t && t.ddd !== undefined && t.numero !== undefined)
+            .map((t) => `${t.ddd}-${t.numero}`)
+            .join(', ');
+    };
+
+    const formatAddress = (endereco?: { enderecoFormatado?: string; logradouro?: string; numero?: string }) => {
+        if (!endereco) return '—';
+        if (endereco.enderecoFormatado && endereco.enderecoFormatado.trim() !== '') return endereco.enderecoFormatado;
+        const log = endereco.logradouro || '';
+        const num = endereco.numero || '';
+        const base = `${log} ${num}`.trim();
+        return base !== '' ? base : '—';
     };
 
     // ===== Componentes internos =====
@@ -536,7 +569,7 @@ const Gestao = () => {
             <div className="flex flex-wrap gap-1">
                 {filaIds.map((id) => {
                     const fila = filaOptions.find((f) => f.id === id) || filas.find((f) => f.id === id);
-                    return <Badge key={id} variant="outline">{fila?.nome || 'Desconhecida'}</Badge>;
+                    return <Badge key={id} variant="secondary">{fila?.nome || 'Desconhecida'}</Badge>;
                 })}
             </div>
         );
@@ -565,9 +598,7 @@ const Gestao = () => {
                     <TabsTrigger value="paineis">Painéis</TabsTrigger>
                 </TabsList>
 
-                {/* Mantenha suas abas existentes aqui, elas não precisam de alteração */}
-
-                {/* TAB FILAS (exemplo de como ficaria) */}
+                {/* TAB FILAS */}
                 <TabsContent value="filas">
                     <Card>
                         <CardHeader className="space-y-4">
@@ -589,7 +620,7 @@ const Gestao = () => {
                                         modes={[{ value: 'porUnidade', label: 'Por Unidade' }, { value: 'todas', label: 'Todas as Filas' }]}
                                         mode={filaMode}
                                         onModeChange={(v) => setFilaMode(v as any)}
-                                        onClear={() => { setFilaQuery(''); setFilaMode('porUnidade'); setFilaUnidadeFilter(''); searchFilas(0); }}
+                                        onClear={() => { setFilaQuery(''); setFilaMode('todas'); setFilaUnidadeFilter(''); setFilas([]); setFilaMetaState(null); setFilaPage(0); }}
                                         unitFilter={{
                                             options: unidadeOptions.map(u => ({ value: u.id, label: u.nome })),
                                             value: filaUnidadeFilter || selectedUnitId || '',
@@ -612,15 +643,15 @@ const Gestao = () => {
                         </CardHeader>
                         <CardContent>
                             <Table>
-                                <TableHeader>
+                                <TableHeader className="[&_th]:bg-muted/50 [&_th]:text-foreground [&_th]:font-semibold">
                                     <TableRow>
-                                        <TableHead className="w-1/2">Nome</TableHead>
-                                        <TableHead className="w-1/4">Setor</TableHead>
-                                        <TableHead className="w-1/4">Unidade</TableHead>
-                                        <TableHead className="text-right">Ações</TableHead>
+                                        <TableHead className="min-w-[220px]">Nome</TableHead>
+                                        <TableHead className="min-w-[200px]">Setor</TableHead>
+                                        <TableHead className="min-w-[200px]">Unidade</TableHead>
+                                        <TableHead className="sticky right-0 z-20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shadow-[inset_1px_0_0_theme(colors.border)] text-right w-[112px] min-w-[112px] whitespace-nowrap px-2">Ações</TableHead>
                                     </TableRow>
                                 </TableHeader>
-                                <TableBody>
+                                <TableBody className="[&_td]:text-sm [&_td]:font-semibold [&_td]:text-foreground">
                                     {filas.length === 0 && (
                                         <TableRow>
                                             <TableCell colSpan={4} className="text-center text-muted-foreground py-6">Nenhuma fila cadastrada.</TableCell>
@@ -628,10 +659,10 @@ const Gestao = () => {
                                     )}
                                     {filas.map(fila => (
                                         <TableRow key={fila.id}>
-                                            <TableCell className="truncate max-w-[0]">{fila.nome}</TableCell>
-                                            <TableCell className="truncate max-w-[0]">{fila.setor.nome}</TableCell>
-                                            <TableCell className="truncate max-w-[0]">{fila.unidade.nome}</TableCell>
-                                            <TableCell className="text-right">
+                                            <TableCell>{fila.nome}</TableCell>
+                                            <TableCell>{fila.setor.nome}</TableCell>
+                                            <TableCell>{fila.unidade.nome}</TableCell>
+                                            <TableCell className="sticky right-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shadow-[inset_1px_0_0_theme(colors.border)] text-right w-[112px] min-w-[112px] px-2">
                                                 <div className="flex gap-2 justify-end">
                                                     <Button variant="outline" size="sm" onClick={() => handleOpenModal('fila', fila)}><Edit className="w-4 h-4"/></Button>
                                                     <Button variant="destructive" size="sm" onClick={() => handleDelete('fila', fila.id)}><Trash2 className="w-4 h-4"/></Button>
@@ -667,7 +698,7 @@ const Gestao = () => {
                                         modes={[{ value: 'todas', label: 'Todos os Setores' }, { value: 'nome', label: 'Por Nome' }]}
                                         mode={setMode}
                                         onModeChange={(v) => setSetMode(v as any)}
-                                        onClear={() => { setSetQuery(''); setSetMode('todas'); searchSetores(0); }}
+                                        onClear={() => { setSetQuery(''); setSetMode('todas'); setSetores([]); setSetMeta(null); setSetPage(0); }}
                                     />
                                 </div>
                                 {setMeta && (
@@ -684,13 +715,13 @@ const Gestao = () => {
                         </CardHeader>
                         <CardContent>
                             <Table>
-                                <TableHeader>
+                                <TableHeader className="[&_th]:bg-muted/50 [&_th]:text-foreground [&_th]:font-semibold">
                                     <TableRow>
-                                        <TableHead className="w-2/3">Nome</TableHead>
-                                        <TableHead className="text-right">Ações</TableHead>
+                                        <TableHead className="min-w-[260px]">Nome</TableHead>
+                                        <TableHead className="sticky right-0 z-20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shadow-[inset_1px_0_0_theme(colors.border)] text-right w-[112px] min-w-[112px] whitespace-nowrap px-2">Ações</TableHead>
                                     </TableRow>
                                 </TableHeader>
-                                <TableBody>
+                                <TableBody className="[&_td]:text-sm [&_td]:font-semibold [&_td]:text-foreground">
                                     {setores.length === 0 && (
                                         <TableRow>
                                             <TableCell colSpan={2} className="text-center text-muted-foreground py-6">Nenhum setor cadastrado.</TableCell>
@@ -698,8 +729,8 @@ const Gestao = () => {
                                     )}
                                     {setores.map(setor => (
                                         <TableRow key={setor.id}>
-                                            <TableCell className="truncate max-w-[0]">{setor.nome}</TableCell>
-                                            <TableCell className="text-right">
+                                            <TableCell>{setor.nome}</TableCell>
+                                            <TableCell className="sticky right-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shadow-[inset_1px_0_0_theme(colors.border)] text-right w-[112px] min-w-[112px] px-2">
                                                 <div className="flex gap-2 justify-end">
                                                     <Button variant="outline" size="sm" onClick={() => handleOpenModal('setor', setor)}><Edit className="w-4 h-4"/></Button>
                                                     <Button variant="destructive" size="sm" onClick={() => handleDelete('setor', setor.id)}><Trash2 className="w-4 h-4"/></Button>
@@ -735,7 +766,7 @@ const Gestao = () => {
                                         modes={[{ value: 'todas', label: 'Todas as Unidades' }, { value: 'nome', label: 'Por Nome' }]}
                                         mode={uniMode}
                                         onModeChange={(v) => setUniMode(v as any)}
-                                        onClear={() => { setUniQuery(''); setUniMode('todas'); searchUnidades(0); }}
+                                        onClear={() => { setUniQuery(''); setUniMode('todas'); setUnidades([]); setUniMeta(null); setUniPage(0); }}
                                     />
                                 </div>
                                 {uniMeta && (
@@ -752,28 +783,26 @@ const Gestao = () => {
                         </CardHeader>
                         <CardContent>
                             <Table>
-                                <TableHeader>
+                                <TableHeader className="[&_th]:bg-muted/50 [&_th]:text-foreground [&_th]:font-semibold">
                                     <TableRow>
-                                        <TableHead className="w-1/3">Nome</TableHead>
-                                        <TableHead className="w-1/2">Endereço</TableHead>
-                                        <TableHead className="text-right">Ações</TableHead>
+                                        <TableHead className="min-w-[220px]">Nome</TableHead>
+                                        <TableHead className="min-w-[320px]">Endereço</TableHead>
+                                        <TableHead className="min-w-[220px]">Telefones</TableHead>
+                                        <TableHead className="sticky right-0 z-20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shadow-[inset_1px_0_0_theme(colors.border)] text-right w-[112px] min-w-[112px] whitespace-nowrap px-2">Ações</TableHead>
                                     </TableRow>
                                 </TableHeader>
-                                <TableBody>
+                                <TableBody className="[&_td]:text-sm [&_td]:font-semibold [&_td]:text-foreground">
                                     {unidades.length === 0 && (
                                         <TableRow>
-                                            <TableCell colSpan={3} className="text-center text-muted-foreground py-6">Nenhuma unidade cadastrada.</TableCell>
+                                            <TableCell colSpan={4} className="text-center text-muted-foreground py-6">Nenhuma unidade cadastrada.</TableCell>
                                         </TableRow>
                                     )}
                                     {unidades.map(un => (
                                         <TableRow key={un.id}>
-                                            <TableCell className="truncate max-w-[0]">{un.nome}</TableCell>
-                                            <TableCell className="text-sm text-muted-foreground truncate max-w-[0]">
-                                                {un.endereco?.enderecoFormatado
-                                                    ? un.endereco.enderecoFormatado
-                                                    : (un.endereco ? `${un.endereco.logradouro || ''} ${un.endereco.numero || ''}` : '—')}
-                                            </TableCell>
-                                            <TableCell className="text-right">
+                                            <TableCell>{un.nome}</TableCell>
+                                            <TableCell>{formatAddress(un.endereco)}</TableCell>
+                                            <TableCell>{formatPhones(un.telefones)}</TableCell>
+                                            <TableCell className="sticky right-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shadow-[inset_1px_0_0_theme(colors.border)] text-right w-[112px] min-w-[112px] px-2">
                                                 <div className="flex gap-2 justify-end">
                                                     <Button variant="outline" size="sm" onClick={() => handleOpenModal('unidade', un)}><Edit className="w-4 h-4"/></Button>
                                                     <Button variant="destructive" size="sm" onClick={() => handleDelete('unidade', un.id)}><Trash2 className="w-4 h-4"/></Button>
@@ -809,7 +838,7 @@ const Gestao = () => {
                                         modes={[{ value: 'todas', label: 'Todos os Usuários' }, { value: 'email', label: 'Por E-mail' }]}
                                         mode={usrMode}
                                         onModeChange={(v) => setUsrMode(v as any)}
-                                        onClear={() => { setUsrQuery(''); setUsrMode('todas'); searchUsuarios(0); }}
+                                        onClear={() => { setUsrQuery(''); setUsrMode('todas'); setUsuarios([]); setUsrMeta(null); setUsrPage(0); }}
                                     />
                                 </div>
                                 {usrMeta && (
@@ -826,15 +855,15 @@ const Gestao = () => {
                         </CardHeader>
                         <CardContent>
                             <Table>
-                                <TableHeader>
+                                <TableHeader className="[&_th]:bg-muted/50 [&_th]:text-foreground [&_th]:font-semibold">
                                     <TableRow>
-                                        <TableHead>Nome</TableHead>
-                                        <TableHead>Email</TableHead>
-                                        <TableHead>Categoria</TableHead>
-                                        <TableHead className="text-right">Ações</TableHead>
+                                        <TableHead className="min-w-[220px]">Nome</TableHead>
+                                        <TableHead className="min-w-[260px]">Email</TableHead>
+                                        <TableHead className="min-w-[160px]">Categoria</TableHead>
+                                        <TableHead className="sticky right-0 z-20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shadow-[inset_1px_0_0_theme(colors.border)] text-right w-[112px] min-w-[112px] whitespace-nowrap px-2">Ações</TableHead>
                                     </TableRow>
                                 </TableHeader>
-                                <TableBody>
+                                <TableBody className="[&_td]:text-sm [&_td]:font-semibold [&_td]:text-foreground">
                                     {usuarios.length === 0 && (
                                         <TableRow>
                                             <TableCell colSpan={4} className="text-center text-muted-foreground py-6">Nenhum usuário cadastrado.</TableCell>
@@ -849,7 +878,7 @@ const Gestao = () => {
                                                     {us.categoria}
                                                 </Badge>
                                             </TableCell>
-                                            <TableCell className="text-right">
+                                            <TableCell className="sticky right-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shadow-[inset_1px_0_0_theme(colors.border)] text-right w-[112px] min-w-[112px] px-2">
                                                 <div className="flex gap-2 justify-end">
                                                     <Button variant="outline" size="sm" onClick={() => handleOpenModal('usuario', us)}><Edit className="w-4 h-4"/></Button>
                                                     <Button variant="destructive" size="sm" onClick={() => handleDelete('usuario', us.id)}><Trash2 className="w-4 h-4"/></Button>
@@ -882,10 +911,10 @@ const Gestao = () => {
                                         onSubmit={() => searchClientes(0)}
                                         placeholder="Buscar..."
                                         loading={cliLoading}
-                                        modes={[{ value: 'todas', label: 'Todos' }, { value: 'nome', label: 'Por Nome' }, { value: 'email', label: 'Por E-mail' }, { value: 'telefone', label: 'Por Telefone' }, { value: 'cpf', label: 'Por CPF' }]}
+                                        modes={[{ value: 'todas', label: 'Todos os Clientes' }, { value: 'nome', label: 'Por Nome' }, { value: 'email', label: 'Por E-mail' }, { value: 'telefone', label: 'Por Telefone' }, { value: 'cpf', label: 'Por CPF' }]}
                                         mode={cliMode}
                                         onModeChange={(v) => setCliMode(v as any)}
-                                        onClear={() => { setCliQuery(''); setCliMode('todas'); searchClientes(0); }}
+                                        onClear={() => { setCliQuery(''); setCliMode('todas'); setClientes([]); setCliMeta(null); setCliPage(0); }}
                                     />
                                 </div>
                                 {cliMeta && (
@@ -902,18 +931,20 @@ const Gestao = () => {
                         </CardHeader>
                         <CardContent>
                             <Table>
-                                <TableHeader>
+                                <TableHeader className="[&_th]:bg-muted/50 [&_th]:text-foreground [&_th]:font-semibold">
                                     <TableRow>
-                                        <TableHead>Nome</TableHead>
-                                        <TableHead>CPF</TableHead>
-                                        <TableHead>Email</TableHead>
-                                        <TableHead className="text-right">Ações</TableHead>
+                                        <TableHead className="min-w-[220px]">Nome</TableHead>
+                                        <TableHead className="min-w-[160px]">CPF</TableHead>
+                                        <TableHead className="min-w-[260px]">Email</TableHead>
+                                        <TableHead className="min-w-[220px]">Telefones</TableHead>
+                                        <TableHead className="min-w-[320px]">Endereço</TableHead>
+                                        <TableHead className="sticky right-0 z-20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shadow-[inset_1px_0_0_theme(colors.border)] text-right w-[112px] min-w-[112px] whitespace-nowrap px-2">Ações</TableHead>
                                     </TableRow>
                                 </TableHeader>
-                                <TableBody>
+                                <TableBody className="[&_td]:text-sm [&_td]:font-semibold [&_td]:text-foreground">
                                     {clientes.length === 0 && (
                                         <TableRow>
-                                            <TableCell colSpan={4} className="text-center text-muted-foreground py-6">Nenhum cliente cadastrado.</TableCell>
+                                            <TableCell colSpan={6} className="text-center text-muted-foreground py-6">Nenhum cliente cadastrado.</TableCell>
                                         </TableRow>
                                     )}
                                     {clientes.map(cl => (
@@ -921,7 +952,9 @@ const Gestao = () => {
                                             <TableCell>{cl.nome}</TableCell>
                                             <TableCell>{cl.cpf}</TableCell>
                                             <TableCell>{cl.email || '—'}</TableCell>
-                                            <TableCell className="text-right">
+                                            <TableCell>{formatPhones(cl.telefones)}</TableCell>
+                                            <TableCell>{formatAddress(cl.endereco)}</TableCell>
+                                            <TableCell className="sticky right-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shadow-[inset_1px_0_0_theme(colors.border)] text-right w-[112px] min-w-[112px] px-2">
                                                 <div className="flex gap-2 justify-end">
                                                     <Button variant="outline" size="sm" onClick={() => handleOpenModal('cliente', cl)}><Edit className="w-4 h-4"/></Button>
                                                     <Button variant="destructive" size="sm" onClick={() => handleDelete('cliente', cl.id)}><Trash2 className="w-4 h-4"/></Button>
@@ -935,7 +968,7 @@ const Gestao = () => {
                     </Card>
                 </TabsContent>
 
-                {/* NOVA TAB PAINÉIS */}
+                {/* TAB PAINÉIS */}
                 <TabsContent value="paineis">
                     <Card>
                         <CardHeader className="space-y-4">
@@ -959,10 +992,10 @@ const Gestao = () => {
                                         modes={[{ value: 'porUnidade', label: 'Por Unidade' }]}
                                         mode={'porUnidade'}
                                         onModeChange={() => {}}
-                                        onClear={() => { setPainelUnidadeFilter(''); searchPaineis(0); }}
+                                        onClear={() => { setPainelUnidadeFilter(''); setPaineis([]); setPainelMeta(null); setPainelPage(0); }}
                                         unitFilter={{
                                             options: unidadeOptions.map(u => ({ value: u.id, label: u.nome })),
-                                            value: painelUnidadeFilter || selectedUnitId || '',
+                                            value: painelUnidadeFilter || '',
                                             onChange: setPainelUnidadeFilter,
                                             title: 'Selecione a unidade',
                                         }}
@@ -982,14 +1015,14 @@ const Gestao = () => {
                         </CardHeader>
                         <CardContent>
                             <Table>
-                                <TableHeader>
+                                <TableHeader className="[&_th]:bg-muted/50 [&_th]:text-foreground [&_th]:font-semibold">
                                     <TableRow>
-                                        <TableHead>Descrição</TableHead>
-                                        <TableHead>Filas Vinculadas</TableHead>
-                                        <TableHead className="text-right">Ações</TableHead>
+                                        <TableHead className="min-w-[280px]">Descrição</TableHead>
+                                        <TableHead className="min-w-[280px]">Filas Vinculadas</TableHead>
+                                        <TableHead className="sticky right-0 z-20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shadow-[inset_1px_0_0_theme(colors.border)] text-right w-[112px] min-w-[112px] whitespace-nowrap px-2">Ações</TableHead>
                                     </TableRow>
                                 </TableHeader>
-                                <TableBody>
+                                <TableBody className="[&_td]:text-sm [&_td]:font-semibold [&_td]:text-foreground">
                                     {paineis.length === 0 && (
                                         <TableRow>
                                             <TableCell colSpan={3} className="text-center text-muted-foreground py-6">Nenhum painel cadastrado.</TableCell>
@@ -997,9 +1030,9 @@ const Gestao = () => {
                                     )}
                                     {paineis.map(painel => (
                                         <TableRow key={painel.id}>
-                                            <TableCell className="font-medium">{painel.descricao}</TableCell>
+                                            <TableCell className="font-semibold">{painel.descricao}</TableCell>
                                             <TableCell>{renderFilaNames(painel.filasIds)}</TableCell>
-                                            <TableCell className="text-right">
+                                            <TableCell className="sticky right-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shadow-[inset_1px_0_0_theme(colors.border)] text-right w-[112px] min-w-[112px] px-2">
                                                 <div className="flex gap-2 justify-end">
                                                     <Button variant="outline" size="sm" onClick={() => handleOpenModal('painel', painel)}><Edit className="w-4 h-4"/></Button>
                                                     <Button variant="destructive" size="sm" onClick={() => handleDelete('painel', painel.id)}><Trash2 className="w-4 h-4"/></Button>
@@ -1200,9 +1233,6 @@ const Gestao = () => {
                                             </div>
                                         );
                                     })}
-                                    {unidadeOptions.length === 0 && (
-                                        <p className="text-xs text-muted-foreground text-center">Nenhuma unidade.</p>
-                                    )}
                                 </div>
                             </ScrollArea>
                         </div>
@@ -1219,7 +1249,7 @@ const Gestao = () => {
                 <DialogContent className="sm:max-w-[720px]">
                     <DialogHeader>
                         <DialogTitle>{editingItem ? 'Editar Cliente' : 'Novo Cliente'}</DialogTitle>
-                        <DialogDescription>Cadastre dados do cliente/paciente.</DialogDescription>
+                        <DialogDescription>Cadastre os dados do cliente.</DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
                         <div className="grid md:grid-cols-2 gap-4">
@@ -1236,8 +1266,8 @@ const Gestao = () => {
                             <Label>Email</Label>
                             <Input type="email" value={formData.email || ''} onChange={(e) => setFormData({ ...formData, email: e.target.value })} />
                         </div>
-                        <AddressFields baseKey="endereco" />
                         <PhonesFields baseKey="telefones" />
+                        <AddressFields baseKey="endereco" />
                     </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setModalOpen(null)}>Cancelar</Button>
@@ -1245,9 +1275,8 @@ const Gestao = () => {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
-
         </div>
     );
-}
+};
 
 export default Gestao;

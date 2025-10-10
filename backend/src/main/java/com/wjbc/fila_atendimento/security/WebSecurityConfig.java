@@ -58,6 +58,8 @@ public class WebSecurityConfig {
                         // Endpoints públicos REST
                         .requestMatchers("/auth/login", "/auth/confirmar").permitAll()
                         .requestMatchers(HttpMethod.POST, "/auth/register").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/auth/forgot-password", "/auth/reset-password").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/auth/reset-password/validate").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/unidades-atendimento/public/login").permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         // Handshake WebSocket/SockJS precisa ser público; autenticação real acontece no frame CONNECT via header Authorization (interceptor)

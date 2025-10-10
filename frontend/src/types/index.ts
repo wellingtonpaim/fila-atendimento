@@ -252,3 +252,35 @@ export interface PainelPublicoConfigDTO {
     descricao: string;
     filas: FilaResponseDTO[];
 }
+
+// ====== DASHBOARD DTOs ======
+export interface TempoEsperaDTO {
+  filaNome: string;
+  setorNome: string;
+  unidadeNome: string;
+  tempoMedioEsperaMinutos: number;
+  periodoInicio: string; // ISO date-time
+  periodoFim: string; // ISO date-time
+}
+
+export interface ProdutividadeDTO {
+  profissionalNome: string;
+  setorNome: string;
+  unidadeNome: string;
+  atendimentosRealizados: number;
+  tempoMedioAtendimentoMinutos: number;
+}
+
+export interface HorarioPicoDTO {
+  unidadeNome: string;
+  setorNome: string;
+  horario: string; // ISO date-time
+  quantidadeAtendimentos: number;
+}
+
+export interface FluxoPacientesDTO {
+  unidadeNome: string;
+  setorOrigem: string;
+  setorDestino: string;
+  quantidadePacientes: number;
+}

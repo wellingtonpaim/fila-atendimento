@@ -10,7 +10,6 @@ import {
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
-  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 
 export type SearchMode = { value: string; label: string };
@@ -109,8 +108,6 @@ export const SearchBar: React.FC<SearchBarProps> = ({
                 </DropdownMenuItem>
               );
             })}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleClear}>Limpar pesquisa</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
