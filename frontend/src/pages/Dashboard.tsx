@@ -8,10 +8,7 @@ import {
     Users,
     Clock,
     Activity,
-    TrendingUp,
     AlertTriangle,
-    UserCheck,
-    Timer,
     Building2,
     Loader2,
     RefreshCw,
@@ -339,46 +336,6 @@ const Dashboard = () => {
                             </Button>
                         </div>
                     )}
-                </CardContent>
-            </Card>
-
-            {/* Ações Rápidas */}
-            <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <TrendingUp className="h-5 w-5" />
-                        Ações Rápidas
-                    </CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <div className="grid gap-4 md:grid-cols-3">
-                        <Button
-                            variant="outline"
-                            className="h-20 flex-col gap-2"
-                            onClick={() => window.location.href = '/entrada-fila'}
-                        >
-                            <UserCheck className="h-6 w-6" />
-                            Entrada em Fila
-                        </Button>
-
-                        <Button
-                            variant="outline"
-                            className="h-20 flex-col gap-2"
-                            onClick={() => window.location.href = '/painel-profissional'}
-                        >
-                            <Timer className="h-6 w-6" />
-                            Painel Profissional
-                        </Button>
-
-                        <Button
-                            variant="outline"
-                            className="h-20 flex-col gap-2"
-                            onClick={() => window.location.href = '/gestao'}
-                        >
-                            <Building2 className="h-6 w-6" />
-                            Gestão
-                        </Button>
-                    </div>
                 </CardContent>
             </Card>
 

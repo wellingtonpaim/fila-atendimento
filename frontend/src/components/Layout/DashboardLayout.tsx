@@ -12,23 +12,21 @@ import {
     Bell,
     User,
     MonitorPlay,
-    Loader2
+    Loader2,
+    UserCheck
 } from 'lucide-react';
 import { authService } from '@/services/authService';
 import { websocketService } from '@/services/websocketService';
 import { painelService } from '@/services/painelService';
 import {PainelResponseDTO, UsuarioResponseDTO} from '@/types';
 import { cn } from '@/lib/utils';
-import { filaService } from '@/services/filaService';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
 
 const DashboardLayout = () => {
     const [usuario, setUsuario] = useState<UsuarioResponseDTO | null>(null);
     const [sidebarOpen, setSidebarOpen] = useState(true);
-    const [notifications, setNotifications] = useState(0);
     // Estados para o diálogo de seleção de painel
     const [showPainelDialog, setShowPainelDialog] = useState(false);
     const [paineisDisponiveis, setPaineisDisponiveis] = useState<PainelResponseDTO[]>([]);
@@ -70,6 +68,7 @@ const DashboardLayout = () => {
     };
 
     const menuItems = [
+        { label: 'Entrada em Fila', path: '/entrada-fila', icon: UserCheck, description: 'Registrar cliente na fila' },
         { label: 'Dashboard', path: '/dashboard', icon: Activity, description: 'Visão geral do sistema' },
         { label: 'Painel Público', action: 'openPainelDialog', icon: MonitorPlay, description: 'Abrir painel de TV com chamadas' },
         { label: 'Painel Profissional', path: '/painel-profissional', icon: Users, description: 'Gerenciar filas e atendimentos' },
@@ -231,3 +230,4 @@ const DashboardLayout = () => {
 };
 
 export default DashboardLayout;
+
