@@ -20,11 +20,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.thymeleaf.TemplateEngine;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
+import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -51,7 +53,7 @@ class AuthServiceTest {
     @BeforeEach
     void setUp() {
         // Stub do template para evitar NPE no envio assíncrono de e-mail
-        when(templateEngine.process(anyString(), any())).thenReturn("<html>ok</html>");
+        lenient().when(templateEngine.process(anyString(), any())).thenReturn("<html>ok</html>");
         authService = new AuthService(
                 usuarioService,
                 usuarioRepository,
@@ -79,7 +81,7 @@ class AuthServiceTest {
         when(usuarioService.criar(any(UsuarioCreateDTO.class))).thenReturn(responseDTO);
         when(usuarioService.findUsuarioById(any(UUID.class))).thenReturn(usuario);
         when(confirmationTokenRepository.save(any(ConfirmationToken.class))).thenReturn(null);
-        doNothing().when(emailSenderService).sendEmail(any(EmailRequestDTO.class));
+        // Removido stubbing desnecessário de emailSenderService.sendEmail
 
         assertDoesNotThrow(() -> authService.register(dto));
     }
@@ -188,7 +190,10 @@ class AuthServiceTest {
 
         verify(passwordResetTokenRepository).deleteByUsuario(eq(usuario));
         verify(passwordResetTokenRepository).save(any(PasswordResetToken.class));
-        verify(emailSenderService).sendEmail(any(EmailRequestDTO.class));
+        // A chamada ao serviço de e-mail é assíncrona: aguarda até 2s pela invocação
+        await().atMost(Duration.ofSeconds(2)).untilAsserted(() ->
+                verify(emailSenderService).sendEmail(any(EmailRequestDTO.class))
+        );
     }
 
     @Test

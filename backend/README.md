@@ -18,8 +18,11 @@
   - [Documentação (Swagger)](#documentação-swagger)
 - [Padrões de Resposta e Códigos HTTP](#padrões-de-resposta-e-códigos-http)
 - [Autenticação e Segurança](#autenticação-e-segurança)
-  - [Confirmação de E-mail (Página HTML + UTMs)](#confirmação-de-e-mail-página-html--utms)
+  - [Fluxo de Registro e Confirmação de E-mail](#fluxo-de-registro-e-confirmação-de-e-mail)
+  - [Fluxo “Esqueci minha senha”](#fluxo-esqueci-minha-senha)
   - [Propriedades relacionadas ao Auth](#propriedades-relacionadas-ao-auth)
+  - [Regras de autorização por método HTTP](#regras-de-autorização-por-método-http)
+  - [CORS (origens permitidas e headers expostos)](#cors-origens-permitidas-e-headers-expostos)
 - [Paginação da API](#paginação-da-api)
 - [Recursos da API por Módulo](#recursos-da-api-por-módulo)
   - [Autenticação (/auth)](#autenticação-auth)
@@ -34,8 +37,8 @@
   - [E-mail (/api/email)](#e-mail-apiemail)
   - [WebSocket](#websocket)
 - [Integração WebSocket (Frontend React)](#integração-websocket-frontend-react)
+- [Frontend: Implementando “Esqueci minha senha”](#frontend-implementando-esqueci-minha-senha)
 - [Guia Rápido para o Frontend](#guia-rápido-para-o-frontend)
-- [Referência: Telas do Frontend](#referência-telas-do-frontend)
 - [Estrutura de Dados Principais](#estrutura-de-dados-principais)
 - [Comandos Úteis](#comandos-úteis)
 - [Contribuições e Licença](#contribuições-e-licença)
@@ -43,7 +46,7 @@
 ---
 
 ## Visão Geral
-O Q-Manager é uma plataforma web para gerenciamento inteligente de filas e atendimento, com foco inicial em unidades de saúde e arquitetura flexível para outros domínios. Fornece APIs REST seguras, comunicação em tempo real para painéis, e mecanismos de autenticação, autorização e confirmação de conta por e-mail.
+O Q-Manager é uma plataforma web para gerenciamento inteligente de filas e atendimento, com foco inicial em unidades de saúde e arquitetura flexível para outros domínios. Fornece APIs REST seguras, comunicação em tempo real para painéis e mecanismos completos de autenticação, incluindo confirmação de e-mail no cadastro e recuperação de senha pelo fluxo “Esqueci minha senha”.
 
 ## Arquitetura e Tecnologias
 - Backend: Java 21, Spring Boot 3
@@ -51,6 +54,7 @@ O Q-Manager é uma plataforma web para gerenciamento inteligente de filas e aten
 - Persistência: Spring Data JPA (Hibernate) + PostgreSQL
 - Migrações: Flyway
 - Tempo real: Spring WebSocket (STOMP)
+- Templates de e-mail/páginas: Thymeleaf
 - Documentação: SpringDoc OpenAPI (Swagger UI)
 - Qualidade: JUnit 5 + JaCoCo
 
@@ -59,19 +63,41 @@ O Q-Manager é uma plataforma web para gerenciamento inteligente de filas e aten
 ## Requisitos, Configuração e Execução
 ### Variáveis e Propriedades de Ambiente
 Banco/E-mail (exemplos):
-- `DB_HOST` • `DB_USER` • `DB_PASSWORD`
-- `spring.mail.username` • `spring.mail.password`
+- Use variáveis de ambiente para sobrescrever as propriedades do Spring.
+- Em desenvolvimento (profile dev):
+  - `spring.datasource.url=${DB_HOST}` → Espera uma URL JDBC completa.
+    - Exemplo: `jdbc:postgresql://localhost:5432/postgres?currentSchema=fila_atendimento`
+  - `spring.datasource.username=${DB_USER}`
+  - `spring.datasource.password=${DB_PASSWORD}`
+- Em produção (profile prod):
+  - `spring.datasource.url=${DB-HOST}`
+  - `spring.datasource.username=${DB-USER}`
+  - `spring.datasource.password=${DB-PASSWORD}`
+  - Observação: os nomes acima com hífen refletem o arquivo `application-prod.properties` atual. Se preferir padronizar com underscore (`DB_HOST`, etc.), ajuste o arquivo de propriedades ou suas variáveis de ambiente de acordo.
+- SMTP (Gmail):
+  - `spring.mail.username`, `spring.mail.password`
+  - `email.sender.impl` (padrão: `gmailSmtpService`) – seleciona a implementação de envio de e-mails.
 
-Integração Frontend e Links:
-- `app.base-url` (default dev: `http://localhost:8899`) – Base pública do backend (usada para montar links enviados por e-mail).
-- `app.qmanager.login-url` – URL de login do frontend.
-  - dev (default): `http://localhost:3000/login`
-  - prod (exemplo): `https://app.qmanager.example.com/login`
-- `app.qmanager.error-url` – URL de erro/retentativa no frontend.
-  - dev (default): `http://localhost:3000/login?retry=true`
-  - prod (exemplo): `https://app.qmanager.example.com/login?retry=true`
+Integração e Links (backend → e-mails → frontend):
+- `app.base-url` (default dev: `http://localhost:8899`) – Base pública do backend (usada para montar links enviados por e-mail de confirmação).
+- `app.qmanager.login-url` – URL de login do frontend usada na página de confirmação.
+  - dev (por env): `${QMANAGER_LOGIN_URL}` (default interno: `http://localhost:3000/login`)
+  - prod (ex.): `https://app.qmanager.example.com/login`
+- `app.qmanager.error-url` – URL de erro/retentativa no frontend (página de confirmação).
+  - dev (por env): `${QMANAGER_ERROR_URL}` (default interno: `http://localhost:3000/login?retry=true`)
+  - prod (ex.): `https://app.qmanager.example.com/login?retry=true`
+- `app.qmanager.reset-url` – URL da tela de redefinição de senha no frontend (usada no e-mail “Esqueci minha senha”).
+  - dev (default interno): `http://localhost:3000/reset-password`
+  - prod (ex.): `https://app.qmanager.example.com/reset-password`
 
-Perfis:
+Outras propriedades úteis (opcional):
+- Servidor: `server.port` (default: `8899`)
+- Painel público (timings):
+  - `painel.publico.tempo-exibicao-segundos` (default: `15`)
+  - `painel.publico.repeticoes` (default: `3`)
+  - `painel.publico.intervalo-repeticao-segundos` (default: `5`)
+
+Perfis de execução:
 - `src/main/resources/application-dev.properties`
 - `src/main/resources/application-prod.properties`
 
@@ -101,8 +127,7 @@ Formato base (`ApiResponse<T>`):
   "data": { }
 }
 ```
-Códigos de status:
-- 200 OK, 400 Bad Request, 401 Unauthorized, 403 Forbidden, 404 Not Found, 409 Conflict, 500 Internal Server Error
+Códigos de status comuns: 200, 400, 401, 403, 404, 409, 500.
 
 ---
 
@@ -111,88 +136,93 @@ Códigos de status:
 - Controle de acesso por unidade de atendimento
 - Perfis: ADMINISTRADOR, USUARIO
 - Confirmação de e-mail obrigatória para ativação de contas
+- Recuperação de senha via token temporário enviado por e-mail
 
-### Confirmação de E-mail (Página HTML + UTMs)
-- Endpoint de confirmação: `GET /auth/confirmar?token=...`
-- Retorna uma página HTML (Thymeleaf) amigável, com mensagem de sucesso/erro e um botão de ação:
-  - Sucesso: “Ir para Q-Manager” (redireciona ao login do frontend)
-  - Erro: “Tentar novamente” (redireciona para URL de retentativa)
-- O link do botão inclui UTMs para analytics do frontend:
-  - `utm_source=qmanager-backend`
-  - `utm_medium=confirm-email-page`
-  - `utm_campaign=signup_confirmation`
-  - `utm_content=success|error`
+### Fluxo de Registro e Confirmação de E-mail
+- `POST /auth/register` – Cria usuário (inativo) e envia e-mail de confirmação com link.
+- `GET /auth/confirmar?token=...` – Página HTML (Thymeleaf) com resultado da confirmação:
+  - Sucesso: botão “Ir para Q-Manager” leva ao `app.qmanager.login-url` com UTMs para analytics.
+  - Erro: botão “Tentar novamente” leva a `app.qmanager.error-url` com UTMs.
 - Templates:
   - Página: `templates/auth/confirmacao-resultado.html`
   - E-mail: `templates/email/confirmacao-cadastro.html`
 
+### Fluxo “Esqueci minha senha”
+1) Solicitação do reset
+- `POST /auth/forgot-password` com body `{ "email": "usuario@dominio.com" }`.
+- Resposta é sempre positiva (mesma mensagem) para evitar enumeração de e-mails.
+- Se o usuário existir e estiver ativo, o backend:
+  - Revoga tokens anteriores (`deleteByUsuario`).
+  - Cria novo `PasswordResetToken` com expiração.
+  - Envia e-mail com link para o frontend: `app.qmanager.reset-url?token=<TOKEN>&utm_source=qmanager-backend&utm_medium=reset-email&utm_campaign=password_reset`.
+- Template de e-mail: `templates/email/redefinicao-senha.html`.
+
+2) Validação do token (frontend)
+- `GET /auth/reset-password/validate?token=...` → 200 OK com `data=true` se válido; 400 com `data=false` se inválido/expirado.
+
+3) Redefinição da senha
+- `POST /auth/reset-password` com body `{ "token": "...", "novaSenha": "..." }`.
+- Se o token for válido e não expirado:
+  - Atualiza a senha do usuário (hash com `PasswordEncoder`).
+  - Revoga todos os tokens de reset do usuário.
+
+Observações importantes:
+- Token inválido → 400: `"Token de redefinição inválido!"`
+- Token expirado → 400: `"Token expirado"`
+- O link no e-mail aponta para o frontend; o backend não exibe formulário de troca de senha.
+
 ### Propriedades relacionadas ao Auth
-- `app.base-url`: base do backend para montar o link do e-mail (ex.: `https://api.seudominio.com`)
-- `app.qmanager.login-url`: URL de login do frontend (sucesso)
-- `app.qmanager.error-url`: URL de retentativa/erro do frontend (erro)
+- `app.base-url`: base pública do backend (construção do link de confirmação).
+- `spring.mail.username`: remetente do e-mail.
+- `app.qmanager.login-url`, `app.qmanager.error-url`: navegação após confirmação.
+- `app.qmanager.reset-url`: tela do frontend para redefinição de senha.
+
+### Regras de autorização por método HTTP
+Conforme a configuração de segurança:
+- Público (sem JWT):
+  - `POST /auth/register`, `POST /auth/forgot-password`, `POST /auth/reset-password`, `GET /auth/reset-password/validate`, `GET /auth/confirmar`, `GET /api/unidades-atendimento/public/login`, Swagger (`/swagger-ui/**`, `/v3/api-docs/**`) e handshake WebSocket (`/ws/**`).
+- Autenticado (JWT com roles USUARIO ou ADMINISTRADOR):
+  - `GET /**` e `POST /**` (exceto os públicos acima).
+- Apenas ADMINISTRADOR:
+  - `PUT /**`, `DELETE /**` e `PATCH /api/usuarios/{id}/promover`.
+
+### CORS (origens permitidas e headers expostos)
+- Origens permitidas (dev): `http://localhost:*`, `http://192.168.1.6:*`.
+- Métodos: `GET, POST, PUT, PATCH, DELETE, OPTIONS`.
+- Headers expostos: `Authorization`, `X-Total-Count`, `X-Total-Pages`, `X-Page`, `X-Page-Size`, `Content-Range`.
+- Observação: o endpoint de handshake WebSocket (`/ws`) é público, mas o frame CONNECT do STOMP deve incluir `Authorization: Bearer <token>`.
 
 ---
 
 ## Paginação da API
-A paginação é opcional e padronizada via `page` (base 0) e `size`.
-- Se `page`/`size` não forem enviados: retorna a lista completa (comportamento atual) e sem headers de paginação.
-- Se enviados: retorna o slice da página e inclui headers com metadados.
+A paginação é opcional via `page` (base 0) e `size`.
+- Se não enviados: retorna lista completa.
+- Se enviados: retorna o slice com headers de paginação (`X-Total-Count`, `X-Total-Pages`, `X-Page`, `X-Page-Size`, `Content-Range`).
 
-Headers de paginação retornados:
-- `X-Total-Count`: total de registros
-- `X-Total-Pages`: total de páginas (com base em `size`)
-- `X-Page`: página atual (base 0)
-- `X-Page-Size`: tamanho da página
-- `Content-Range`: `items start-end/total` (end inclusivo)
-
-Endpoints com paginação:
-- `GET /api/usuarios`
-- `GET /api/clientes`
-- `GET /api/clientes/nome/{nome}`
-- `GET /api/clientes/email/{email}`
-- `GET /api/clientes/telefone/{telefone}`
-- `GET /api/setores`
-- `GET /api/setores/nome/{nome}`
-- `GET /api/unidades-atendimento`
-- `GET /api/unidades-atendimento/nome/{nome}`
-- `GET /api/unidades-atendimento/public/login`
-- `GET /api/paineis?unidadeAtendimentoId={id}`
-- `GET /api/paineis/unidade/{unidadeId}`
-- `GET /api/filas`              
-- `GET /api/filas/unidade/{unidadeId}`
-- `GET /api/entrada-fila/aguardando/{filaId}`
-
-Exemplos:
-```bash
-# Primeira página com 10 itens (usuários)
-curl -i "http://localhost:8899/api/usuarios?page=0&size=10"
-
-# Busca por nome (clientes), página 1 tamanho 25
-curl -i "http://localhost:8899/api/clientes/nome/Ana?page=1&size=25"
-```
+Endpoints com paginação (amostra): `GET /api/usuarios`, `GET /api/clientes`, `GET /api/setores`, `GET /api/unidades-atendimento`, `GET /api/paineis`, `GET /api/filas`, `GET /api/entrada-fila/aguardando/{filaId}`.
 
 ---
 
 ## Recursos da API por Módulo
 
 ### Autenticação (/auth)
-- `POST /auth/login` – Autenticação com validação de acesso por unidade. Envia parâmetros como query/form (`username`, `password`, `unidadeAtendimentoId`). Exemplo:
-  ```bash
-  curl -X POST "http://localhost:8899/auth/login?username=admin@teste.com&password=123456&unidadeAtendimentoId=<UUID>"
-  ```
-- `POST /auth/register` – Registro público com envio de e-mail de confirmação (JSON body)
-- `GET /auth/confirmar?token=...` – Página HTML de confirmação de e-mail
-- `DELETE /auth/delete/{email}` – Desativar usuário por e-mail
+- `POST /auth/login` – Autenticação com validação por unidade. Params: `username`, `password`, `unidadeAtendimentoId`.
+- `POST /auth/register` – Registro público; envia e-mail de confirmação.
+- `GET /auth/confirmar?token=...` – Página HTML de confirmação (resultado + botões com UTMs).
+- `DELETE /auth/delete/{email}` – Desativar usuário por e-mail.
+- `POST /auth/forgot-password` – Inicia fluxo “Esqueci minha senha”.
+- `GET /auth/reset-password/validate?token=...` – Verifica validade do token.
+- `POST /auth/reset-password` – Define nova senha usando o token.
 
 ### Unidades de Atendimento (/api/unidades-atendimento)
-- `GET /api/unidades-atendimento` – Listar todas (paginaçāo opcional)
+- `GET /api/unidades-atendimento` – Listar (paginação opcional)
 - `GET /api/unidades-atendimento/{id}` – Buscar por ID
 - `GET /api/unidades-atendimento/nome/{nome}` – Buscar por nome (paginação opcional)
 - `POST /api/unidades-atendimento` – Criar
 - `PUT /api/unidades-atendimento/{id}` – Substituir
 - `PATCH /api/unidades-atendimento/{id}` – Atualização parcial
 - `DELETE /api/unidades-atendimento/{id}` – Desativar
-- `GET /api/unidades-atendimento/public/login` – Listar (público) para tela de login (paginação opcional)
+- `GET /api/unidades-atendimento/public/login` – Listar (público) para tela de login
 
 ### Setores (/api/setores)
 - `GET /api/setores` – Listar (paginação opcional)
@@ -213,21 +243,21 @@ curl -i "http://localhost:8899/api/clientes/nome/Ana?page=1&size=25"
 
 ### Entrada na Fila (/api/entrada-fila)
 - `POST /api/entrada-fila` – Adicionar cliente à fila
-- `POST /api/entrada-fila/chamar-proximo` – Chamar próximo (params: `filaId`, `usuarioId`, `guiche`)
+- `POST /api/entrada-fila/chamar-proximo` – Chamar próximo (`filaId`, `usuarioId`, `guiche`)
 - `POST /api/entrada-fila/finalizar/{entradaFilaId}` – Finalizar atendimento
 - `POST /api/entrada-fila/cancelar/{entradaFilaId}` – Cancelar atendimento
 - `POST /api/entrada-fila/encaminhar/{entradaFilaIdOrigem}` – Encaminhar para outra fila
-- `GET /api/entrada-fila/aguardando/{filaId}` – Listar aguardando (paginação opcional)
+- `GET /api/entrada-fila/aguardando/{filaId}` – Aguardando (paginação opcional)
 
 ### Painéis (/api/paineis)
-- `GET /api/paineis?unidadeAtendimentoId={id}` – Listar (paginação opcional; parâmetro obrigatório unidadeAtendimentoId)
+- `GET /api/paineis?unidadeAtendimentoId={id}` – Listar (paginação opcional; parâmetro obrigatório unidade)
 - `GET /api/paineis/{id}?unidadeAtendimentoId={unidadeAtendimentoId}` – Buscar por ID (valida unidade)
 - `GET /api/paineis/unidade/{unidadeId}` – Listar por unidade (paginação opcional)
 - `POST /api/paineis` – Criar
 - `PUT /api/paineis/{id}` – Atualizar
 - `DELETE /api/paineis/{id}` – Desativar
-- `POST /api/paineis/{painelId}/filas/{filaId}` – Associar fila ao painel
-- `DELETE /api/paineis/{painelId}/filas/{filaId}` – Remover fila do painel
+- `POST /api/paineis/{painelId}/filas/{filaId}` – Associar fila
+- `DELETE /api/paineis/{painelId}/filas/{filaId}` – Remover fila
 
 ### Clientes (/api/clientes)
 - `GET /api/clientes` – Listar todos (paginação opcional)
@@ -257,321 +287,135 @@ curl -i "http://localhost:8899/api/clientes/nome/Ana?page=1&size=25"
 - `GET /api/dashboard/horarios-pico`
 - `GET /api/dashboard/fluxo-pacientes`
 
+Parâmetros obrigatórios para todos os endpoints de Dashboard:
+- `unidadeId` (UUID)
+- `inicio` e `fim` em ISO-8601 (ex.: `2025-01-31T08:00:00`)
+
 ### E-mail (/api/email)
 - `POST /api/email/send` – Envio de e-mail (serviço)
 
 ### WebSocket
-Tópicos STOMP (atuais):
-- `/topic/painel-publico/{painelId}` – Atualizações para um painel público específico (cada painel é associado a uma ou mais filas via relação `painel_fila`). O payload inclui `filaId` dentro do DTO para identificar a fila origem do evento.
-- `/topic/fila/{setorId}` – Atualizações consolidadas para profissionais de um setor (lista de entradas aguardando nas filas daquele setor).
+Tópicos STOMP:
+- `/topic/painel-publico/{painelId}` – Atualizações para um painel público (cada payload inclui `filaId`).
+- `/topic/fila/{setorId}` – Atualizações para profissionais de um setor.
 
-Observação importante: antes a documentação referenciava `/topic/painel/{filaId}`; a implementação final usa o ID do PAINEL no tópico (`/topic/painel-publico/{painelId}`). Ajuste seu frontend se ainda estiver usando o formato antigo.
+Observações:
+- O handshake em `/ws` é público, mas o frame CONNECT do STOMP deve conter `Authorization: Bearer <token>`.
+- O tópico público usa `painelId` (não `filaId`). Ajuste o frontend caso use o formato antigo.
 
 ---
 
 ## Integração WebSocket (Frontend React)
-Esta seção orienta o desenvolvedor React a consumir o canal em tempo real de chamadas de pacientes e atualização de filas.
+Resumo do fluxo:
+1. Frontend autentica via `POST /auth/login` e obtém JWT.
+2. Conecta a `/ws` (SockJS) com header `Authorization: Bearer <token>` no frame CONNECT.
+3. Assina os tópicos relevantes e atualiza a UI conforme os payloads recebidos.
 
-### Visão Geral do Fluxo
-1. Frontend autentica usuário via `POST /auth/login` e obtém um JWT.
-2. Estabelece conexão STOMP sobre WebSocket (ou SockJS fallback) no endpoint `/ws`.
-3. Envia no frame CONNECT o header `Authorization: Bearer <token>` (obrigatório).
-4. Assina os tópicos relevantes:
-   - Painel público: `/topic/painel-publico/{painelId}` (um painel por TV/monitor). Um painel pode estar associado a várias filas; cada evento carrega `filaId` dentro do payload.
-   - Painel profissional (setor): `/topic/fila/{setorId}`
-5. Recebe payloads JSON (DTOs) e atualiza a UI. Quando houver nova chamada, `sinalizacaoSonora=true` e `mensagemVocalizacao` conterá texto para síntese de voz.
+Detalhes e exemplos de cliente STOMP, hooks e payloads continuam iguais à seção anterior do projeto.
 
-### Como obter IDs necessários
-- Listar painéis de uma unidade: `GET /api/paineis?unidadeAtendimentoId={unidadeId}` → use o `id` de cada painel para assinar `/topic/painel-publico/{painelId}`.
-- Listar filas vinculadas a um painel (indiretamente): cada atualização de painel inclui `filaId` no payload `PainelPublicoDTO`.
-- Listar painéis por unidade (alternativo): `GET /api/paineis/unidade/{unidadeId}`.
-- Listar filas de um setor: `GET /api/filas?setorId=...` (se implementar filtro) ou correlacionar via entidades.
+---
 
-### Endpoints e Prefixos
-- Handshake WebSocket: `/ws` (SockJS habilitado)
-- Prefixo de envio do cliente: `/app` (no momento não exposto para comandos do frontend)
-- Broker (simple broker): `/topic/**`
+## Frontend: Implementando “Esqueci minha senha”
+A seguir um guia direto para implementar as telas e chamadas no frontend (ex.: React). Pressupõe que `VITE_API_BASE_URL` (ou similar) aponte para o backend e que a rota `/reset-password` exista no app.
 
-### Segurança
-- Token verificado no frame CONNECT (`Authorization: Bearer <jwt>`).
-- Conexão sem header ou com token inválido é rejeitada pelo `WebSocketAuthInterceptor`.
+1) Tela “Esqueci minha senha” (formulário de e-mail)
+- Caminho sugerido: `/forgot-password`.
+- Campos: `email` (obrigatório, formato válido).
+- Ação:
+  - `POST /auth/forgot-password` com `{ email }`.
+  - Sempre exibir mensagem neutra: “Se este e-mail estiver cadastrado, enviaremos instruções...” (evita revelar se o e-mail existe).
 
-### Bibliotecas Recomendadas (React)
-```bash
-npm install @stomp/stompjs sockjs-client
-```
-
-### Exemplo de Cliente STOMP (Painel Público + Profissional)
-```javascript
-import { Client } from '@stomp/stompjs';
-import SockJS from 'sockjs-client';
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8899';
-
-export function createStompClient({ token, painelId, setorId, onPainelPublico, onFilaProfissional, onError }) {
-  const client = new Client({
-    webSocketFactory: () => new SockJS(`${API_BASE}/ws`),
-    connectHeaders: { Authorization: `Bearer ${token}` },
-    reconnectDelay: 5000,
-    debug: (str) => console.debug('[STOMP]', str),
-    onConnect: () => {
-      if (painelId) {
-        client.subscribe(`/topic/painel-publico/${painelId}`, (msg) => {
-          try { onPainelPublico && onPainelPublico(JSON.parse(msg.body)); } catch (e) { console.error(e); }
-        });
-      }
-      if (setorId) {
-        client.subscribe(`/topic/fila/${setorId}`, (msg) => {
-          try { onFilaProfissional && onFilaProfissional(JSON.parse(msg.body)); } catch (e) { console.error(e); }
-        });
-      }
-    },
-    onStompError: (frame) => {
-      console.error('Broker error', frame.headers['message'], frame.body);
-      onError && onError(frame.body);
-    },
-    onWebSocketError: (event) => {
-      console.error('WS transport error', event);
-      onError && onError(event);
-    }
+Exemplo (fetch):
+```js
+async function solicitarReset(email) {
+  const res = await fetch(`${API_BASE}/auth/forgot-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email })
   });
-  client.activate();
-  return client;
+  // Tratar resposta 200 sempre com a mesma mensagem para o usuário
 }
 ```
 
-### Estrutura dos Payloads
-`/topic/painel-publico/{painelId}` -> `PainelPublicoDTO`:
-```json
-{
-  "filaId": "<uuid-da-fila-origem>",
-  "chamadaAtual": {
-    "nomePaciente": "Maria Silva",
-    "guicheOuSala": "Guichê 2",
-    "dataHoraChamada": "2025-10-03T14:22:31.123"
-  },
-  "ultimasChamadas": [
-    { "nomePaciente": "João Lima", "guicheOuSala": "Guichê 1", "dataHoraChamada": "2025-10-03T14:20:00" }
-  ],
-  "mensagemVocalizacao": "Maria Silva, compareça a Guichê 2!",
-  "tempoExibicao": 15,
-  "repeticoes": 3,
-  "intervaloRepeticao": 5,
-  "sinalizacaoSonora": true
-}
-```
-Notas:
-- O tópico usa `painelId`, mas o payload contém `filaId` (a fila que gerou a atualização) — um painel pode agregar múltiplas filas.
-- `chamadaAtual` pode ser `null`.
-- Habilite áudio apenas se `sinalizacaoSonora=true` e `mensagemVocalizacao` não vazia.
+2) Tela “Redefinir senha” (consome token)
+- Caminho: `/reset-password`.
+- Lê `token` de `?token=<TOKEN>` (querystring) do link enviado por e-mail.
+- Antes de exibir o formulário, valide o token:
+  - `GET /auth/reset-password/validate?token=...`.
+  - Se 200 e `data=true`: renderizar formulário.
+  - Se 400 ou `data=false`: exibir mensagem “Token inválido ou expirado” e um botão para solicitar novo e-mail.
 
-`/topic/fila/{setorId}` -> `PainelProfissionalDTO`:
-```json
-{
-  "setorId": "<uuid-setor>",
-  "filaAtual": [ { "id": "...", "status": "AGUARDANDO" } ]
+Exemplo (validação):
+```js
+async function validarToken(token) {
+  const res = await fetch(`${API_BASE}/auth/reset-password/validate?token=${encodeURIComponent(token)}`);
+  const body = await res.json();
+  return res.ok && body?.data === true;
 }
 ```
 
-### Hook React Simplificado
-```javascript
-import { useEffect, useRef, useState } from 'react';
-import { createStompClient } from './stompClient';
+3) Enviar nova senha
+- Regras sugeridas de front: tamanho mínimo (8+), letras maiúsculas/minúsculas, dígitos e caractere especial.
+- `POST /auth/reset-password` com `{ token, novaSenha }`.
+- Sucesso: informar “Senha redefinida com sucesso!” e oferecer atalho para a tela de login.
 
-export function usePainelRealtime({ token, painelId, setorId }) {
-  const clientRef = useRef(null);
-  const [painelPublico, setPainelPublico] = useState(null);
-  const [filaProfissional, setFilaProfissional] = useState(null);
-
-  useEffect(() => {
-    if (!token) return;
-    clientRef.current = createStompClient({
-      token,
-      painelId,
-      setorId,
-      onPainelPublico: (payload) => {
-        setPainelPublico(payload);
-        if (payload?.sinalizacaoSonora && payload?.mensagemVocalizacao) {
-          const utter = new SpeechSynthesisUtterance(payload.mensagemVocalizacao);
-            utter.lang = 'pt-BR';
-            speechSynthesis.speak(utter);
-        }
-      },
-      onFilaProfissional: setFilaProfissional,
-      onError: (e) => console.error('Erro STOMP', e)
-    });
-    return () => clientRef.current?.deactivate();
-  }, [token, painelId, setorId]);
-
-  return { painelPublico, filaProfissional };
+Exemplo (envio):
+```js
+async function redefinirSenha(token, novaSenha) {
+  const res = await fetch(`${API_BASE}/auth/reset-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token, novaSenha })
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error(body?.message || 'Erro ao redefinir senha');
 }
 ```
 
-### Boas Práticas
-- Sempre diferencie `painelId` (tópico de exibição) de `filaId` (origem do evento) no frontend.
-- Caso um monitor precise acompanhar múltiplas filas separadamente, crie painéis distintos e assine cada tópico correspondente.
-- Recrie a conexão apenas quando o token ou os IDs mudarem; limpe com `deactivate()`.
+4) Experiência do usuário e UTMs
+- O link no e-mail inclui UTMs padrão para analytics: `utm_source=qmanager-backend&utm_medium=reset-email&utm_campaign=password_reset`.
+- Preserve o `?token=...` ao navegar/compartilhar a tela.
 
-### Erros Comuns & Debug
-| Sintoma | Causa Provável | Ação |
-|--------|----------------|------|
-| Conexão fecha logo após abrir | Token ausente/expirado | Renovar token e reconectar |
-| 403 no handshake SockJS `info` | CORS / allowed origins | Ajustar `setAllowedOriginPatterns` para domínios confiáveis |
-| Sem áudio | `sinalizacaoSonora=false` ou autoplay bloqueado | Requer interação do usuário ou liberar autoplay |
-| Subscrições duplicadas | Falta de cleanup | Garantir `deactivate()` no unmount |
-
-### Teste Rápido Manual (sem React)
-```javascript
-const sock = new SockJS('http://localhost:8899/ws');
-const Stomp = window.Stomp.over(sock);
-Stomp.connect({ Authorization: 'Bearer <TOKEN>' }, () => {
-  Stomp.subscribe('/topic/painel-publico/<PAINEL_ID>', m => console.log(JSON.parse(m.body)));
-});
-```
-
-### Checklist de Integração
-- [ ] Login funcionando (token válido)
-- [ ] Obter lista de painéis e escolher `painelId`
-- [ ] Assinar `/topic/painel-publico/{painelId}`
-- [ ] Assinar `/topic/fila/{setorId}` (se necessário)
-- [ ] Atualizar UI ao receber `chamadaAtual` / `filaAtual`
-- [ ] Acionamento de áudio condicional
-- [ ] Reconexão resiliente
-- [ ] Cleanup ao desmontar
+5) Erros comuns e dicas
+- Token expirado → mostre CTA para reenviar e-mail (“Esqueci minha senha”).
+- Não exponha ao usuário se o e-mail existe ou não.
+- Trate indisponibilidade de rede com feedback amigável e opção de tentar novamente.
 
 ---
 
 ## Guia Rápido para o Frontend
-- Login exige seleção de unidade válida para o usuário.
-- Registro envia e-mail de confirmação com link para `/auth/confirmar?token=...`.
-- A página de confirmação mostra o resultado e redireciona com UTMs (sucesso/erro) para URLs configuráveis.
-- Em listagens, prefira usar paginação (`page`/`size`) e leia os headers (`X-Total-Count`, `X-Total-Pages`, `Content-Range`, etc.).
-
----
-
-## Referência: Telas do Frontend
-(Compilado para orientar o consumo da API e fluxos de UI)
-
-- Autenticação: Login, Registro, Confirmação de E-mail
-- Área Administrativa: Dashboard, Gestão de Unidades, Setores, Filas
-- Gestão de Pessoas: Clientes/Pacientes, Usuários/Profissionais
-- Operacional: Entrada na Fila (Recepção), Painel do Profissional, Encaminhamento
-- Painéis Públicos de Chamadas (TV/Monitor)
-- Relatórios e Analytics: Métricas em tempo real, Relatórios analíticos, Produtividade
-- Configurações e Administração: Painéis, Configurações gerais, Monitoramento do sistema
-- Diretrizes de UX/UI: design system, acessibilidade, performance, feedback visual, temas
-
-Cada uma dessas telas se alinha aos endpoints listados por módulo, aproveitando paginação, filtros e segurança JWT.
+- Autenticação: `POST /auth/login` retorna JWT (use no header `Authorization: Bearer` para APIs e no CONNECT do WebSocket)
+- Confirmação de e-mail: link do backend direciona para o login do frontend
+- Esqueci minha senha: telas `/forgot-password` e `/reset-password?token=...` conforme guia acima
+- WebSocket: conecte-se a `/ws` com JWT e assine os tópicos necessários
 
 ---
 
 ## Estrutura de Dados Principais
-Entidades core: `UnidadeAtendimento`, `Setor`, `Fila`, `Cliente`, `Usuario`, `EntradaFila`, `Painel`.
-Relações (resumo):
-- UnidadeAtendimento 1..* Setor
-- Setor 1..* Fila
-- Fila 1..* EntradaFila
-- Cliente 1..* EntradaFila
-- Usuario *..* UnidadeAtendimento
-- Painel *..* Fila (tabela de junção `painel_fila`)
+- Usuário, Unidade de Atendimento, Setor, Fila, Painel, EntradaFila
+- Tokens de segurança: `ConfirmationToken` (cadastro) e `PasswordResetToken` (redefinição de senha)
 
 ---
 
 ## Comandos Úteis
-```bash
-# Executar todos os testes
-./mvnw test
+- Subir aplicação:
+  ```bash
+  ./mvnw spring-boot:run
+  ```
+- Rodar testes e cobertura:
+  ```bash
+  ./mvnw clean test jacoco:report
+  ```
+- Gerar JAR:
+  ```bash
+  ./mvnw clean package
+  ```
 
-# Relatório de cobertura
-./mvnw jacoco:report
-
-# Executar com profile
-./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
-
-# Build para produção
-./mvnw clean package -Pprod
-```
+Observação: o profile ativo padrão é `dev` (`spring.profiles.active=dev`), porta `8899`.
 
 ---
 
 ## Contribuições e Licença
-Contribuições são bem-vindas. Abra uma issue/PR com testes passando.
+Contribuições são bem-vindas via PRs. Verifique padrões de código, testes e documentação antes de submeter.
 
-Licença: MIT (ver arquivo LICENSE)
-
----
-
-**Q-Manager** — Transformando a gestão de filas com tecnologia e inteligência. 🚀
-
----
-
-## Paginação da API (Importante para o Frontend)
-
-A partir desta versão, as listagens passam a suportar paginação opcional via query params, sem quebrar compatibilidade:
-
-- Se page e size NÃO forem informados: o comportamento permanece o mesmo (retorna a lista completa, sem headers de paginação).
-- Se page e size forem informados: a resposta é paginada e são adicionados headers com metadados.
-
-Parâmetros
-- page: número da página (base 0). Ex.: page=0 é a primeira página.
-- size: tamanho da página (número de itens por página). Se size<=0, o backend normaliza para um valor padrão.
-
-Headers de paginação retornados
-- X-Total-Count: total de registros na coleção (antes da paginação)
-- X-Total-Pages: total de páginas (baseado em size)
-- X-Page: página atual (base 0)
-- X-Page-Size: tamanho da página efetivo
-- Content-Range: items start-end/total (end é inclusivo)
-
-Endpoints com paginação
-- GET /api/usuarios
-- GET /api/clientes
-- GET /api/clientes/nome/{nome}
-- GET /api/clientes/email/{email}
-- GET /api/clientes/telefone/{telefone}
-- GET /api/setores
-- GET /api/setores/nome/{nome}
-- GET /api/unidades-atendimento
-- GET /api/unidades-atendimento/nome/{nome}
-- GET /api/unidades-atendimento/public/login
-- GET /api/paineis?unidadeAtendimentoId={id}
-- GET /api/paineis/unidade/{unidadeId}
-- GET /api/filas
-- GET /api/filas/unidade/{unidadeId}
-- GET /api/entrada-fila/aguardando/{filaId}
-
-Exemplos de consumo
-1) Primeira página com 10 itens (usuários)
-```bash
-curl -s -i "http://localhost:8899/api/usuarios?page=0&size=10"
-```
-Headers esperados (exemplo):
-```
-X-Total-Count: 128
-X-Total-Pages: 13
-X-Page: 0
-X-Page-Size: 10
-Content-Range: items 0-9/128
-```
-Body (inalterado, mesmo formato de antes):
-```json
-{
-  "success": true,
-  "message": "Usuários listados com sucesso",
-  "data": [ /* array de usuários (até 10) */ ]
-}
-```
-
-2) Busca por nome com paginação (clientes)
-```bash
-curl -s -i "http://localhost:8899/api/clientes/nome/Ana?page=1&size=25"
-```
-
-Boas práticas para o frontend
-- Em telas de listagem, prefira enviar page e size para evitar transferências grandes e melhorar a UX.
-- Use X-Total-Count e X-Total-Pages para montar a paginação (número total de páginas, exibição de paginação etc.).
-- Content-Range é útil para depurar intervalos de itens retornados (o índice final é inclusivo).
-- Se for necessário carregar tudo de uma vez (ex.: dropdowns pequenos), basta omitir page e size.
-
-Compatibilidade
-- Não houve alteração no corpo das respostas. A paginação é 100% opt-in. Aplicações existentes continuam funcionando sem qualquer mudança.
+Este projeto é disponibilizado sob licença compatível definida pelo repositório (ver arquivo de licença, se aplicável).
