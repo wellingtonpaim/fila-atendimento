@@ -19,7 +19,10 @@ import { filaService } from '@/services/filaService';
 import { unidadeService } from '@/services/unidadeService';
 import { entradaFilaService } from '@/services/entradaFilaService';
 import { dashboardService } from '@/services/dashboardService';
-import { FilaResponseDTO, UnidadeAtendimentoResponseDTO } from '@/types';
+import { FilaResponseDTO, UnidadeAtendimentoResponseDTO, TempoEsperaDTO, ProdutividadeDTO, HorarioPicoDTO, FluxoPacientesDTO } from '@/types';
+import { format, parseISO } from 'date-fns';
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ComposedChart, Line, AreaChart, Area, LabelList } from 'recharts';
 
 interface MetricasFila {
     fila: FilaResponseDTO;
@@ -36,10 +39,25 @@ interface EstatisticasGerais {
     atendimentosHoje: number;
 }
 
+// Tipos auxiliares de UI
+type Periodo = 'hoje' | '7d' | '30d' | 'custom';
+
 const Dashboard = () => {
     const [unidadeAtual, setUnidadeAtual] = useState<UnidadeAtendimentoResponseDTO | null>(null);
     const [estatisticas, setEstatisticas] = useState<EstatisticasGerais | null>(null);
     const [metricasFilas, setMetricasFilas] = useState<MetricasFila[]>([]);
+
+    // Novos estados para gráficos do dashboard
+    const [tempoEsperaData, setTempoEsperaData] = useState<TempoEsperaDTO[]>([]);
+    const [produtividadeData, setProdutividadeData] = useState<ProdutividadeDTO[]>([]);
+    const [horariosPicoData, setHorariosPicoData] = useState<HorarioPicoDTO[]>([]);
+    const [fluxoPacientesData, setFluxoPacientesData] = useState<FluxoPacientesDTO[]>([]);
+
+    // Filtro de período
+    const [periodo, setPeriodo] = useState<Periodo>('hoje');
+    const [customInicio, setCustomInicio] = useState<string>(''); // datetime-local
+    const [customFim, setCustomFim] = useState<string>('');
+
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
 
@@ -49,9 +67,36 @@ const Dashboard = () => {
     useEffect(() => {
         loadDashboardData();
         // Atualizar dados a cada 60 segundos
-        const interval = setInterval(loadDashboardData, 60000);
+        const interval = setInterval(() => loadDashboardData(true), 60000);
         return () => clearInterval(interval);
-    }, []);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [periodo, customInicio, customFim, selectedUnitId]);
+
+    const calcularIntervalo = () => {
+        const agora = new Date();
+        let inicioDate: Date;
+        let fimDate: Date;
+
+        if (periodo === 'custom' && customInicio && customFim) {
+            // Converter datetime-local para ISO
+            inicioDate = new Date(customInicio);
+            fimDate = new Date(customFim);
+        } else if (periodo === '7d') {
+            fimDate = agora;
+            inicioDate = new Date(agora);
+            inicioDate.setDate(inicioDate.getDate() - 7);
+        } else if (periodo === '30d') {
+            fimDate = agora;
+            inicioDate = new Date(agora);
+            inicioDate.setDate(inicioDate.getDate() - 30);
+        } else {
+            // Hoje (meia-noite até 23:59:59)
+            inicioDate = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate(), 0, 0, 0);
+            fimDate = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate(), 23, 59, 59);
+        }
+
+        return { inicio: inicioDate.toISOString(), fim: fimDate.toISOString() };
+    };
 
     const loadDashboardData = async (showRefreshing = false) => {
         try {
@@ -84,24 +129,26 @@ const Dashboard = () => {
                 }
             }
 
-            // Tempo médio por fila: mapeia por nome (Swagger não traz id da fila)
+            const { inicio, fim } = calcularIntervalo();
+
+            // Tempo médio por fila: também popular dados para gráfico
             let tempoMedioPorFila: Record<string, number> = {};
             if (unidadeData) {
-                const hoje = new Date();
-                const inicio = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate(), 0, 0, 0).toISOString();
-                const fim = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate(), 23, 59, 59).toISOString();
                 try {
                     const tempos = await dashboardService.tempoMedioEspera(unidadeData.id, inicio, fim);
+                    setTempoEsperaData(tempos);
+                    // mapear por id da fila (via nome)
                     tempos.forEach((t) => {
                         const filaMatch = filasData.find((f) => (f.nome || '').toLowerCase() === (t.filaNome || '').toLowerCase());
                         if (filaMatch) tempoMedioPorFila[filaMatch.id] = t.tempoMedioEsperaMinutos || 0;
                     });
                 } catch {
                     tempoMedioPorFila = {};
+                    setTempoEsperaData([]);
                 }
             }
 
-            // Buscar clientes aguardando por fila
+            // Buscar clientes aguardando por fila (tempo real)
             const metricas: MetricasFila[] = [];
             for (const fila of filasData) {
                 let aguardando = 0;
@@ -124,27 +171,52 @@ const Dashboard = () => {
             }
             setMetricasFilas(metricas);
 
+            // Produtividade
+            let atendimentosHoje = 0;
+            if (unidadeData) {
+                try {
+                    const produtividade = await dashboardService.produtividade(unidadeData.id, inicio, fim);
+                    setProdutividadeData(produtividade);
+                    atendimentosHoje = produtividade.reduce((sum, p) => sum + (p.atendimentosRealizados || 0), 0);
+                } catch {
+                    setProdutividadeData([]);
+                    atendimentosHoje = 0;
+                }
+            }
+
+            // Horários de pico
+            if (unidadeData) {
+                try {
+                    const horarios = await dashboardService.horariosPico(unidadeData.id, inicio, fim);
+                    setHorariosPicoData(horarios);
+                } catch {
+                    setHorariosPicoData([]);
+                }
+            }
+
+            // Fluxo de pacientes
+            if (unidadeData) {
+                try {
+                    const fluxo = await dashboardService.fluxoPacientes(unidadeData.id, inicio, fim);
+                    setFluxoPacientesData(fluxo);
+                } catch {
+                    setFluxoPacientesData([]);
+                }
+            }
+
             // Calcular estatísticas gerais
             const totalAguardando = metricas.reduce((sum, m) => sum + m.aguardando, 0);
             const totalPrioritarios = metricas.reduce((sum, m) => sum + m.prioritarios, 0);
             const tempoMedioGeral = metricas.length > 0 ? metricas.reduce((sum, m) => sum + m.tempoMedioEspera, 0) / metricas.length : 0;
 
-            let atendimentosHoje = 0;
-            if (unidadeData) {
-                try {
-                    const hoje = new Date();
-                    const inicio = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate(), 0, 0, 0).toISOString();
-                    const fim = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate(), 23, 59, 59).toISOString();
-                    const produtividade = await dashboardService.produtividade(unidadeData.id, inicio, fim);
-                    atendimentosHoje = produtividade.reduce((sum, p) => sum + (p.atendimentosRealizados || 0), 0);
-                } catch {
-                    atendimentosHoje = 0;
-                }
-            }
             setEstatisticas({ totalFilas: filasData.length, totalAguardando, totalPrioritarios, tempoMedioGeral, atendimentosHoje });
         } catch (error: any) {
             setEstatisticas({ totalFilas: 0, totalAguardando: 0, totalPrioritarios: 0, tempoMedioGeral: 0, atendimentosHoje: 0 });
             setMetricasFilas([]);
+            setTempoEsperaData([]);
+            setProdutividadeData([]);
+            setHorariosPicoData([]);
+            setFluxoPacientesData([]);
             toast({ title: 'Aviso', description: 'Alguns dados podem não estar disponíveis. Configure filas para ver mais informações.', variant: 'default' });
         } finally {
             setLoading(false);
@@ -167,6 +239,23 @@ const Dashboard = () => {
         return `${horas}h ${mins}m`;
     };
 
+    // Dados derivados para gráficos
+    const horariosPicoAggregated = (() => {
+        const map = new Map<string, number>();
+        for (const h of horariosPicoData) {
+            try {
+                const hora = format(parseISO(h.horario), 'HH:mm');
+                map.set(hora, (map.get(hora) || 0) + (h.quantidadeAtendimentos || 0));
+            } catch {}
+        }
+        return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0])).map(([hora, quantidade]) => ({ hora, quantidade }));
+    })();
+
+    const fluxoPacientesBarData = fluxoPacientesData.map((f) => ({
+        caminho: `${f.setorOrigem} → ${f.setorDestino}`,
+        quantidade: f.quantidadePacientes || 0,
+    }));
+
     if (loading) {
         return (
             <div className="flex items-center justify-center min-h-[400px]">
@@ -181,14 +270,44 @@ const Dashboard = () => {
     return (
         <div className="space-y-6">
             {/* Cabeçalho */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
                     <p className="text-muted-foreground">
                         Visão geral das operações{unidadeAtual ? ` - ${unidadeAtual.nome}` : ''}
                     </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                    {/* Filtro de período */}
+                    <select
+                        className="border rounded-md px-2 py-1 text-sm"
+                        value={periodo}
+                        onChange={(e) => setPeriodo(e.target.value as Periodo)}
+                        aria-label="Selecionar período"
+                    >
+                        <option value="hoje">Hoje</option>
+                        <option value="7d">Últimos 7 dias</option>
+                        <option value="30d">Últimos 30 dias</option>
+                        <option value="custom">Personalizado</option>
+                    </select>
+                    {periodo === 'custom' && (
+                        <>
+                            <input
+                                type="datetime-local"
+                                className="border rounded-md px-2 py-1 text-sm"
+                                value={customInicio}
+                                onChange={(e) => setCustomInicio(e.target.value)}
+                                aria-label="Início do período"
+                            />
+                            <input
+                                type="datetime-local"
+                                className="border rounded-md px-2 py-1 text-sm"
+                                value={customFim}
+                                onChange={(e) => setCustomFim(e.target.value)}
+                                aria-label="Fim do período"
+                            />
+                        </>
+                    )}
                     <Button
                         onClick={handleRefresh}
                         variant="outline"
@@ -335,6 +454,124 @@ const Dashboard = () => {
                                 Ir para Gestão
                             </Button>
                         </div>
+                    )}
+                </CardContent>
+            </Card>
+
+            {/* Tempo médio de espera por fila */}
+            <Card>
+                <CardHeader>
+                    <CardTitle>Tempo médio de espera por fila</CardTitle>
+                    <CardDescription>Período selecionado</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {tempoEsperaData.length > 0 ? (
+                        <ChartContainer
+                            config={{ tempo: { label: 'Tempo médio (min)', color: 'hsl(var(--primary))' } }}
+                            className="h-[300px]"
+                        >
+                            <BarChart data={tempoEsperaData}>
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis dataKey="filaNome" tick={{ fontSize: 12 }} interval={0} angle={-25} textAnchor="end" height={60} />
+                                <YAxis />
+                                <Tooltip content={<ChartTooltipContent />} />
+                                <Legend />
+                                <Bar dataKey="tempoMedioEsperaMinutos" name="Tempo médio (min)" fill="var(--color-tempo, hsl(var(--primary)))">
+                                    <LabelList dataKey="tempoMedioEsperaMinutos" position="top" formatter={(v: number) => Math.round(v)} />
+                                </Bar>
+                            </BarChart>
+                        </ChartContainer>
+                    ) : (
+                        <p className="text-sm text-muted-foreground">Sem dados para o período.</p>
+                    )}
+                </CardContent>
+            </Card>
+
+            {/* Produtividade por profissional */}
+            <Card>
+                <CardHeader>
+                    <CardTitle>Produtividade por profissional</CardTitle>
+                    <CardDescription>Atendimentos e tempo médio</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {produtividadeData.length > 0 ? (
+                        <ChartContainer
+                            config={{
+                                atend: { label: 'Atendimentos', color: 'hsl(var(--chart-1))' },
+                                tempo: { label: 'Tempo médio (min)', color: 'hsl(var(--chart-2))' },
+                            }}
+                            className="h-[320px]"
+                        >
+                            <ComposedChart data={produtividadeData}>
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis dataKey="profissionalNome" tick={{ fontSize: 12 }} interval={0} angle={-25} textAnchor="end" height={60} />
+                                <YAxis yAxisId="left" />
+                                <YAxis yAxisId="right" orientation="right" />
+                                <Tooltip content={<ChartTooltipContent />} />
+                                <Legend />
+                                <Bar yAxisId="left" dataKey="atendimentosRealizados" name="Atendimentos" fill="var(--color-atend, hsl(var(--chart-1)))">
+                                    <LabelList dataKey="atendimentosRealizados" position="top" />
+                                </Bar>
+                                <Line yAxisId="right" type="monotone" dataKey="tempoMedioAtendimentoMinutos" name="Tempo médio (min)" stroke="var(--color-tempo, hsl(var(--chart-2)))" strokeWidth={2} dot={false} />
+                            </ComposedChart>
+                        </ChartContainer>
+                    ) : (
+                        <p className="text-sm text-muted-foreground">Sem dados para o período.</p>
+                    )}
+                </CardContent>
+            </Card>
+
+            {/* Horários de pico */}
+            <Card>
+                <CardHeader>
+                    <CardTitle>Horários de pico</CardTitle>
+                    <CardDescription>Quantidade de atendimentos por horário</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {horariosPicoAggregated.length > 0 ? (
+                        <ChartContainer
+                            config={{ qtd: { label: 'Atendimentos', color: 'hsl(var(--chart-3))' } }}
+                            className="h-[300px]"
+                        >
+                            <AreaChart data={horariosPicoAggregated}>
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis dataKey="hora" />
+                                <YAxis />
+                                <Tooltip content={<ChartTooltipContent />} />
+                                <Area type="monotone" dataKey="quantidade" name="Atendimentos" stroke="var(--color-qtd, hsl(var(--chart-3)))" fill="var(--color-qtd, hsl(var(--chart-3)))" fillOpacity={0.2} />
+                            </AreaChart>
+                        </ChartContainer>
+                    ) : (
+                        <p className="text-sm text-muted-foreground">Sem dados para o período.</p>
+                    )}
+                </CardContent>
+            </Card>
+
+            {/* Fluxo de pacientes entre setores */}
+            <Card>
+                <CardHeader>
+                    <CardTitle>Fluxo de pacientes entre setores</CardTitle>
+                    <CardDescription>Origem → Destino</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {fluxoPacientesBarData.length > 0 ? (
+                        <ChartContainer
+                            config={{ flux: { label: 'Pacientes', color: 'hsl(var(--chart-4))' } }}
+                            className="h-[300px]"
+                        >
+                            <BarChart data={fluxoPacientesBarData}>
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis dataKey="caminho" tick={{ fontSize: 11 }} interval={0} angle={-25} textAnchor="end" height={70} />
+                                <YAxis />
+                                <Tooltip content={<ChartTooltipContent />} />
+                                <Legend />
+                                <Bar dataKey="quantidade" name="Pacientes" fill="var(--color-flux, hsl(var(--chart-4)))">
+                                    <LabelList dataKey="quantidade" position="top" />
+                                </Bar>
+                            </BarChart>
+                        </ChartContainer>
+                    ) : (
+                        <p className="text-sm text-muted-foreground">Sem dados para o período.</p>
                     )}
                 </CardContent>
             </Card>

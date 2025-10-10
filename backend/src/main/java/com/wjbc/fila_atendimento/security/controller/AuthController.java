@@ -81,4 +81,34 @@ public class AuthController {
         }
     }
 
+    // Fluxo: Esqueci minha senha - solicitar redefinição
+    @PostMapping(value = "/forgot-password")
+    public ResponseEntity<ApiResponse<Void>> forgotPassword(@Valid @RequestBody com.wjbc.fila_atendimento.domain.dto.ForgotPasswordRequestDTO request) {
+        // Intencionalmente não diferenciamos se e-mail existe para evitar enumeração
+        authService.solicitarRedefinicaoSenha(request.email());
+        return ResponseEntity.ok(new ApiResponse<>(true, "Se este e-mail estiver cadastrado, enviaremos instruções para redefinição.", null));
+    }
+
+    // Fluxo: Redefinir senha com token
+    @PostMapping(value = "/reset-password")
+    public ResponseEntity<ApiResponse<Void>> resetPassword(@Valid @RequestBody com.wjbc.fila_atendimento.domain.dto.ResetPasswordRequestDTO request) {
+        try {
+            authService.redefinirSenha(request.token(), request.novaSenha());
+            return ResponseEntity.ok(new ApiResponse<>(true, "Senha redefinida com sucesso!", null));
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            return ResponseEntity.badRequest().body(new ApiResponse<>(false, e.getMessage(), null));
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(new ApiResponse<>(false, "Erro ao redefinir senha!", null));
+        }
+    }
+
+    // Validar token de redefinição (para o frontend saber se pode exibir o formulário)
+    @GetMapping(value = "/reset-password/validate")
+    public ResponseEntity<ApiResponse<Boolean>> validateResetToken(@RequestParam String token) {
+        boolean valido = authService.isPasswordResetTokenValido(token);
+        if (valido) {
+            return ResponseEntity.ok(new ApiResponse<>(true, "Token válido", true));
+        }
+        return ResponseEntity.badRequest().body(new ApiResponse<>(false, "Token inválido ou expirado", false));
+    }
 }
