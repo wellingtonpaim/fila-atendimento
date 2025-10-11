@@ -272,6 +272,85 @@ class AuthService {
             throw new Error(error.message || 'Erro ao excluir usuário');
         }
     }
+
+    /**
+     * Solicita reset de senha (envia e-mail com link)
+     */
+    async forgotPassword(email: string): Promise<void> {
+        try {
+            const response = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ email })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.text();
+                throw new Error(errorData || 'Erro ao solicitar redefinição de senha');
+            }
+
+            const result: ApiResponse<void> = await response.json();
+
+            if (!result.success) {
+                throw new Error(result.message || 'Erro ao solicitar redefinição de senha');
+            }
+        } catch (error: any) {
+            console.error('❌ Erro ao solicitar redefinição de senha:', error);
+            throw new Error(error.message || 'Erro ao solicitar redefinição de senha');
+        }
+    }
+
+    /**
+     * Valida token de redefinição de senha
+     */
+    async validateResetToken(token: string): Promise<boolean> {
+        try {
+            const response = await fetch(`${API_BASE_URL}/auth/reset-password/validate?token=${encodeURIComponent(token)}`, {
+                method: 'GET'
+            });
+
+            if (!response.ok) {
+                return false;
+            }
+
+            const result: ApiResponse<boolean> = await response.json();
+            return result.success && result.data === true;
+        } catch (error: any) {
+            console.error('❌ Erro ao validar token:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Redefine senha usando token
+     */
+    async resetPassword(token: string, novaSenha: string): Promise<void> {
+        try {
+            const response = await fetch(`${API_BASE_URL}/auth/reset-password`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ token, novaSenha })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.text();
+                throw new Error(errorData || 'Erro ao redefinir senha');
+            }
+
+            const result: ApiResponse<void> = await response.json();
+
+            if (!result.success) {
+                throw new Error(result.message || 'Erro ao redefinir senha');
+            }
+        } catch (error: any) {
+            console.error('❌ Erro ao redefinir senha:', error);
+            throw new Error(error.message || 'Erro ao redefinir senha');
+        }
+    }
 }
 
 export const authService = new AuthService();
