@@ -24,6 +24,7 @@ import {
 import { authService } from "@/services/authService";
 import { usuarioService } from "@/services/usuarioService";
 import { UsuarioResponseDTO, UsuarioUpdateDTO } from "@/types";
+import { audioService } from "@/services/audioService";
 
 interface ConfiguracoesUsuario {
     // Notificações
@@ -104,7 +105,22 @@ const Configuracoes = () => {
             const configSalva = localStorage.getItem('qmanager_config');
             if (configSalva) {
                 const configParsed = JSON.parse(configSalva);
-                setConfig({ ...config, ...configParsed });
+                const merged = { ...config, ...configParsed } as ConfiguracoesUsuario;
+                setConfig(merged);
+                // Aplicar imediatamente às APIs de áudio
+                audioService.setEnabled(!!merged.audioHabilitado);
+                audioService.setVolume((merged.volumeAudio ?? 50) / 100);
+                const src = mapSomToSrc(merged.somChamada);
+                audioService.setAlertSrc(src);
+                // Pre-carregar para reduzir latência
+                audioService.preloadAlert(src).catch(() => {});
+            } else {
+                // aplicar defaults
+                audioService.setEnabled(!!config.audioHabilitado);
+                audioService.setVolume((config.volumeAudio ?? 50) / 100);
+                const src = mapSomToSrc(config.somChamada);
+                audioService.setAlertSrc(src);
+                audioService.preloadAlert(src).catch(() => {});
             }
 
             console.log('✅ Configurações carregadas');
@@ -156,11 +172,12 @@ const Configuracoes = () => {
             document.documentElement.classList.remove('dark');
         }
 
-        // Configurar volume de áudio
-        if (typeof window !== 'undefined' && 'Audio' in window) {
-            const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-            audioContext.destination.volume = config.volumeAudio / 100;
-        }
+        // Configurar áudio via serviço
+        audioService.setEnabled(!!config.audioHabilitado);
+        audioService.setVolume((config.volumeAudio ?? 50) / 100);
+        const src = mapSomToSrc(config.somChamada);
+        audioService.setAlertSrc(src);
+        audioService.preloadAlert(src).catch(() => {});
 
         console.log('🎨 Configurações aplicadas à interface');
     };
@@ -219,19 +236,38 @@ const Configuracoes = () => {
         }
     };
 
-    const testarSom = () => {
-        if (config.audioHabilitado) {
-            // Simular som de teste
-            toast({
-                title: '🔊 Som de teste',
-                description: 'Este seria o som de chamada configurado.',
-            });
-        } else {
+    const testarSom = async () => {
+        if (!config.audioHabilitado) {
             toast({
                 title: 'Áudio desabilitado',
                 description: 'Habilite o áudio para testar os sons.',
                 variant: 'destructive',
             });
+            return;
+        }
+        try {
+            audioService.setEnabled(true);
+            audioService.setVolume((config.volumeAudio ?? 50) / 100);
+            const src = mapSomToSrc(config.somChamada);
+            audioService.setAlertSrc(src);
+            await audioService.preloadAlert(src);
+            await audioService.playAlert(src);
+            await audioService.vocalizarTexto('Teste de áudio do Q-Manager.');
+            toast({ title: 'Som reproduzido', description: 'O teste de áudio foi executado.' });
+        } catch (e: any) {
+            toast({ title: 'Falha ao reproduzir', description: e?.message || 'Não foi possível reproduzir o áudio.', variant: 'destructive' });
+        }
+    };
+
+    const mapSomToSrc = (valor: string): string => {
+        switch (valor) {
+            case 'padrao':
+            case 'campainha':
+            case 'sino':
+            case 'beep':
+            default:
+                // Por enquanto todos apontam para o mesmo alerta padrão
+                return '/sounds/alerta.mp3';
         }
     };
 
@@ -459,9 +495,10 @@ const Configuracoes = () => {
                             <Switch
                                 id="audio-enabled"
                                 checked={config.audioHabilitado}
-                                onCheckedChange={(checked) =>
-                                    setConfig({...config, audioHabilitado: checked})
-                                }
+                                onCheckedChange={(checked) => {
+                                    setConfig({...config, audioHabilitado: checked});
+                                    audioService.setEnabled(checked);
+                                }}
                             />
                         </div>
                         <Separator />
@@ -483,9 +520,11 @@ const Configuracoes = () => {
                                 min="0"
                                 max="100"
                                 value={config.volumeAudio}
-                                onChange={(e) =>
-                                    setConfig({...config, volumeAudio: parseInt(e.target.value)})
-                                }
+                                onChange={(e) => {
+                                    const v = parseInt(e.target.value);
+                                    setConfig({...config, volumeAudio: v});
+                                    audioService.setVolume((v ?? 50) / 100);
+                                }}
                                 className="w-full"
                                 disabled={!config.audioHabilitado}
                             />
@@ -495,7 +534,12 @@ const Configuracoes = () => {
                             <Label htmlFor="som-chamada">Som de chamada</Label>
                             <Select
                                 value={config.somChamada}
-                                onValueChange={(value) => setConfig({...config, somChamada: value})}
+                                onValueChange={(value) => {
+                                    setConfig({...config, somChamada: value});
+                                    const src = mapSomToSrc(value);
+                                    audioService.setAlertSrc(src);
+                                    audioService.preloadAlert(src).catch(() => {});
+                                }}
                                 disabled={!config.audioHabilitado}
                             >
                                 <SelectTrigger>

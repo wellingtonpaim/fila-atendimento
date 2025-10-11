@@ -3,6 +3,9 @@ class AudioService {
     private synth: SpeechSynthesis;
     private isEnabled: boolean = true;
     private audioCtx: (AudioContext | null) = null;
+    private volume: number = 0.9; // 0..1
+    private alertSrc: string = '/sounds/alerta.mp3';
+    private alertAudio: HTMLAudioElement | null = null;
 
     private constructor() {
         this.synth = window.speechSynthesis;
@@ -15,6 +18,33 @@ class AudioService {
             AudioService.instance = new AudioService();
         }
         return AudioService.instance;
+    }
+
+    // ===== Configuração global =====
+    setEnabled(enabled: boolean): void {
+        this.isEnabled = enabled;
+        if (!enabled) {
+            this.pararVocalizacao();
+        } else {
+            if (this.audioCtx && this.audioCtx.state === 'suspended') {
+                this.audioCtx.resume().catch(() => {});
+            }
+        }
+    }
+    isAudioEnabled(): boolean {
+        return this.isEnabled;
+    }
+    setVolume(v: number): void {
+        // clamp [0,1]
+        this.volume = Math.max(0, Math.min(1, v));
+    }
+    getVolume(): number {
+        return this.volume;
+    }
+    setAlertSrc(src: string): void {
+        this.alertSrc = src || '/sounds/alerta.mp3';
+        // se já existir áudio pre-carregado de outra fonte, descartamos; irá ser recarregado sob demanda
+        this.alertAudio = null;
     }
 
     private async ensureAudioContext(): Promise<AudioContext> {
@@ -30,6 +60,7 @@ class AudioService {
 
     private playTone(opts: { freq: number; durationMs: number; type?: OscillatorType; startDelayMs?: number; volume?: number; }): Promise<void> {
         const { freq, durationMs, type = 'sine', startDelayMs = 0, volume = 0.15 } = opts;
+        const vol = Math.max(0, Math.min(1, volume * this.volume));
         return new Promise(async (resolve) => {
             try {
                 const ctx = await this.ensureAudioContext();
@@ -50,9 +81,9 @@ class AudioService {
                 const releaseStart = now + Math.max(0.01, total - release);
 
                 gain.gain.setValueAtTime(0, now);
-                gain.gain.linearRampToValueAtTime(volume, peakTime);
-                gain.gain.linearRampToValueAtTime(volume * sustain, decayEnd);
-                gain.gain.setValueAtTime(volume * sustain, releaseStart);
+                gain.gain.linearRampToValueAtTime(vol, peakTime);
+                gain.gain.linearRampToValueAtTime(vol * sustain, decayEnd);
+                gain.gain.setValueAtTime(vol * sustain, releaseStart);
                 gain.gain.linearRampToValueAtTime(0, releaseStart + release);
 
                 osc.connect(gain);
@@ -69,61 +100,74 @@ class AudioService {
         });
     }
 
+    /** Pré-carregar alerta MP3 para reduzir latência na primeira reprodução */
+    async preloadAlert(src?: string): Promise<void> {
+        const path = src || this.alertSrc;
+        try {
+            this.alertAudio = new Audio(path);
+            this.alertAudio.preload = 'auto';
+            this.alertAudio.volume = this.volume;
+            await new Promise<void>((resolve) => {
+                const done = () => {
+                    if (this.alertAudio) {
+                        this.alertAudio.oncanplaythrough = null;
+                        this.alertAudio.onerror = null;
+                    }
+                    resolve();
+                };
+                if (!this.alertAudio) return resolve();
+                this.alertAudio.oncanplaythrough = done;
+                this.alertAudio.onerror = () => done();
+                // Kick loading
+                // NOTE: some browsers require play() to decode, we avoid auto-play to respect policies.
+            });
+        } catch {}
+    }
+
     /**
      * Reproduz um sinal sonoro curto e agradável (estilo "aeroporto")
      */
     async playChime(): Promise<void> {
         if (!this.isEnabled) return;
         try {
-            // Um pequeno "ding-dong" em três notas com leve arpejo
-            // Notas (~Hz): A5=880, C#6=1109, E6=1319 (intervalo maior e agradável)
             await this.playTone({ freq: 880, durationMs: 140, type: 'sine', volume: 0.18 });
             await this.playTone({ freq: 1109, durationMs: 150, type: 'sine', volume: 0.16, startDelayMs: 20 });
             await this.playTone({ freq: 1319, durationMs: 140, type: 'sine', volume: 0.14, startDelayMs: 10 });
         } catch (e) {
-            // Silencioso: se falhar, apenas segue sem chime
             console.warn('Falha ao tocar chime:', e);
         }
     }
 
     /**
-     * Reproduz um arquivo MP3 (alerta) do diretório público. Útil para tocar apenas na primeira chamada.
+     * Reproduz um arquivo MP3 de alerta. Usa cache se pré-carregado.
      */
-    async playAlert(src: string = '/sounds/alerta.mp3'): Promise<void> {
+    async playAlert(src?: string): Promise<void> {
         if (!this.isEnabled) return;
+        const path = src || this.alertSrc;
         try {
-            // Usar HTMLAudio para evitar latência de decodificação manual
-            await this.ensureAudioContext(); // ajuda a contornar políticas de autoplay
-            const audio = new Audio(src);
-            audio.preload = 'auto';
+            await this.ensureAudioContext();
+            const elem = this.alertAudio && this.alertSrc === path ? this.alertAudio : new Audio(path);
+            elem.preload = 'auto';
+            elem.volume = this.volume;
             return new Promise((resolve) => {
                 const cleanup = () => {
-                    audio.onended = null;
-                    audio.onerror = null;
+                    elem.onended = null;
+                    elem.onerror = null;
                     resolve();
                 };
-                audio.onended = cleanup;
-                audio.onerror = (e) => {
-                    console.warn('Falha ao reproduzir alerta MP3:', e);
-                    cleanup();
-                };
-                // Pode falhar sem gesto do usuário; se falhar, resolvemos sem bloquear o fluxo
-                audio.play().catch((e) => {
-                    console.warn('Reprodução MP3 bloqueada pelo navegador:', e);
-                    cleanup();
-                });
+                try { elem.currentTime = 0; } catch {}
+                elem.onended = cleanup;
+                elem.onerror = () => cleanup();
+                elem.play().catch(() => cleanup());
             });
         } catch (e) {
             console.warn('Erro ao iniciar alerta MP3:', e);
         }
     }
 
-    /**
-     * Vocaliza um texto arbitrário (respeita as configurações de voz padrão)
-     */
+    /** Vocaliza um texto arbitrário */
     async vocalizarTexto(texto: string): Promise<void> {
         if (!this.isEnabled) return;
-        // Cancela qualquer vocalização em andamento
         this.synth.cancel();
         return new Promise((resolve) => {
             try {
@@ -131,12 +175,10 @@ class AudioService {
                 utterance.lang = 'pt-BR';
                 utterance.rate = 0.9;
                 utterance.pitch = 1.0;
-                utterance.volume = 0.9;
-
+                utterance.volume = this.volume;
                 const voices = this.synth.getVoices();
                 const ptBrVoice = voices.find(voice => voice.lang === 'pt-BR' || voice.lang?.toLowerCase().startsWith('pt'));
                 if (ptBrVoice) utterance.voice = ptBrVoice;
-
                 utterance.onend = () => resolve();
                 utterance.onerror = () => resolve();
                 this.synth.speak(utterance);
@@ -147,50 +189,30 @@ class AudioService {
         });
     }
 
-    /**
-     * Vocaliza o nome do paciente e a sala de atendimento
-     */
+    /** Vocaliza o nome do paciente e a sala de atendimento */
     async vocalizarChamada(nomeCliente: string, sala: string, setor: string): Promise<void> {
         if (!this.isEnabled) {
-            console.log('Áudio desabilitado');
             return;
         }
-
-        // Cancela qualquer vocalização em andamento
         this.synth.cancel();
-
         const texto = `${nomeCliente}, favor dirigir-se à ${sala}${setor ? ', ' + setor : ''}`;
-
         return new Promise((resolve, reject) => {
             try {
                 const utterance = new SpeechSynthesisUtterance(texto);
-
-                // Configurações de voz
                 utterance.lang = 'pt-BR';
                 utterance.rate = 0.9;
                 utterance.pitch = 1.0;
-                utterance.volume = 0.9;
-
-                // Tentar usar uma voz em português brasileiro se disponível
+                utterance.volume = this.volume;
                 const voices = this.synth.getVoices();
                 const ptBrVoice = voices.find(voice =>
                     voice.lang === 'pt-BR' ||
                     voice.lang?.toLowerCase().startsWith('pt')
                 );
-
                 if (ptBrVoice) {
                     utterance.voice = ptBrVoice;
                 }
-
-                utterance.onend = () => {
-                    resolve();
-                };
-
-                utterance.onerror = (error) => {
-                    console.error('Erro na vocalização:', error);
-                    resolve(); // não quebrar o fluxo por erro de TTS
-                };
-
+                utterance.onend = () => resolve();
+                utterance.onerror = () => resolve();
                 this.synth.speak(utterance);
             } catch (error) {
                 console.error('Erro ao criar vocalização:', error);
@@ -199,51 +221,21 @@ class AudioService {
         });
     }
 
-    /**
-     * Para qualquer vocalização em andamento
-     */
     pararVocalizacao(): void {
         this.synth.cancel();
     }
 
-    /**
-     * Habilita ou desabilita o áudio
-     */
-    setEnabled(enabled: boolean): void {
-        this.isEnabled = enabled;
-        if (!enabled) {
-            this.pararVocalizacao();
-        } else {
-            // Tentar resumir o AudioContext em caso de bloqueio por política de autoplay
-            if (this.audioCtx && this.audioCtx.state === 'suspended') {
-                this.audioCtx.resume().catch(() => {});
-            }
-        }
-    }
-
-    /**
-     * Verifica se o áudio está habilitado
-     */
-    isAudioEnabled(): boolean {
-        return this.isEnabled;
-    }
-
-    /**
-     * Testa o sistema de áudio
-     */
     async testarAudio(): Promise<void> {
         try {
-            await this.playChime();
-            await this.vocalizarChamada('João da Silva', 'Sala 1', 'Consultório Médico');
+            await this.preloadAlert();
+            await this.playAlert();
+            await this.vocalizarChamada('João da Silva', 'Guichê 3', '');
         } catch (error) {
             console.error('Teste de áudio falhou:', error);
             throw error;
         }
     }
 
-    /**
-     * Lista vozes disponíveis
-     */
     getVozesDisponiveis(): SpeechSynthesisVoice[] {
         return this.synth.getVoices();
     }

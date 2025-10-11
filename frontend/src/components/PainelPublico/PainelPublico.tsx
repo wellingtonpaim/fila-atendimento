@@ -143,6 +143,11 @@ const PainelPublico = () => {
         };
     }, []);
 
+    useEffect(() => {
+        // Pré-carregar o alerta MP3 para evitar latência na primeira execução
+        audioService.preloadAlert().catch(() => {});
+    }, []);
+
     // Processamento de payload WebSocket
     const processPayload = useCallback((dto: PainelPublicoDTO, config: PainelPublicoConfigDTO) => {
         const filaDaChamada = config.filas.find(f => f.id === dto.filaId);
