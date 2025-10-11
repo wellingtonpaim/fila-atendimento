@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Volume2, VolumeX, Clock, Users, RefreshCw, AlertTriangle, Loader2 } from 'lucide-react';
+import { Volume2, VolumeX, Clock, Users, AlertTriangle, Loader2 } from 'lucide-react';
 import { websocketService } from '@/services/websocketService';
 import { painelService } from '@/services/painelService'; // Importar novo serviço
 import { audioService } from '@/services/audioService';
@@ -29,6 +29,7 @@ const PainelPublico = () => {
     const [isLoading, setIsLoading] = useState(true);
 
     const repeticaoTimers = useRef<number[]>([]);
+    const unsubscribeRef = useRef<(() => void) | null>(null);
 
     const getParam = (k: string): string | null => {
         try {
@@ -44,54 +45,91 @@ const PainelPublico = () => {
         const token = getParam('token');
         const painelId = getParam('painelId');
 
+        console.log('[PainelPublico] Inicializando com:', { painelId, hasToken: !!token });
+
         if (!painelId) {
-            setError('ID do painel não fornecido na URL. Adicione "?painelId=SEU_ID".');
+            setError('ID do painel não fornecido na URL. Adicione "?painelId=SEU_ID" na URL.');
             setIsLoading(false);
             return;
         }
 
         if (!token) {
-            setError('Token de autenticação não fornecido na URL. Adicione "?token=SEU_TOKEN".');
+            setError('Token de autenticação não fornecido na URL. Adicione "&token=SEU_TOKEN" na URL.');
             setIsLoading(false);
             return;
         }
 
+        let mounted = true;
+
         const initializePainel = async () => {
             try {
-                // 1. Buscar a configuração do painel
-                const configResponse = await painelService.buscarConfiguracaoPublica(painelId);
-                if (!configResponse.success) throw new Error(configResponse.message);
+                console.log('[PainelPublico] Buscando configuração do painel...');
+
+                // 1. Buscar a configuração do painel (endpoint público)
+                const configResponse = await painelService.buscarConfiguracaoPublica(painelId, token);
+
+                if (!mounted) return;
+
+                if (!configResponse.success) {
+                    throw new Error(configResponse.message || 'Falha ao buscar configuração do painel');
+                }
+
+                console.log('[PainelPublico] Configuração carregada:', configResponse.data);
                 setPainelConfig(configResponse.data);
 
-                // 2. Conectar ao WebSocket
+                // 2. Conectar ao WebSocket com o token JWT
+                console.log('[PainelPublico] Conectando ao WebSocket...');
                 websocketService.connect(token);
-                setIsConnected(websocketService.isConnected());
+
+                // Aguardar um pouco para a conexão estabelecer
+                await new Promise(resolve => setTimeout(resolve, 1000));
+
+                const connected = websocketService.isConnected();
+                console.log('[PainelPublico] WebSocket conectado:', connected);
+
+                if (!mounted) return;
+
+                setIsConnected(connected);
 
                 // 3. Assinar o tópico do painel
                 const topic = `/topic/painel-publico/${painelId}`;
+                console.log('[PainelPublico] Inscrevendo no tópico:', topic);
+
                 const unsubscribe = websocketService.subscribe(topic, (payload: any) => {
-                    processPayload(payload as PainelPublicoDTO, configResponse.data);
+                    console.log('[PainelPublico] Mensagem recebida:', payload);
+                    processPayload(payload as PainelPublicoDTO, configResponse.data!);
                 });
 
-                return () => {
-                    unsubscribe();
-                    websocketService.disconnect();
-                };
-            } catch (err: any) {
-                setError(`Erro ao inicializar o painel: ${err.message}`);
-            } finally {
+                unsubscribeRef.current = unsubscribe;
+
+                if (!mounted) return;
+
                 setIsLoading(false);
+                setError(null);
+
+            } catch (err: any) {
+                console.error('[PainelPublico] Erro ao inicializar:', err);
+                if (mounted) {
+                    setError(`Erro ao inicializar o painel: ${err.message}`);
+                    setIsLoading(false);
+                }
             }
         };
 
-        const cleanup = initializePainel();
+        initializePainel();
 
         return () => {
-            if (cleanup && typeof cleanup.then === 'function') {
-                cleanup.then(unsub => unsub && unsub());
+            mounted = false;
+            console.log('[PainelPublico] Limpando recursos...');
+            if (unsubscribeRef.current) {
+                unsubscribeRef.current();
+                unsubscribeRef.current = null;
             }
+            websocketService.disconnect();
+            repeticaoTimers.current.forEach(clearTimeout);
+            repeticaoTimers.current = [];
         };
-    }, []);
+    }, []); // Executar apenas uma vez na montagem
 
     // Efeitos secundários
     useEffect(() => {
@@ -258,3 +296,4 @@ const PainelPublico = () => {
 };
 
 export default PainelPublico;
+

@@ -134,6 +134,13 @@ public class PainelServiceImpl implements PainelService {
         return toResponseDTO(salvo);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public PainelResponseDTO buscarPublico(UUID id) {
+        Painel painel = findPainelById(id);
+        return toResponseDTO(painel);
+    }
+
     // Métodos auxiliares
     private UnidadeAtendimento findUnidadeById(UUID id) {
         return unidadeAtendimentoRepository.findById(id)

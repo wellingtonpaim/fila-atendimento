@@ -16,4 +16,5 @@ public interface PainelService {
     void desativar(UUID id);
     PainelResponseDTO adicionarFilaAoPainel(UUID painelId, UUID filaId);
     PainelResponseDTO removerFilaDoPainel(UUID painelId, UUID filaId);
+    PainelResponseDTO buscarPublico(UUID id);
 }

@@ -55,6 +55,8 @@ public class WebSecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+                        // Permitir preflight CORS sem autenticação
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         // Endpoints públicos REST
                         .requestMatchers("/auth/login", "/auth/confirmar").permitAll()
                         .requestMatchers(HttpMethod.POST, "/auth/register").permitAll()
@@ -86,11 +88,12 @@ public class WebSecurityConfig {
     @Bean
     CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        // Ajuste dos padrões de origem: usar '*' para portas, sem colchetes
-        config.setAllowedOriginPatterns(List.of("http://localhost:*", "http://127.0.0.1:*", "http://192.168.1.6:*"));
+        // Origens de desenvolvimento comuns; ajuste para produção conforme necessário
+        config.setAllowedOriginPatterns(List.of("http://localhost:*", "http://127.0.0.1:*", "http://192.168.1.*:*"));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        // Permitir todos os headers em desenvolvimento para evitar bloqueios por CORS (ex.: x-unidade-id)
         config.setAllowedHeaders(List.of("*"));
-        config.setAllowCredentials(true); // Permitir credenciais
+        config.setAllowCredentials(true);
         config.setExposedHeaders(List.of("Authorization", "X-Total-Count", "X-Total-Pages", "X-Page", "X-Page-Size", "Content-Range"));
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

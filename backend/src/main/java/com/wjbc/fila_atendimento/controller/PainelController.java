@@ -81,4 +81,10 @@ public class PainelController {
         PainelResponseDTO response = painelService.removerFilaDoPainel(painelId, filaId);
         return ResponseEntity.ok(new ApiResponse<>(true, "Fila removida do painel com sucesso", response));
     }
+
+    @GetMapping("/publico/{id}")
+    public ResponseEntity<ApiResponse<PainelResponseDTO>> buscarPublico(@PathVariable UUID id) {
+        PainelResponseDTO response = painelService.buscarPublico(id);
+        return ResponseEntity.ok(new ApiResponse<>(true, "Painel público encontrado", response));
+    }
 }
