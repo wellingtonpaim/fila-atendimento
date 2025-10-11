@@ -47,16 +47,22 @@ class PainelService {
 
     /**
      * Busca a configuração pública de um painel. O backend retorna PainelResponseDTO (com filasIds),
-     * então aqui enriquecemos para PainelPublicoConfigDTO (com filas detalhadas), usando o JWT fornecido.
+     * então aqui enriquecemos para PainelPublicoConfigDTO (com filas detalhadas).
+     * Estratégia: tentar sem Authorization; se 401 e houver JWT, tentar novamente com Authorization.
      */
     async buscarConfiguracaoPublica(id: string, jwt?: string): Promise<ApiResponse<PainelPublicoConfigDTO>> {
-        const baseHeaders: Record<string, string> = {};
-        if (jwt) baseHeaders['Authorization'] = `Bearer ${jwt}`;
+        const url = `${API_BASE_URL}/api/paineis/publico/${id}`;
 
-        const resp = await fetch(`${API_BASE_URL}/api/paineis/publico/${id}`, {
+        const doFetch = (withAuth: boolean) => fetch(url, {
             method: 'GET',
-            headers: baseHeaders,
+            headers: withAuth && jwt ? { Authorization: `Bearer ${jwt}` } : undefined,
         });
+
+        let resp = await doFetch(false);
+        if (resp.status === 401 && jwt) {
+            // Backend ainda exige Authorization: tentar novamente
+            resp = await doFetch(true);
+        }
 
         if (!resp.ok) {
             const errorText = await resp.text();

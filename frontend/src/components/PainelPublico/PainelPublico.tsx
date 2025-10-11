@@ -164,7 +164,7 @@ const PainelPublico = () => {
             setUltimasChamadas(prev => [novaChamada, ...prev.filter(c => c.timestamp !== novaChamada.timestamp)].slice(0, 5));
 
             // Lógica de áudio
-            if (audioEnabled && dto.sinalizacaoSonora && dto.mensagemVocalizacao) {
+            if (audioEnabled && dto.sinalizacaoSonora) {
                 dispararAudio(dto);
             }
 
@@ -183,11 +183,23 @@ const PainelPublico = () => {
         repeticaoTimers.current = [];
         const rep = Math.max(1, dto.repeticoes ?? 1);
         const intervalo = (dto.intervaloRepeticao ?? 5) * 1000;
+        const mensagem = (dto.mensagemVocalizacao || '').trim();
+
         for (let i = 0; i < rep; i++) {
-            const timerId = window.setTimeout(() => {
+            const timerId = window.setTimeout(async () => {
                 try {
-                    audioService.vocalizarChamada(dto.chamadaAtual!.nomePaciente, dto.chamadaAtual!.guicheOuSala, '');
-                } catch (e) { console.error('Erro na síntese de voz:', e); }
+                    if (!audioEnabled) return;
+                    // Tocar o alerta MP3 apenas na primeira repetição
+                    if (i === 0) {
+                        await audioService.playAlert('/sounds/alerta.mp3');
+                    }
+
+                    if (mensagem) {
+                        await audioService.vocalizarTexto(mensagem);
+                    } else if (dto.chamadaAtual) {
+                        await audioService.vocalizarChamada(dto.chamadaAtual.nomePaciente, dto.chamadaAtual.guicheOuSala, '');
+                    }
+                } catch (e) { console.error('Erro na reprodução de áudio:', e); }
             }, i * intervalo);
             repeticaoTimers.current.push(timerId);
         }
@@ -296,4 +308,3 @@ const PainelPublico = () => {
 };
 
 export default PainelPublico;
-
