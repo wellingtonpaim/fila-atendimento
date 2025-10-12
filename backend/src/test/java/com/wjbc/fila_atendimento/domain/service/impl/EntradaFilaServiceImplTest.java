@@ -367,7 +367,9 @@ class EntradaFilaServiceImplTest {
         when(entradaFilaMapper.toResponseDTO(any())).thenReturn(mockResponseDTO());
         EntradaFilaResponseDTO result = service.adicionarClienteAFila(dto);
         assertNotNull(result);
-        verify(filaBroadcastService, times(1)).broadcastPainelPublicoUpdate(eq(painel.getId()), any());
+        // Comportamento atualizado: não envia mais atualização ao painel público ao adicionar
+        verify(filaBroadcastService, never()).broadcastPainelPublicoUpdate(any(), any());
+        // Continua atualizando o painel profissional
         verify(filaBroadcastService, times(1)).broadcastFilaProfissionalUpdate(eq(setor.getId()), any());
     }
 

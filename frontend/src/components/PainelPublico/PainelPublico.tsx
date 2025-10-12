@@ -40,6 +40,17 @@ const PainelPublico = () => {
         }
     };
 
+    // Garantir áudio habilitado e preparado logo na montagem
+    useEffect(() => {
+        // Força o serviço a permanecer habilitado no painel público
+        audioService.setEnabled(true);
+        setAudioEnabled(true);
+        // Tenta aquecer o áudio (pré-carregar e iniciar AudioContext)
+        audioService.forceEnableAndWarmup().catch(() => {});
+        // Registra desbloqueio na primeira interação do usuário
+        audioService.unlockOnUserGestureOnce();
+    }, []);
+
     // Efeito para carregar o painel e conectar ao WebSocket
     useEffect(() => {
         const token = getParam('token');
@@ -211,9 +222,19 @@ const PainelPublico = () => {
     };
 
     const toggleAudio = async () => {
+        // Se já está habilitado, use o clique para apenas desbloquear o áudio (primeiro gesto)
+        if (audioEnabled) {
+            const wasUnlocked = audioService.isUnlocked();
+            const unlockedNow = await audioService.tryResume();
+            if (!wasUnlocked && unlockedNow) {
+                // Desbloqueou nesta interação: mantenha habilitado e não alterne o estado
+                return;
+            }
+        }
         setAudioEnabled(prev => {
-            audioService.setEnabled(!prev);
-            return !prev;
+            const next = !prev;
+            audioService.setEnabled(next);
+            return next;
         });
     };
 
