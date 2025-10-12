@@ -23,6 +23,7 @@ import { FilaResponseDTO, UnidadeAtendimentoResponseDTO, TempoEsperaDTO, Produti
 import { format, parseISO } from 'date-fns';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ComposedChart, Line, AreaChart, Area, LabelList } from 'recharts';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface MetricasFila {
     fila: FilaResponseDTO;
@@ -289,17 +290,17 @@ const Dashboard = () => {
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                     {/* Filtro de período */}
-                    <select
-                        className="px-2 py-1 text-sm rounded-md border border-input bg-background text-foreground"
-                        value={periodo}
-                        onChange={(e) => setPeriodo(e.target.value as Periodo)}
-                        aria-label="Selecionar período"
-                    >
-                        <option value="hoje">Hoje</option>
-                        <option value="7d">Últimos 7 dias</option>
-                        <option value="30d">Últimos 30 dias</option>
-                        <option value="custom">Personalizado</option>
-                    </select>
+                    <Select value={periodo} onValueChange={(val) => setPeriodo(val as Periodo)}>
+                        <SelectTrigger aria-label="Selecionar período" className="w-[200px]">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="hoje">Hoje</SelectItem>
+                            <SelectItem value="7d">Últimos 7 dias</SelectItem>
+                            <SelectItem value="30d">Últimos 30 dias</SelectItem>
+                            <SelectItem value="custom">Personalizado</SelectItem>
+                        </SelectContent>
+                    </Select>
                     {periodo === 'custom' && (
                         <>
                             <input
