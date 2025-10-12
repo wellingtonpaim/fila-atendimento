@@ -25,6 +25,9 @@ import { authService } from "@/services/authService";
 import { usuarioService } from "@/services/usuarioService";
 import { UsuarioResponseDTO, UsuarioUpdateDTO } from "@/types";
 import { audioService } from "@/services/audioService";
+import { refreshService } from "@/services/refreshService";
+import { themeService } from "@/services/themeService";
+import { localeService } from "@/services/localeService";
 
 interface ConfiguracoesUsuario {
     // Notificações
@@ -107,20 +110,30 @@ const Configuracoes = () => {
                 const configParsed = JSON.parse(configSalva);
                 const merged = { ...config, ...configParsed } as ConfiguracoesUsuario;
                 setConfig(merged);
-                // Aplicar imediatamente às APIs de áudio
+                // Áudio
                 audioService.setEnabled(!!merged.audioHabilitado);
                 audioService.setVolume((merged.volumeAudio ?? 50) / 100);
                 const src = mapSomToSrc(merged.somChamada);
                 audioService.setAlertSrc(src);
-                // Pre-carregar para reduzir latência
                 audioService.preloadAlert(src).catch(() => {});
+                // Tema
+                themeService.setDarkMode(!!merged.modoEscuro, false);
+                // Idioma
+                localeService.setLocale(merged.idiomaInterface || 'pt-BR', false);
+                // Auto-refresh
+                const secs = Number(merged.intervaloAtualizacao);
+                if (secs && secs >= 5) refreshService.updateInterval(secs); else refreshService.clear();
             } else {
-                // aplicar defaults
+                // Defaults
                 audioService.setEnabled(!!config.audioHabilitado);
                 audioService.setVolume((config.volumeAudio ?? 50) / 100);
                 const src = mapSomToSrc(config.somChamada);
                 audioService.setAlertSrc(src);
                 audioService.preloadAlert(src).catch(() => {});
+                themeService.setDarkMode(!!config.modoEscuro, false);
+                localeService.setLocale(config.idiomaInterface || 'pt-BR', false);
+                const secs = Number(config.intervaloAtualizacao);
+                if (secs && secs >= 5) refreshService.updateInterval(secs); else refreshService.clear();
             }
 
             console.log('✅ Configurações carregadas');
@@ -165,19 +178,19 @@ const Configuracoes = () => {
     };
 
     const aplicarConfiguracoes = () => {
-        // Aplicar modo escuro
-        if (config.modoEscuro) {
-            document.documentElement.classList.add('dark');
-        } else {
-            document.documentElement.classList.remove('dark');
-        }
-
-        // Configurar áudio via serviço
+        // Tema
+        themeService.setDarkMode(!!config.modoEscuro);
+        // Idioma
+        localeService.setLocale(config.idiomaInterface || 'pt-BR');
+        // Áudio
         audioService.setEnabled(!!config.audioHabilitado);
         audioService.setVolume((config.volumeAudio ?? 50) / 100);
         const src = mapSomToSrc(config.somChamada);
         audioService.setAlertSrc(src);
         audioService.preloadAlert(src).catch(() => {});
+        // Auto-refresh
+        const secs = Number(config.intervaloAtualizacao);
+        if (secs && secs >= 5) refreshService.updateInterval(secs); else refreshService.clear();
 
         console.log('🎨 Configurações aplicadas à interface');
     };
@@ -578,25 +591,10 @@ const Configuracoes = () => {
                             <Switch
                                 id="modo-escuro"
                                 checked={config.modoEscuro}
-                                onCheckedChange={(checked) =>
-                                    setConfig({...config, modoEscuro: checked})
-                                }
-                            />
-                        </div>
-                        <Separator />
-                        <div className="flex items-center justify-between">
-                            <div className="space-y-0.5">
-                                <Label htmlFor="modo-compacto">Modo compacto</Label>
-                                <p className="text-sm text-muted-foreground">
-                                    Reduzir espaçamentos para mais informações na tela
-                                </p>
-                            </div>
-                            <Switch
-                                id="modo-compacto"
-                                checked={config.modoCompacto}
-                                onCheckedChange={(checked) =>
-                                    setConfig({...config, modoCompacto: checked})
-                                }
+                                onCheckedChange={(checked) => {
+                                    setConfig({...config, modoEscuro: checked});
+                                    themeService.setDarkMode(checked);
+                                }}
                             />
                         </div>
                         <Separator />
@@ -607,18 +605,23 @@ const Configuracoes = () => {
                                     id="intervalo-atualizacao"
                                     type="number"
                                     min="5"
-                                    max="60"
+                                    max="3600"
                                     value={config.intervaloAtualizacao}
-                                    onChange={(e) =>
-                                        setConfig({...config, intervaloAtualizacao: parseInt(e.target.value)})
-                                    }
+                                    onChange={(e) => {
+                                        const v = parseInt(e.target.value || '0');
+                                        setConfig({...config, intervaloAtualizacao: v});
+                                        if (v && v >= 5) refreshService.updateInterval(v); else refreshService.clear();
+                                    }}
                                 />
                             </div>
                             <div className="space-y-2">
                                 <Label htmlFor="idioma">Idioma da interface</Label>
                                 <Select
                                     value={config.idiomaInterface}
-                                    onValueChange={(value) => setConfig({...config, idiomaInterface: value})}
+                                    onValueChange={(value) => {
+                                        setConfig({...config, idiomaInterface: value});
+                                        localeService.setLocale(value as string);
+                                    }}
                                 >
                                     <SelectTrigger>
                                         <SelectValue />
