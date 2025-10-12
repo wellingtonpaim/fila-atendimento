@@ -178,21 +178,12 @@ const PainelProfissional = () => {
             // A API já retorna os dados completos! Não preciso buscar individualmente
             setClientesAguardando(clientes as EntradaFilaComClienteDTO[]);
 
-            // Verificar cliente em atendimento - expandir critérios de busca
-            const clienteEmAtendimento = clientes.find((c: any) => {
-                const isEmAtendimento = c.status === 'CHAMADO' ||
-                                       c.status === 'EM_ATENDIMENTO' ||
-                                       c.dataHoraChamada !== null ||
-                                       c.usuarioResponsavelId !== null;
-
-                console.log(`🔍 Cliente ${c.cliente?.nome}: status=${c.status}, chamada=${c.dataHoraChamada}, responsavel=${c.usuarioResponsavelId}, isEmAtendimento=${isEmAtendimento}`);
-
-                return isEmAtendimento;
-            });
-
-            console.log('🔍 Debug - Cliente em atendimento encontrado:', clienteEmAtendimento);
-            setClienteAtual(clienteEmAtendimento as EntradaFilaComClienteDTO || null);
-
+            // Tenta identificar um cliente em atendimento (status CHAMADO)
+            const clienteEmAtendimento = clientes.find((c: any) => c.status === 'CHAMADO');
+            if (clienteEmAtendimento) {
+                setClienteAtual(clienteEmAtendimento as EntradaFilaComClienteDTO);
+            }
+            // Caso contrário, mantém o estado atual (não sobrescreve para null aqui)
         } catch (error: any) {
             console.error('❌ Erro ao carregar clientes aguardando:', error);
             toast({
@@ -217,22 +208,18 @@ const PainelProfissional = () => {
             setLoadingAction(true);
             
             console.log('🔍 Debug - Chamando próximo cliente...', { filaSelecionada, userId: user.id, guiche });
-            await entradaFilaService.chamarProximo(
+            const chamado = await entradaFilaService.chamarProximo(
                 filaSelecionada,
                 user.id,
                 guiche.trim()
             );
 
-            // Aguardar um momento para o backend processar
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            // Define o cliente atual imediatamente com base no retorno da API
+            setClienteAtual(chamado as unknown as EntradaFilaComClienteDTO);
 
-            // Forçar múltiplas atualizações para garantir que a mudança seja capturada
+            // Aguardar um momento para o backend processar e atualizar a fila
+            await new Promise(resolve => setTimeout(resolve, 500));
             await loadClientesAguardando();
-
-            // Segunda tentativa após mais um momento
-            setTimeout(async () => {
-                await loadClientesAguardando();
-            }, 2000);
 
             toast({
                 title: 'Cliente chamado!',
@@ -263,14 +250,13 @@ const PainelProfissional = () => {
             await loadClientesAguardando();
 
             toast({
-                title: 'Atendimento cancelado',
-                description: 'O atendimento foi cancelado.',
-                variant: 'destructive',
+                title: 'Cliente dispensado',
+                description: 'O cliente foi retirado da fila.',
             });
         } catch (error: any) {
             console.error('❌ Erro ao cancelar atendimento:', error);
             toast({
-                title: 'Erro ao cancelar atendimento',
+                title: 'Erro ao dispensar cliente',
                 description: error.message,
                 variant: 'destructive',
             });
@@ -355,7 +341,8 @@ const PainelProfissional = () => {
 
     const resetModalEncaminhamento = () => {
         setFilaEncaminhamento('');
-        setIsPrioridade(false);
+        // Carrega prioridade com a mesma opção utilizada na entrada atual
+        setIsPrioridade(!!clienteAtual?.prioridade);
         setIsRetorno(false);
         setObservacoes('');
     };
@@ -538,7 +525,7 @@ const PainelProfissional = () => {
                                             className="w-full"
                                         >
                                             <XCircle className="mr-1 h-4 w-4" />
-                                            Cancelar Atendimento
+                                            Dispensar
                                         </Button>
 
                                         {/* Botão direto para encaminhar cliente */}
@@ -554,7 +541,7 @@ const PainelProfissional = () => {
                                                     size="sm"
                                                 >
                                                     <ArrowRight className="mr-1 h-4 w-4" />
-                                                    Encaminhar Cliente
+                                                    Encaminhar
                                                 </Button>
                                             </DialogTrigger>
                                             <DialogContent className="max-w-md">
