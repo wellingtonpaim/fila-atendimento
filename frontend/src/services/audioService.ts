@@ -20,6 +20,23 @@ class AudioService {
         return AudioService.instance;
     }
 
+    // Inicializa a partir do localStorage
+    initFromStorage(): void {
+        try {
+            const raw = localStorage.getItem('qmanager_config');
+            if (raw) {
+                const cfg = JSON.parse(raw);
+                if (typeof cfg.audioHabilitado === 'boolean') this.isEnabled = !!cfg.audioHabilitado;
+                const volPct = Number(cfg.volumeAudio);
+                if (!Number.isNaN(volPct)) this.volume = Math.max(0, Math.min(1, (volPct ?? 50) / 100));
+                const som = cfg.somChamada;
+                if (typeof som === 'string' && som) {
+                    this.setAlertSrc(this.mapSomToSrc(som));
+                }
+            }
+        } catch {}
+    }
+
     // ===== Configuração global =====
     setEnabled(enabled: boolean): void {
         this.isEnabled = enabled;
@@ -238,6 +255,17 @@ class AudioService {
 
     getVozesDisponiveis(): SpeechSynthesisVoice[] {
         return this.synth.getVoices();
+    }
+
+    private mapSomToSrc(valor: string): string {
+        switch (valor) {
+            case 'padrao':
+            case 'campainha':
+            case 'sino':
+            case 'beep':
+            default:
+                return '/sounds/alerta.mp3';
+        }
     }
 }
 
