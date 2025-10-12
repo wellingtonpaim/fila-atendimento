@@ -23,6 +23,7 @@ import { FilaResponseDTO, UnidadeAtendimentoResponseDTO, TempoEsperaDTO, Produti
 import { format, parseISO } from 'date-fns';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ComposedChart, Line, AreaChart, Area, LabelList } from 'recharts';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface MetricasFila {
     fila: FilaResponseDTO;
@@ -109,24 +110,28 @@ const Dashboard = () => {
             // Buscar unidade selecionada
             let unidadeData: UnidadeAtendimentoResponseDTO | null = null;
             let filasData: FilaResponseDTO[] = [];
-            if (selectedUnitId) {
-                // Buscar unidade atual
-                const unidadeResponse = await unidadeService.buscarPorId(selectedUnitId);
-                unidadeData = unidadeResponse.data || null;
-                setUnidadeAtual(unidadeData);
-                // Buscar filas da unidade
-                const filasResponse = await filaService.listarPorUnidade(selectedUnitId);
-                filasData = filasResponse.data || [];
-            } else {
-                // Buscar todas as unidades e usar a primeira
-                const unidadesResponse = await unidadeService.listarTodas();
-                const unidades = unidadesResponse.data || [];
-                if (unidades.length > 0) {
-                    unidadeData = unidades[0];
+            try {
+                if (selectedUnitId) {
+                    const unidadeResponse = await unidadeService.buscarPorId(selectedUnitId);
+                    unidadeData = unidadeResponse.data || null;
                     setUnidadeAtual(unidadeData);
-                    const filasResponse = await filaService.listarPorUnidade(unidadeData.id);
+                    const filasResponse = await filaService.listarPorUnidade(selectedUnitId);
                     filasData = filasResponse.data || [];
+                } else {
+                    const unidadesResponse = await unidadeService.listarTodas();
+                    const unidades = unidadesResponse.data || [];
+                    if (unidades.length > 0) {
+                        unidadeData = unidades[0];
+                        setUnidadeAtual(unidadeData);
+                        const filasResponse = await filaService.listarPorUnidade(unidadeData.id);
+                        filasData = filasResponse.data || [];
+                    }
                 }
+            } catch (e: any) {
+                console.error('[Dashboard] Erro ao carregar unidade/filas:', e);
+                // Segue com dados vazios, demais seções já testam unidadeData
+                unidadeData = unidadeData || null;
+                filasData = filasData || [];
             }
 
             const { inicio, fim } = calcularIntervalo();
@@ -142,7 +147,8 @@ const Dashboard = () => {
                         const filaMatch = filasData.find((f) => (f.nome || '').toLowerCase() === (t.filaNome || '').toLowerCase());
                         if (filaMatch) tempoMedioPorFila[filaMatch.id] = t.tempoMedioEsperaMinutos || 0;
                     });
-                } catch {
+                } catch (err) {
+                    console.error('[Dashboard] Erro em tempoMedioEspera:', err);
                     tempoMedioPorFila = {};
                     setTempoEsperaData([]);
                 }
@@ -158,7 +164,8 @@ const Dashboard = () => {
                     const clientes = Array.isArray(aguardandoLista) ? aguardandoLista : [];
                     aguardando = clientes.length;
                     prioritarios = clientes.filter((c: any) => c.prioridade).length;
-                } catch {
+                } catch (err) {
+                    console.warn('[Dashboard] Erro ao listar aguardando por fila', fila.id, err);
                     aguardando = 0;
                     prioritarios = 0;
                 }
@@ -178,7 +185,8 @@ const Dashboard = () => {
                     const produtividade = await dashboardService.produtividade(unidadeData.id, inicio, fim);
                     setProdutividadeData(produtividade);
                     atendimentosHoje = produtividade.reduce((sum, p) => sum + (p.atendimentosRealizados || 0), 0);
-                } catch {
+                } catch (err) {
+                    console.error('[Dashboard] Erro em produtividade:', err);
                     setProdutividadeData([]);
                     atendimentosHoje = 0;
                 }
@@ -189,7 +197,8 @@ const Dashboard = () => {
                 try {
                     const horarios = await dashboardService.horariosPico(unidadeData.id, inicio, fim);
                     setHorariosPicoData(horarios);
-                } catch {
+                } catch (err) {
+                    console.error('[Dashboard] Erro em horariosPico:', err);
                     setHorariosPicoData([]);
                 }
             }
@@ -199,7 +208,8 @@ const Dashboard = () => {
                 try {
                     const fluxo = await dashboardService.fluxoPacientes(unidadeData.id, inicio, fim);
                     setFluxoPacientesData(fluxo);
-                } catch {
+                } catch (err) {
+                    console.error('[Dashboard] Erro em fluxoPacientes:', err);
                     setFluxoPacientesData([]);
                 }
             }
@@ -211,6 +221,7 @@ const Dashboard = () => {
 
             setEstatisticas({ totalFilas: filasData.length, totalAguardando, totalPrioritarios, tempoMedioGeral, atendimentosHoje });
         } catch (error: any) {
+            console.error('[Dashboard] Erro inesperado no carregamento:', error);
             setEstatisticas({ totalFilas: 0, totalAguardando: 0, totalPrioritarios: 0, tempoMedioGeral: 0, atendimentosHoje: 0 });
             setMetricasFilas([]);
             setTempoEsperaData([]);
@@ -279,29 +290,29 @@ const Dashboard = () => {
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                     {/* Filtro de período */}
-                    <select
-                        className="border rounded-md px-2 py-1 text-sm"
-                        value={periodo}
-                        onChange={(e) => setPeriodo(e.target.value as Periodo)}
-                        aria-label="Selecionar período"
-                    >
-                        <option value="hoje">Hoje</option>
-                        <option value="7d">Últimos 7 dias</option>
-                        <option value="30d">Últimos 30 dias</option>
-                        <option value="custom">Personalizado</option>
-                    </select>
+                    <Select value={periodo} onValueChange={(val) => setPeriodo(val as Periodo)}>
+                        <SelectTrigger aria-label="Selecionar período" className="w-[200px]">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="hoje">Hoje</SelectItem>
+                            <SelectItem value="7d">Últimos 7 dias</SelectItem>
+                            <SelectItem value="30d">Últimos 30 dias</SelectItem>
+                            <SelectItem value="custom">Personalizado</SelectItem>
+                        </SelectContent>
+                    </Select>
                     {periodo === 'custom' && (
                         <>
                             <input
                                 type="datetime-local"
-                                className="border rounded-md px-2 py-1 text-sm"
+                                className="px-2 py-1 text-sm rounded-md border border-input bg-background text-foreground"
                                 value={customInicio}
                                 onChange={(e) => setCustomInicio(e.target.value)}
                                 aria-label="Início do período"
                             />
                             <input
                                 type="datetime-local"
-                                className="border rounded-md px-2 py-1 text-sm"
+                                className="px-2 py-1 text-sm rounded-md border border-input bg-background text-foreground"
                                 value={customFim}
                                 onChange={(e) => setCustomFim(e.target.value)}
                                 aria-label="Fim do período"

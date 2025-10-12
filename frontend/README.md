@@ -246,22 +246,45 @@ await entradaFilaService.cancelarAtendimento(entradaFilaId);
 
 ## ♿ Acessibilidade
 
-O Q-Manager Frontend foi desenvolvido seguindo as diretrizes **WCAG 2.1 Level AA**:
+O Q-Manager Frontend foi projetado e implementado para atender às diretrizes **WCAG 2.1 Nível AA**, garantindo uma experiência inclusiva para todas as pessoas.
 
-### 🎯 Recursos de Acessibilidade
+### ✅ O que está implementado
 
-- **🏷️ ARIA Labels**: Todos os componentes têm labels descritivos
-- **⌨️ Navegação por Teclado**: Totalmente operável via teclado
-- **🔊 Leitores de Tela**: Compatível com NVDA, JAWS, VoiceOver
-- **🎨 Alto Contraste**: Cores que atendem aos requisitos de contraste
-- **📏 Texto Redimensionável**: Suporte a zoom até 200%
-- **🎵 Feedback Sonoro**: Notificações audíveis para eventos importantes
+1) Estrutura e Navegação
+- Landmarks semânticos e/ou roles apropriados em todo o app (banner/header, navigation, main, application quando pertinente).
+- Total operabilidade por teclado: navegação via Tab/Shift+Tab, ativação com Enter/Espaço e saída com Esc onde aplicável.
+- Foco visível consistente (outline/ring) em todos os elementos interativos, respeitando o tema.
+- Ordem de navegação lógica e previsível em formulários e ações principais.
 
-### 🧪 Testado Com
-- **NVDA** (Windows)
-- **VoiceOver** (macOS/iOS)
-- **JAWS** (Windows)
-- **TalkBack** (Android)
+2) Cores e Contraste
+- Tokens de tema (Tailwind + CSS custom properties) garantem contraste adequado no modo claro e escuro.
+- Informações não dependem apenas de cor: acompanhadas por texto/ícones/estados visuais.
+
+3) Imagens e Mídias
+- Ícones decorativos com `aria-hidden="true"`.
+- Recursos visuais relevantes expostos por meio de texto/labels nos componentes.
+
+4) Formulários e Mensagens
+- Todos os campos possuem rótulos claros (Label/aria-label) e descrições quando necessário.
+- Estados e feedbacks visuais e verbais: áreas com `aria-live="polite"` para atualizações de resultados.
+- Botões e ações com descrições compreensíveis e sem ambiguidade.
+
+5) Responsividade e Zoom
+- Layout responsivo (mobile, tablet e desktop) com grade fluida.
+- Conteúdo permanece legível e navegável com zoom ampliado (até 200%).
+
+6) Compatibilidade com Tecnologias Assistivas
+- Componentes interativos compatíveis com leitores de tela (NVDA, VoiceOver, JAWS).
+- Componentes shadcn/ui (por exemplo, Select) utilizados e configurados com atributos ARIA apropriados.
+
+7) Verificação Automática
+- Verificação automatizada de acessibilidade via ferramentas do navegador e padrões da biblioteca UI.
+
+### 🧩 Exemplos práticos na interface
+- Selects nativos substituídos por **shadcn/ui Select** (teclado e leitor de tela friendly) no Dashboard (filtro de período) e na Entrada em Filas ("Buscar por" e "Itens por página").
+- Área de resultados de busca com **`aria-live="polite"`** para anúncio de mudanças.
+- Ícones decorativos marcados como **`aria-hidden`**; elementos clicáveis com **role** e **aria-label** descritivos.
+- Estilos de foco visível padronizados e tema dark com contraste adequado.
 
 ---
 
@@ -294,13 +317,11 @@ VITE_ANALYTICS_ID=your-analytics-id
 
 ```json
 {
-  "dev": "vite",                    // Servidor de desenvolvimento
-  "build": "tsc && vite build",     // Build para produção
-  "preview": "vite preview",        // Preview do build
-  "lint": "eslint . --ext ts,tsx",  // Verificação de código
-  "lint:fix": "eslint . --ext ts,tsx --fix", // Correção automática
-  "type-check": "tsc --noEmit",     // Verificação de tipos
-  "format": "prettier --write ."    // Formatação de código
+  "dev": "vite",
+  "build": "vite build",
+  "build:dev": "vite build --mode development",
+  "lint": "eslint .",
+  "preview": "vite preview"
 }
 ```
 
@@ -339,17 +360,11 @@ CMD ["npm", "run", "preview"]
 ## 🧪 Testes
 
 ```bash
-# Testes unitários
+# Testes unitários (quando configurados)
 npm run test
 
-# Testes com coverage
-npm run test:coverage
-
-# Testes E2E
+# Testes E2E (quando configurados)
 npm run test:e2e
-
-# Testes de acessibilidade
-npm run test:a11y
 ```
 
 ---

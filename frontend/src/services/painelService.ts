@@ -3,7 +3,8 @@ import {
     PainelResponseDTO,
     PainelCreateDTO,
     PainelUpdateDTO,
-    PainelPublicoConfigDTO
+    PainelPublicoConfigDTO,
+    FilaResponseDTO
 } from '@/types';
 import { authService } from './authService';
 
@@ -45,12 +46,71 @@ class PainelService {
     }
 
     /**
-     * Busca a configuração pública de um painel (sem autenticação)
+     * Busca a configuração pública de um painel. O backend retorna PainelResponseDTO (com filasIds),
+     * então aqui enriquecemos para PainelPublicoConfigDTO (com filas detalhadas).
+     * Estratégia: tentar sem Authorization; se 401 e houver JWT, tentar novamente com Authorization.
      */
-    async buscarConfiguracaoPublica(id: string): Promise<ApiResponse<PainelPublicoConfigDTO>> {
-        const response = await fetch(`${API_BASE_URL}/api/paineis/publico/${id}`);
-        if (!response.ok) throw new Error('Falha ao buscar configuração do painel');
-        return response.json();
+    async buscarConfiguracaoPublica(id: string, jwt?: string): Promise<ApiResponse<PainelPublicoConfigDTO>> {
+        const url = `${API_BASE_URL}/api/paineis/publico/${id}`;
+
+        const doFetch = (withAuth: boolean) => fetch(url, {
+            method: 'GET',
+            headers: withAuth && jwt ? { Authorization: `Bearer ${jwt}` } : undefined,
+        });
+
+        let resp = await doFetch(false);
+        if (resp.status === 401 && jwt) {
+            // Backend ainda exige Authorization: tentar novamente
+            resp = await doFetch(true);
+        }
+
+        if (!resp.ok) {
+            const errorText = await resp.text();
+            console.error('Erro ao buscar painel público:', errorText);
+            throw new Error(`Erro ${resp.status}: ${errorText || 'Falha ao buscar painel público'}`);
+        }
+
+        const body: ApiResponse<PainelResponseDTO> = await resp.json();
+        const painel = body?.data;
+        if (!painel) {
+            throw new Error('Resposta inválida do servidor ao buscar painel público.');
+        }
+
+        const filaHeaders: Record<string, string> = {};
+        if (jwt) filaHeaders['Authorization'] = `Bearer ${jwt}`;
+
+        const filas: FilaResponseDTO[] = [];
+        for (const filaId of painel.filasIds || []) {
+            try {
+                const fResp = await fetch(`${API_BASE_URL}/api/filas/${filaId}`, {
+                    method: 'GET',
+                    headers: filaHeaders,
+                });
+                if (!fResp.ok) {
+                    const t = await fResp.text();
+                    console.warn(`Falha ao buscar fila ${filaId}: ${fResp.status} ${t}`);
+                    continue;
+                }
+                const fBody: ApiResponse<FilaResponseDTO> = await fResp.json();
+                if (fBody?.data) filas.push(fBody.data);
+            } catch (e) {
+                console.warn(`Erro ao buscar fila ${filaId}:`, e);
+            }
+        }
+
+        const cfg: PainelPublicoConfigDTO = {
+            id: painel.id,
+            descricao: painel.descricao,
+            filas,
+        };
+
+        return {
+            success: body.success,
+            message: body.message || 'Configuração do painel carregada',
+            data: cfg,
+            errors: body.errors,
+            timestamp: body.timestamp,
+        };
     }
 
     /**

@@ -13,7 +13,6 @@ import {
     Volume2,
     Monitor,
     Shield,
-    User,
     Eye,
     EyeOff,
     RefreshCw,
@@ -22,8 +21,10 @@ import {
     Loader2
 } from "lucide-react";
 import { authService } from "@/services/authService";
-import { usuarioService } from "@/services/usuarioService";
-import { UsuarioResponseDTO, UsuarioUpdateDTO } from "@/types";
+import { UsuarioResponseDTO } from "@/types";
+import { audioService } from "@/services/audioService";
+import { themeService } from "@/services/themeService";
+import { localeService } from "@/services/localeService";
 
 interface ConfiguracoesUsuario {
     // Notificações
@@ -40,7 +41,6 @@ interface ConfiguracoesUsuario {
     // Interface
     modoEscuro: boolean;
     modoCompacto: boolean;
-    intervaloAtualizacao: number;
     idiomaInterface: string;
 
     // Segurança
@@ -65,7 +65,6 @@ const Configuracoes = () => {
         // Interface
         modoEscuro: false,
         modoCompacto: false,
-        intervaloAtualizacao: 10,
         idiomaInterface: 'pt-BR',
 
         // Segurança
@@ -87,6 +86,16 @@ const Configuracoes = () => {
 
     const { toast } = useToast();
 
+    // Helper: persiste atualização parcial de configurações no localStorage, preservando demais campos
+    const persistConfigPartial = (partial: Partial<ConfiguracoesUsuario>) => {
+        try {
+            const raw = localStorage.getItem('qmanager_config');
+            const current = raw ? JSON.parse(raw) : {};
+            const updated = { ...current, ...partial };
+            localStorage.setItem('qmanager_config', JSON.stringify(updated));
+        } catch {}
+    };
+
     useEffect(() => {
         carregarConfiguracoes();
     }, []);
@@ -104,7 +113,29 @@ const Configuracoes = () => {
             const configSalva = localStorage.getItem('qmanager_config');
             if (configSalva) {
                 const configParsed = JSON.parse(configSalva);
-                setConfig({ ...config, ...configParsed });
+                const merged = { ...config, ...configParsed } as ConfiguracoesUsuario;
+                setConfig(merged);
+                // Áudio
+                audioService.setEnabled(!!merged.audioHabilitado);
+                audioService.setVolume((merged.volumeAudio ?? 50) / 100);
+                const src = mapSomToSrc(merged.somChamada);
+                audioService.setAlertSrc(src);
+                audioService.preloadAlert(src).catch(() => {});
+                // Tema
+                themeService.setDarkMode(!!merged.modoEscuro, false);
+                // Idioma
+                localeService.setLocale(merged.idiomaInterface || 'pt-BR', false);
+                // Removido: auto-refresh global
+            } else {
+                // Defaults
+                audioService.setEnabled(!!config.audioHabilitado);
+                audioService.setVolume((config.volumeAudio ?? 50) / 100);
+                const src = mapSomToSrc(config.somChamada);
+                audioService.setAlertSrc(src);
+                audioService.preloadAlert(src).catch(() => {});
+                themeService.setDarkMode(!!config.modoEscuro, false);
+                localeService.setLocale(config.idiomaInterface || 'pt-BR', false);
+                // Removido: auto-refresh global
             }
 
             console.log('✅ Configurações carregadas');
@@ -149,18 +180,17 @@ const Configuracoes = () => {
     };
 
     const aplicarConfiguracoes = () => {
-        // Aplicar modo escuro
-        if (config.modoEscuro) {
-            document.documentElement.classList.add('dark');
-        } else {
-            document.documentElement.classList.remove('dark');
-        }
-
-        // Configurar volume de áudio
-        if (typeof window !== 'undefined' && 'Audio' in window) {
-            const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-            audioContext.destination.volume = config.volumeAudio / 100;
-        }
+        // Tema
+        themeService.setDarkMode(!!config.modoEscuro);
+        // Idioma
+        localeService.setLocale(config.idiomaInterface || 'pt-BR');
+        // Áudio
+        audioService.setEnabled(!!config.audioHabilitado);
+        audioService.setVolume((config.volumeAudio ?? 50) / 100);
+        const src = mapSomToSrc(config.somChamada);
+        audioService.setAlertSrc(src);
+        audioService.preloadAlert(src).catch(() => {});
+        // Removido: auto-refresh global
 
         console.log('🎨 Configurações aplicadas à interface');
     };
@@ -219,19 +249,38 @@ const Configuracoes = () => {
         }
     };
 
-    const testarSom = () => {
-        if (config.audioHabilitado) {
-            // Simular som de teste
-            toast({
-                title: '🔊 Som de teste',
-                description: 'Este seria o som de chamada configurado.',
-            });
-        } else {
+    const testarSom = async () => {
+        if (!config.audioHabilitado) {
             toast({
                 title: 'Áudio desabilitado',
                 description: 'Habilite o áudio para testar os sons.',
                 variant: 'destructive',
             });
+            return;
+        }
+        try {
+            audioService.setEnabled(true);
+            audioService.setVolume((config.volumeAudio ?? 50) / 100);
+            const src = mapSomToSrc(config.somChamada);
+            audioService.setAlertSrc(src);
+            await audioService.preloadAlert(src);
+            await audioService.playAlert(src);
+            await audioService.vocalizarTexto('Teste de áudio do Q-Manager.');
+            toast({ title: 'Som reproduzido', description: 'O teste de áudio foi executado.' });
+        } catch (e: any) {
+            toast({ title: 'Falha ao reproduzir', description: e?.message || 'Não foi possível reproduzir o áudio.', variant: 'destructive' });
+        }
+    };
+
+    const mapSomToSrc = (valor: string): string => {
+        switch (valor) {
+            case 'padrao':
+            case 'campainha':
+            case 'sino':
+            case 'beep':
+            default:
+                // Por enquanto todos apontam para o mesmo alerta padrão
+                return '/sounds/alerta.mp3';
         }
     };
 
@@ -290,7 +339,7 @@ const Configuracoes = () => {
     };
 
     const resetarConfiguracoes = () => {
-        setConfig({
+        const defaults: ConfiguracoesUsuario = {
             notificacoesNovasChamadas: true,
             notificacoesAtualizacoesFila: true,
             notificacoesSistema: true,
@@ -300,12 +349,24 @@ const Configuracoes = () => {
             somChamada: 'padrao',
             modoEscuro: false,
             modoCompacto: false,
-            intervaloAtualizacao: 10,
             idiomaInterface: 'pt-BR',
             logoutAutomatico: true,
             tempoLogoutMinutos: 30,
             autenticacaoDoisFatores: false
-        });
+        };
+
+        setConfig(defaults);
+        try { localStorage.setItem('qmanager_config', JSON.stringify(defaults)); } catch {}
+
+        // Aplicar imediatamente
+        themeService.setDarkMode(!!defaults.modoEscuro);
+        localeService.setLocale(defaults.idiomaInterface || 'pt-BR');
+        audioService.setEnabled(!!defaults.audioHabilitado);
+        audioService.setVolume((defaults.volumeAudio ?? 50) / 100);
+        const src = mapSomToSrc(defaults.somChamada);
+        audioService.setAlertSrc(src);
+        audioService.preloadAlert(src).catch(() => {});
+        // Removido: auto-refresh global
 
         toast({
             title: 'Configurações resetadas',
@@ -459,9 +520,11 @@ const Configuracoes = () => {
                             <Switch
                                 id="audio-enabled"
                                 checked={config.audioHabilitado}
-                                onCheckedChange={(checked) =>
-                                    setConfig({...config, audioHabilitado: checked})
-                                }
+                                onCheckedChange={(checked) => {
+                                    setConfig({...config, audioHabilitado: checked});
+                                    audioService.setEnabled(checked);
+                                    persistConfigPartial({ audioHabilitado: checked });
+                                }}
                             />
                         </div>
                         <Separator />
@@ -483,9 +546,12 @@ const Configuracoes = () => {
                                 min="0"
                                 max="100"
                                 value={config.volumeAudio}
-                                onChange={(e) =>
-                                    setConfig({...config, volumeAudio: parseInt(e.target.value)})
-                                }
+                                onChange={(e) => {
+                                    const v = parseInt(e.target.value);
+                                    setConfig({...config, volumeAudio: v});
+                                    audioService.setVolume((v ?? 50) / 100);
+                                    persistConfigPartial({ volumeAudio: v });
+                                }}
                                 className="w-full"
                                 disabled={!config.audioHabilitado}
                             />
@@ -495,7 +561,13 @@ const Configuracoes = () => {
                             <Label htmlFor="som-chamada">Som de chamada</Label>
                             <Select
                                 value={config.somChamada}
-                                onValueChange={(value) => setConfig({...config, somChamada: value})}
+                                onValueChange={(value) => {
+                                    setConfig({...config, somChamada: value});
+                                    const src = mapSomToSrc(value);
+                                    audioService.setAlertSrc(src);
+                                    audioService.preloadAlert(src).catch(() => {});
+                                    persistConfigPartial({ somChamada: value });
+                                }}
                                 disabled={!config.audioHabilitado}
                             >
                                 <SelectTrigger>
@@ -534,47 +606,22 @@ const Configuracoes = () => {
                             <Switch
                                 id="modo-escuro"
                                 checked={config.modoEscuro}
-                                onCheckedChange={(checked) =>
-                                    setConfig({...config, modoEscuro: checked})
-                                }
+                                onCheckedChange={(checked) => {
+                                    setConfig({...config, modoEscuro: checked});
+                                    themeService.setDarkMode(checked);
+                                }}
                             />
                         </div>
                         <Separator />
-                        <div className="flex items-center justify-between">
-                            <div className="space-y-0.5">
-                                <Label htmlFor="modo-compacto">Modo compacto</Label>
-                                <p className="text-sm text-muted-foreground">
-                                    Reduzir espaçamentos para mais informações na tela
-                                </p>
-                            </div>
-                            <Switch
-                                id="modo-compacto"
-                                checked={config.modoCompacto}
-                                onCheckedChange={(checked) =>
-                                    setConfig({...config, modoCompacto: checked})
-                                }
-                            />
-                        </div>
-                        <Separator />
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="intervalo-atualizacao">Intervalo de atualização (segundos)</Label>
-                                <Input
-                                    id="intervalo-atualizacao"
-                                    type="number"
-                                    min="5"
-                                    max="60"
-                                    value={config.intervaloAtualizacao}
-                                    onChange={(e) =>
-                                        setConfig({...config, intervaloAtualizacao: parseInt(e.target.value)})
-                                    }
-                                />
-                            </div>
+                        <div className="grid gap-4">
                             <div className="space-y-2">
                                 <Label htmlFor="idioma">Idioma da interface</Label>
                                 <Select
                                     value={config.idiomaInterface}
-                                    onValueChange={(value) => setConfig({...config, idiomaInterface: value})}
+                                    onValueChange={(value) => {
+                                        setConfig({...config, idiomaInterface: value});
+                                        localeService.setLocale(value as string);
+                                    }}
                                 >
                                     <SelectTrigger>
                                         <SelectValue />

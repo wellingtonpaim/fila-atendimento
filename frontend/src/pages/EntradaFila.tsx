@@ -175,11 +175,6 @@ const EntradaFila = () => {
         setPage(safe);
     };
 
-    const handleSizeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        setSize(Number(e.target.value));
-        setPage(0);
-    };
-
     const displayPage = totalPages > 0 ? page + 1 : 0;
 
     if (loading) {
@@ -248,44 +243,46 @@ const EntradaFila = () => {
                     <CardContent className="space-y-4">
                         {/* Busca */}
                         <div className="flex items-center gap-2 mb-2">
-                            <label className="text-sm font-medium">Buscar por:</label>
-                            <select
-                                value={searchType}
-                                onChange={e => { setSearchType(e.target.value as any); setSearchTerm(''); setClientes([]); setPage(0); }}
-                                className="border rounded px-2 py-1 text-sm"
-                            >
-                                <option value="nome">Nome</option>
-                                <option value="cpf">CPF</option>
-                                <option value="email">Email</option>
-                                <option value="telefone">Telefone</option>
-                            </select>
+                            <label className="text-sm font-medium" id="buscar-por-label">Buscar por:</label>
+                            <Select value={searchType} onValueChange={(val) => { setSearchType(val as any); setSearchTerm(''); setClientes([]); setPage(0); }}>
+                                <SelectTrigger aria-labelledby="buscar-por-label" className="w-[160px]">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="nome">Nome</SelectItem>
+                                    <SelectItem value="cpf">CPF</SelectItem>
+                                    <SelectItem value="email">Email</SelectItem>
+                                    <SelectItem value="telefone">Telefone</SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
                         <div className="relative">
-                            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" aria-hidden="true" />
                             <Input
                                 placeholder={searchType === 'nome' ? 'Buscar por nome...' : searchType === 'cpf' ? 'Buscar por CPF...' : searchType === 'email' ? 'Buscar por email...' : 'Buscar por telefone...'}
                                 value={searchTerm}
                                 onChange={(e) => handleBuscarClientes(e.target.value)}
                                 onKeyDown={handleKeyDownBusca}
                                 className="pl-10"
+                                aria-label={`Campo de busca por ${searchType}`}
                             />
                         </div>
-                        <div className="space-y-2 max-h-96 overflow-y-auto">
+                        <div className="space-y-2 max-h-96 overflow-y-auto" role="status" aria-live="polite">
                             {buscando && (
                                 <div className="text-center py-8 text-muted-foreground">
-                                    <Loader2 className="h-8 w-8 mx-auto mb-2 animate-spin" />
+                                    <Loader2 className="h-8 w-8 mx-auto mb-2 animate-spin" aria-hidden="true" />
                                     <p>Buscando clientes...</p>
                                 </div>
                             )}
                             {!buscando && buscaVazia && (
                                 <div className="text-center py-8 text-muted-foreground">
-                                    <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                                    <Users className="h-12 w-12 mx-auto mb-4 opacity-50" aria-hidden="true" />
                                     <p>Digite para buscar clientes</p>
                                 </div>
                             )}
                             {!buscando && !buscaVazia && clientes.length === 0 && (
                                 <div className="text-center py-8 text-muted-foreground">
-                                    <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                                    <Users className="h-12 w-12 mx-auto mb-4 opacity-50" aria-hidden="true" />
                                     <p>Nenhum cliente encontrado</p>
                                     <p className="text-sm">Tente ajustar sua busca ou cadastre um novo cliente</p>
                                 </div>
@@ -305,6 +302,10 @@ const EntradaFila = () => {
                                         setSearchTerm('');
                                         setBuscaVazia(true);
                                     }}
+                                    role="button"
+                                    tabIndex={0}
+                                    aria-label={`Selecionar cliente ${cliente.nome}`}
+                                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setClienteSelecionado(cliente); setClientes([]); setSearchTerm(''); setBuscaVazia(true); } }}
                                 >
                                     <div className="flex items-center justify-between">
                                         <div>
@@ -318,7 +319,7 @@ const EntradaFila = () => {
                                             </p>
                                         </div>
                                         {clienteSelecionado?.id === cliente.id && (
-                                            <CheckCircle className="h-5 w-5 text-primary" />
+                                            <CheckCircle className="h-5 w-5 text-primary" aria-hidden="true" />
                                         )}
                                     </div>
                                 </div>
@@ -342,14 +343,19 @@ const EntradaFila = () => {
                                         Última
                                     </Button>
                                 </div>
-                                <div>
-                                    <label className="text-sm mr-2">Itens por página:</label>
-                                    <select value={size} onChange={handleSizeChange} className="border rounded px-2 py-1 text-sm">
-                                        <option value={5}>5</option>
-                                        <option value={10}>10</option>
-                                        <option value={20}>20</option>
-                                        <option value={50}>50</option>
-                                    </select>
+                                <div className="flex items-center gap-2">
+                                    <label className="text-sm" id="itens-por-pagina-label">Itens por página:</label>
+                                    <Select value={String(size)} onValueChange={(val) => { setSize(Number(val)); setPage(0); }}>
+                                        <SelectTrigger aria-labelledby="itens-por-pagina-label" className="w-[100px]">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="5">5</SelectItem>
+                                            <SelectItem value="10">10</SelectItem>
+                                            <SelectItem value="20">20</SelectItem>
+                                            <SelectItem value="50">50</SelectItem>
+                                        </SelectContent>
+                                    </Select>
                                 </div>
                             </div>
                         )}
