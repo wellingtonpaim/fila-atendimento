@@ -27,6 +27,7 @@ const PainelPublico = () => {
     const [isConnected, setIsConnected] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [showUnlockOverlay, setShowUnlockOverlay] = useState(false);
 
     const repeticaoTimers = useRef<number[]>([]);
     const unsubscribeRef = useRef<(() => void) | null>(null);
@@ -46,10 +47,36 @@ const PainelPublico = () => {
         audioService.setEnabled(true);
         setAudioEnabled(true);
         // Tenta aquecer o áudio (pré-carregar e iniciar AudioContext)
-        audioService.forceEnableAndWarmup().catch(() => {});
+        setShowUnlockOverlay(!audioService.isUnlocked());
+        audioService.forceEnableAndWarmup()
+            .then(() => {
+                // Após warmup, reavalia o bloqueio
+                setShowUnlockOverlay(!audioService.isUnlocked());
+            })
+            .catch(() => {});
         // Registra desbloqueio na primeira interação do usuário
         audioService.unlockOnUserGestureOnce();
     }, []);
+
+    // Registrar gesto único para ocultar overlay e tentar liberar áudio
+    useEffect(() => {
+        if (!audioEnabled || !showUnlockOverlay) return;
+        const handler = async () => {
+            try { await audioService.tryResume(); } catch {}
+            setShowUnlockOverlay(false);
+            // removemos listeners após primeira interação
+            remove();
+        };
+        const remove = () => {
+            document.removeEventListener('pointerdown', handler, { capture: true } as any);
+            document.removeEventListener('touchstart', handler, { capture: true } as any);
+            document.removeEventListener('keydown', handler, { capture: true } as any);
+        };
+        document.addEventListener('pointerdown', handler, { capture: true } as any);
+        document.addEventListener('touchstart', handler, { capture: true } as any);
+        document.addEventListener('keydown', handler, { capture: true } as any);
+        return () => remove();
+    }, [audioEnabled, showUnlockOverlay]);
 
     // Efeito para carregar o painel e conectar ao WebSocket
     useEffect(() => {
@@ -227,6 +254,7 @@ const PainelPublico = () => {
             const wasUnlocked = audioService.isUnlocked();
             const unlockedNow = await audioService.tryResume();
             if (!wasUnlocked && unlockedNow) {
+                setShowUnlockOverlay(false);
                 // Desbloqueou nesta interação: mantenha habilitado e não alterne o estado
                 return;
             }
@@ -234,6 +262,12 @@ const PainelPublico = () => {
         setAudioEnabled(prev => {
             const next = !prev;
             audioService.setEnabled(next);
+            // Se habilitar novamente e continuar bloqueado, exibe overlay
+            if (next && !audioService.isUnlocked()) {
+                setShowUnlockOverlay(true);
+            } else if (!next) {
+                setShowUnlockOverlay(false);
+            }
             return next;
         });
     };
@@ -259,6 +293,20 @@ const PainelPublico = () => {
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5 p-4 md:p-6 lg:p-8 grid grid-rows-[auto_1fr_auto] gap-4" role="main">
+            {/* Overlay de desbloqueio do áudio */}
+            {audioEnabled && showUnlockOverlay && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/90">
+                    <div className="text-center">
+                        <div className="animate-pulse text-3xl md:text-5xl font-extrabold text-primary drop-shadow">
+                            Áudio bloqueado — clique em qualquer lugar para habilitar
+                        </div>
+                        <div className="mt-4 text-muted-foreground text-sm md:text-base">
+                            Dica: após liberar, os anúncios tocarão automaticamente.
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Header */}
             <header className="flex items-start justify-between gap-4">
                 <div>
