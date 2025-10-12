@@ -106,15 +106,15 @@ const Login: React.FC = () => {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+        <div className="min-h-screen flex items-center justify-center bg-background p-4">
             <div className="w-full max-w-md space-y-8">
                 {/* Logo e título */}
                 <div className="text-center">
                     <div className="mx-auto h-20 w-20 bg-primary rounded-full flex items-center justify-center mb-4">
                         <Building2 className="h-10 w-10 text-white" />
                     </div>
-                    <h1 className="text-3xl font-bold text-gray-900">Q-Manager</h1>
-                    <p className="text-sm text-gray-600 mt-2">
+                    <h1 className="text-3xl font-bold text-foreground">Q-Manager</h1>
+                    <p className="text-sm text-muted-foreground mt-2">
                         Sistema de Gestão de Filas Inteligentes
                     </p>
                 </div>
@@ -136,15 +136,15 @@ const Login: React.FC = () => {
                                 </Alert>
                             )}
 
-                            {/* Campo de usuário/email */}
+                            {/* Campo de email */}
                             <div className="space-y-2">
-                                <Label htmlFor="username">Usuário ou Email</Label>
+                                <Label htmlFor="username">Email</Label>
                                 <div className="relative">
-                                    <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                                    <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                                     <Input
                                         id="username"
                                         type="text"
-                                        placeholder="Digite seu usuário ou email"
+                                        placeholder="Digite seu email"
                                         value={username}
                                         onChange={(e) => setUsername(e.target.value)}
                                         className="pl-10"
@@ -166,7 +166,7 @@ const Login: React.FC = () => {
                                     </Link>
                                 </div>
                                 <div className="relative">
-                                    <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                                    <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                                     <Input
                                         id="password"
                                         type={showPassword ? 'text' : 'password'}
@@ -180,7 +180,7 @@ const Login: React.FC = () => {
                                     <button
                                         type="button"
                                         onClick={togglePasswordVisibility}
-                                        className="absolute right-3 top-3 h-4 w-4 text-gray-400 hover:text-gray-600"
+                                        className="absolute right-3 top-3 h-4 w-4 text-muted-foreground hover:text-foreground"
                                         disabled={isLoading}
                                     >
                                         {showPassword ? <EyeOff /> : <Eye />}
@@ -219,7 +219,7 @@ const Login: React.FC = () => {
                                     </Button>
                                 </div>
                                 {unidades.length === 0 && !isLoadingUnidades && (
-                                    <p className="text-sm text-gray-500">
+                                    <p className="text-sm text-muted-foreground">
                                         Nenhuma unidade encontrada. Tente recarregar.
                                     </p>
                                 )}
@@ -244,13 +244,13 @@ const Login: React.FC = () => {
 
                         {/* Links adicionais */}
                         <div className="mt-6 text-center space-y-2">
-                            <p className="text-sm text-gray-600">
+                            <p className="text-sm text-muted-foreground">
                                 Não tem uma conta?{' '}
                                 <Link to="/register" className="text-primary hover:underline font-medium">
                                     Cadastre-se aqui
                                 </Link>
                             </p>
-                            <p className="text-xs text-gray-500">
+                            <p className="text-xs text-muted-foreground">
                                 Q-Manager v1.0 - Sistema de Gestão de Filas
                             </p>
                         </div>

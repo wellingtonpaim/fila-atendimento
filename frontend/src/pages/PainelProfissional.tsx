@@ -447,6 +447,7 @@ const PainelProfissional = () => {
                                 placeholder="Ex: Guichê 01, Sala 3"
                                 value={guiche}
                                 onChange={(e) => setGuiche(e.target.value)}
+                                className="bg-background"
                             />
                         </div>
                     </CardContent>
