@@ -160,11 +160,12 @@ class EntradaFilaServiceImplTest {
         EntradaFila entrada = new EntradaFila(); entrada.setId(entradaId); entrada.setStatus(StatusFila.CHAMADO);
         EntradaFila cancelada = new EntradaFila(); cancelada.setId(entradaId); cancelada.setStatus(StatusFila.CANCELADO);
         when(entradaFilaRepository.findById(entradaId)).thenReturn(Optional.of(entrada));
-        doNothing().when(entradaFilaRepository).delete(entrada);
-        when(entradaFilaRepository.findById(entradaId)).thenReturn(Optional.of(cancelada));
+        when(entradaFilaRepository.save(any())).thenReturn(cancelada);
         when(entradaFilaMapper.toResponseDTO(any())).thenReturn(mockResponseDTO());
         EntradaFilaResponseDTO result = service.cancelarAtendimento(entradaId);
         assertNotNull(result);
+        verify(entradaFilaRepository, times(1)).save(any());
+        verify(entradaFilaRepository, never()).delete(any());
     }
 
     @Test void cancelarAtendimento_statusAtendido() {
@@ -176,10 +177,16 @@ class EntradaFilaServiceImplTest {
 
     @Test void cancelarAtendimento_entradaNaoEncontrada() {
         UUID entradaId = UUID.randomUUID();
-        EntradaFila entrada = new EntradaFila(); entrada.setId(entradaId); entrada.setStatus(StatusFila.CHAMADO);
-        when(entradaFilaRepository.findById(entradaId)).thenReturn(Optional.of(entrada)).thenReturn(Optional.empty());
-        doNothing().when(entradaFilaRepository).delete(entrada);
+        when(entradaFilaRepository.findById(entradaId)).thenReturn(Optional.empty());
         assertThrows(ResourceNotFoundException.class, () -> service.cancelarAtendimento(entradaId));
+    }
+
+    @Test void cancelarAtendimento_motivoMuitoLongo() {
+        UUID entradaId = UUID.randomUUID();
+        EntradaFila entrada = new EntradaFila(); entrada.setId(entradaId); entrada.setStatus(StatusFila.CHAMADO);
+        when(entradaFilaRepository.findById(entradaId)).thenReturn(Optional.of(entrada));
+        String longMotivo = "x".repeat(501);
+        assertThrows(BusinessException.class, () -> service.cancelarAtendimento(entradaId, new com.wjbc.fila_atendimento.domain.dto.EntradaFilaCancelamentoDTO(longMotivo)));
     }
 
     @Test void encaminharParaFila_sucesso() {

@@ -102,11 +102,12 @@ class EntradaFilaService {
     /**
      * Cancela atendimento
      */
-    async cancelarAtendimento(entradaFilaId: string): Promise<EntradaFilaResponseDTO> {
+    async cancelarAtendimento(entradaFilaId: string, motivoCancelamento?: string): Promise<EntradaFilaResponseDTO> {
         try {
             const response = await fetch(`${API_BASE_URL}/api/entrada-fila/cancelar/${entradaFilaId}`, {
                 method: 'POST',
-                headers: authService.getAuthHeaders()
+                headers: authService.getAuthHeaders(),
+                body: JSON.stringify({ motivoCancelamento: motivoCancelamento ?? '' })
             });
 
             if (!response.ok) {

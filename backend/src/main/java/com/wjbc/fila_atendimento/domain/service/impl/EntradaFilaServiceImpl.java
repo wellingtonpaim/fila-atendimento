@@ -135,17 +135,23 @@ public class EntradaFilaServiceImpl implements EntradaFilaService {
 
     @Override
     @Transactional
-    public EntradaFilaResponseDTO cancelarAtendimento(UUID entradaFilaId) {
+    public EntradaFilaResponseDTO cancelarAtendimento(UUID entradaFilaId, com.wjbc.fila_atendimento.domain.dto.EntradaFilaCancelamentoDTO cancelamentoDTO) {
         EntradaFila entrada = findEntradaFilaById(entradaFilaId);
         if (entrada.getStatus() == StatusFila.ATENDIDO) {
             throw new BusinessException("Não é possível cancelar um atendimento que já foi finalizado.");
         }
-        Fila fila = entrada.getFila(); // guarda a fila antes do soft delete
-        entradaFilaRepository.delete(entrada);
-        EntradaFila entradaCancelada = entradaFilaRepository.findById(entradaFilaId)
-                .orElseThrow(() -> new ResourceNotFoundException("Entrada na fila não encontrada com o ID: " + entradaFilaId));
+        // Valida tamanho se vier direto por serviço (sem @Valid do controller)
+        if (cancelamentoDTO != null && cancelamentoDTO.motivoCancelamento() != null && cancelamentoDTO.motivoCancelamento().length() > 500) {
+            throw new BusinessException("motivoCancelamento deve ter no máximo 500 caracteres");
+        }
+        entrada.setStatus(StatusFila.CANCELADO);
+        entrada.setDataHoraSaida(LocalDateTime.now());
+        if (cancelamentoDTO != null) {
+            entrada.setMotivoCancelamento(cancelamentoDTO.motivoCancelamento());
+        }
+        EntradaFila entradaCancelada = entradaFilaRepository.save(entrada);
         // Notifica SOMENTE o painel profissional para remover o item cancelado da visualização
-        notificarSomentePainelProfissional(fila);
+        notificarSomentePainelProfissional(entrada.getFila());
         return entradaFilaMapper.toResponseDTO(entradaCancelada);
     }
 
