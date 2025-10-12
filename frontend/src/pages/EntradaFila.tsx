@@ -252,7 +252,7 @@ const EntradaFila = () => {
                             <select
                                 value={searchType}
                                 onChange={e => { setSearchType(e.target.value as any); setSearchTerm(''); setClientes([]); setPage(0); }}
-                                className="border rounded px-2 py-1 text-sm"
+                                className="px-2 py-1 text-sm rounded-md border border-input bg-background text-foreground"
                             >
                                 <option value="nome">Nome</option>
                                 <option value="cpf">CPF</option>
@@ -344,7 +344,7 @@ const EntradaFila = () => {
                                 </div>
                                 <div>
                                     <label className="text-sm mr-2">Itens por página:</label>
-                                    <select value={size} onChange={handleSizeChange} className="border rounded px-2 py-1 text-sm">
+                                    <select value={size} onChange={handleSizeChange} className="px-2 py-1 text-sm rounded-md border border-input bg-background text-foreground">
                                         <option value={5}>5</option>
                                         <option value={10}>10</option>
                                         <option value={20}>20</option>

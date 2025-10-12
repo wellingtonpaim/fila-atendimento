@@ -290,7 +290,7 @@ const Dashboard = () => {
                 <div className="flex flex-wrap items-center gap-2">
                     {/* Filtro de período */}
                     <select
-                        className="border rounded-md px-2 py-1 text-sm"
+                        className="px-2 py-1 text-sm rounded-md border border-input bg-background text-foreground"
                         value={periodo}
                         onChange={(e) => setPeriodo(e.target.value as Periodo)}
                         aria-label="Selecionar período"
@@ -304,14 +304,14 @@ const Dashboard = () => {
                         <>
                             <input
                                 type="datetime-local"
-                                className="border rounded-md px-2 py-1 text-sm"
+                                className="px-2 py-1 text-sm rounded-md border border-input bg-background text-foreground"
                                 value={customInicio}
                                 onChange={(e) => setCustomInicio(e.target.value)}
                                 aria-label="Início do período"
                             />
                             <input
                                 type="datetime-local"
-                                className="border rounded-md px-2 py-1 text-sm"
+                                className="px-2 py-1 text-sm rounded-md border border-input bg-background text-foreground"
                                 value={customFim}
                                 onChange={(e) => setCustomFim(e.target.value)}
                                 aria-label="Fim do período"
