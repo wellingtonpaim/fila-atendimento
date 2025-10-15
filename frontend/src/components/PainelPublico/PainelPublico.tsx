@@ -31,7 +31,7 @@ const PainelPublico = () => {
 
     const repeticaoTimers = useRef<number[]>([]);
     const unsubscribeRef = useRef<(() => void) | null>(null);
-    // Fila sequencial de anúncios de áudio
+    // Fila sequencial de anúncios (visual + áudio)
     const audioQueue = useRef<Array<() => Promise<void>>>([]);
     const processingAudio = useRef(false);
 
@@ -169,7 +169,7 @@ const PainelPublico = () => {
             websocketService.disconnect();
             repeticaoTimers.current.forEach(clearTimeout);
             repeticaoTimers.current = [];
-            // Limpa fila de áudio pendente
+            // Limpa fila pendente
             audioQueue.current = [];
             processingAudio.current = false;
         };
@@ -192,7 +192,10 @@ const PainelPublico = () => {
         audioService.preloadAlert().catch(() => {});
     }, []);
 
-    // Processamento de fila de áudio
+    // Utilitário de espera
+    const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
+
+    // Processamento da fila (visual + áudio)
     const runAudioQueue = useCallback(async () => {
         if (processingAudio.current) return;
         processingAudio.current = true;
@@ -203,7 +206,7 @@ const PainelPublico = () => {
                 try {
                     await task();
                 } catch (e) {
-                    console.error('Erro ao executar tarefa de áudio:', e);
+                    console.error('Erro ao executar tarefa de chamada:', e);
                 }
             }
         } finally {
@@ -211,20 +214,42 @@ const PainelPublico = () => {
         }
     }, []);
 
-    const enqueueAudioTask = useCallback((task: () => Promise<void>) => {
+    const enqueueTask = useCallback((task: () => Promise<void>) => {
         audioQueue.current.push(task);
-        // Dispara o processamento assíncrono da fila
-        // Usa microtask para evitar reentrância no mesmo tick
         Promise.resolve().then(() => runAudioQueue());
     }, [runAudioQueue]);
+
+    // Executa áudio para um DTO (sem enfileirar)
+    const playAudioForDto = useCallback(async (dto: PainelPublicoDTO) => {
+        const rep = Math.max(1, dto.repeticoes ?? 1);
+        const intervalo = Math.max(0, (dto.intervaloRepeticao ?? 5) * 1000);
+        const mensagem = (dto.mensagemVocalizacao || '').trim();
+        for (let i = 0; i < rep; i++) {
+            try {
+                if (i === 0) {
+                    await audioService.playAlert('/sounds/alerta.mp3');
+                }
+                if (mensagem) {
+                    await audioService.vocalizarTexto(mensagem);
+                } else if (dto.chamadaAtual) {
+                    await audioService.vocalizarChamada(dto.chamadaAtual.nomePaciente, dto.chamadaAtual.guicheOuSala, '');
+                }
+                if (i < rep - 1 && intervalo > 0) {
+                    await sleep(intervalo);
+                }
+            } catch (e) {
+                console.error('Erro na reprodução de áudio:', e);
+            }
+        }
+    }, []);
 
     // Processamento de payload WebSocket
     const processPayload = useCallback((dto: PainelPublicoDTO, config: PainelPublicoConfigDTO) => {
         const filaDaChamada = config.filas.find(f => f.id === dto.filaId);
         if (!filaDaChamada) return;
 
-        // Atualiza a chamada atual
         if (dto.chamadaAtual) {
+            // Enfileira uma tarefa completa (visual + áudio + destaque)
             const novaChamada: ChamadaExibicao = {
                 filaId: dto.filaId,
                 filaNome: filaDaChamada.nome,
@@ -233,59 +258,38 @@ const PainelPublico = () => {
                 timestamp: dto.chamadaAtual.dataHoraChamada,
                 isNew: true,
             };
-            setChamadaAtual(novaChamada);
+            const tempoDestaque = Math.max(0, (dto.tempoExibicao ?? 15) * 1000);
 
-            // Adiciona às últimas chamadas, mantendo o limite
-            setUltimasChamadas(prev => [novaChamada, ...prev.filter(c => c.timestamp !== novaChamada.timestamp)].slice(0, 5));
+            const task = async () => {
+                const start = Date.now();
+                // Atualiza visual para esta chamada
+                setChamadaAtual(novaChamada);
+                setUltimasChamadas(prev => [novaChamada, ...prev.filter(c => c.timestamp !== novaChamada.timestamp)].slice(0, 5));
 
-            // Lógica de áudio (agora enfileirada para execução sequencial)
-            if (audioEnabled && dto.sinalizacaoSonora) {
-                dispararAudio(dto);
-            }
-
-            // Remove o destaque após o tempo
-            const tempoDestaque = (dto.tempoExibicao ?? 15) * 1000;
-            setTimeout(() => {
-                setChamadaAtual(prev => prev?.timestamp === novaChamada.timestamp ? { ...prev, isNew: false } : prev);
-            }, tempoDestaque);
-        } else {
-            setChamadaAtual(null); // Limpa se não houver chamada atual
-        }
-    }, [audioEnabled]);
-
-    const dispararAudio = (dto: PainelPublicoDTO) => {
-        // Limpa qualquer timer antigo (não mais utilizado para áudio, mas por segurança)
-        repeticaoTimers.current.forEach(clearTimeout);
-        repeticaoTimers.current = [];
-
-        const rep = Math.max(1, dto.repeticoes ?? 1);
-        const intervalo = Math.max(0, (dto.intervaloRepeticao ?? 5) * 1000);
-        const mensagem = (dto.mensagemVocalizacao || '').trim();
-
-        // Enfileira uma única tarefa que executa todas as repetições desta chamada
-        const task = async () => {
-            // Se o áudio estiver desativado no momento da execução, deixe o serviço decidir (no-op)
-            for (let i = 0; i < rep; i++) {
-                try {
-                    if (i === 0) {
-                        await audioService.playAlert('/sounds/alerta.mp3');
-                    }
-                    if (mensagem) {
-                        await audioService.vocalizarTexto(mensagem);
-                    } else if (dto.chamadaAtual) {
-                        await audioService.vocalizarChamada(dto.chamadaAtual.nomePaciente, dto.chamadaAtual.guicheOuSala, '');
-                    }
-                    if (i < rep - 1 && intervalo > 0) {
-                        await new Promise(res => setTimeout(res, intervalo));
-                    }
-                } catch (e) {
-                    console.error('Erro na reprodução de áudio:', e);
+                // Executa áudio somente se habilitado e sinalização sonora ativa
+                if (audioEnabled && dto.sinalizacaoSonora) {
+                    await playAudioForDto(dto);
                 }
-            }
-        };
 
-        enqueueAudioTask(task);
-    };
+                // Garante tempo mínimo de destaque visual
+                const elapsed = Date.now() - start;
+                const restante = tempoDestaque - elapsed;
+                if (restante > 0) {
+                    await sleep(restante);
+                }
+
+                // Remove o destaque (mantém a chamada exibida até chegar a próxima)
+                setChamadaAtual(prev => prev?.timestamp === novaChamada.timestamp ? { ...prev, isNew: false } : prev);
+            };
+
+            enqueueTask(task);
+        } else {
+            // Se não há chamada atual enviada pelo backend, apenas limpa caso não haja execução em andamento
+            if (!processingAudio.current && audioQueue.current.length === 0) {
+                setChamadaAtual(null);
+            }
+        }
+    }, [audioEnabled, enqueueTask, playAudioForDto]);
 
     const toggleAudio = async () => {
         // Se já está habilitado, use o clique para apenas desbloquear o áudio (primeiro gesto)
