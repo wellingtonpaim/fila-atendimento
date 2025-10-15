@@ -31,6 +31,9 @@ const PainelPublico = () => {
 
     const repeticaoTimers = useRef<number[]>([]);
     const unsubscribeRef = useRef<(() => void) | null>(null);
+    // Fila sequencial de anúncios de áudio
+    const audioQueue = useRef<Array<() => Promise<void>>>([]);
+    const processingAudio = useRef(false);
 
     const getParam = (k: string): string | null => {
         try {
@@ -166,6 +169,9 @@ const PainelPublico = () => {
             websocketService.disconnect();
             repeticaoTimers.current.forEach(clearTimeout);
             repeticaoTimers.current = [];
+            // Limpa fila de áudio pendente
+            audioQueue.current = [];
+            processingAudio.current = false;
         };
     }, []); // Executar apenas uma vez na montagem
 
@@ -185,6 +191,32 @@ const PainelPublico = () => {
         // Pré-carregar o alerta MP3 para evitar latência na primeira execução
         audioService.preloadAlert().catch(() => {});
     }, []);
+
+    // Processamento de fila de áudio
+    const runAudioQueue = useCallback(async () => {
+        if (processingAudio.current) return;
+        processingAudio.current = true;
+        try {
+            while (audioQueue.current.length > 0) {
+                const task = audioQueue.current.shift();
+                if (!task) continue;
+                try {
+                    await task();
+                } catch (e) {
+                    console.error('Erro ao executar tarefa de áudio:', e);
+                }
+            }
+        } finally {
+            processingAudio.current = false;
+        }
+    }, []);
+
+    const enqueueAudioTask = useCallback((task: () => Promise<void>) => {
+        audioQueue.current.push(task);
+        // Dispara o processamento assíncrono da fila
+        // Usa microtask para evitar reentrância no mesmo tick
+        Promise.resolve().then(() => runAudioQueue());
+    }, [runAudioQueue]);
 
     // Processamento de payload WebSocket
     const processPayload = useCallback((dto: PainelPublicoDTO, config: PainelPublicoConfigDTO) => {
@@ -206,7 +238,7 @@ const PainelPublico = () => {
             // Adiciona às últimas chamadas, mantendo o limite
             setUltimasChamadas(prev => [novaChamada, ...prev.filter(c => c.timestamp !== novaChamada.timestamp)].slice(0, 5));
 
-            // Lógica de áudio
+            // Lógica de áudio (agora enfileirada para execução sequencial)
             if (audioEnabled && dto.sinalizacaoSonora) {
                 dispararAudio(dto);
             }
@@ -222,30 +254,37 @@ const PainelPublico = () => {
     }, [audioEnabled]);
 
     const dispararAudio = (dto: PainelPublicoDTO) => {
+        // Limpa qualquer timer antigo (não mais utilizado para áudio, mas por segurança)
         repeticaoTimers.current.forEach(clearTimeout);
         repeticaoTimers.current = [];
+
         const rep = Math.max(1, dto.repeticoes ?? 1);
-        const intervalo = (dto.intervaloRepeticao ?? 5) * 1000;
+        const intervalo = Math.max(0, (dto.intervaloRepeticao ?? 5) * 1000);
         const mensagem = (dto.mensagemVocalizacao || '').trim();
 
-        for (let i = 0; i < rep; i++) {
-            const timerId = window.setTimeout(async () => {
+        // Enfileira uma única tarefa que executa todas as repetições desta chamada
+        const task = async () => {
+            // Se o áudio estiver desativado no momento da execução, deixe o serviço decidir (no-op)
+            for (let i = 0; i < rep; i++) {
                 try {
-                    if (!audioEnabled) return;
-                    // Tocar o alerta MP3 apenas na primeira repetição
                     if (i === 0) {
                         await audioService.playAlert('/sounds/alerta.mp3');
                     }
-
                     if (mensagem) {
                         await audioService.vocalizarTexto(mensagem);
                     } else if (dto.chamadaAtual) {
                         await audioService.vocalizarChamada(dto.chamadaAtual.nomePaciente, dto.chamadaAtual.guicheOuSala, '');
                     }
-                } catch (e) { console.error('Erro na reprodução de áudio:', e); }
-            }, i * intervalo);
-            repeticaoTimers.current.push(timerId);
-        }
+                    if (i < rep - 1 && intervalo > 0) {
+                        await new Promise(res => setTimeout(res, intervalo));
+                    }
+                } catch (e) {
+                    console.error('Erro na reprodução de áudio:', e);
+                }
+            }
+        };
+
+        enqueueAudioTask(task);
     };
 
     const toggleAudio = async () => {
@@ -334,7 +373,8 @@ const PainelPublico = () => {
                     {chamadaAtual ? (
                         <div className="text-center w-full">
                             <p className="text-lg md:text-2xl text-muted-foreground">Senha</p>
-                            <p className="text-6xl md:text-8xl lg:text-9xl font-bold tracking-tight my-2 md:my-4">{chamadaAtual.clienteNome.split(' ')[0]}</p>
+                            {/* Exibir nome completo em vez de apenas o primeiro nome */}
+                            <p className="text-6xl md:text-8xl lg:text-9xl font-bold tracking-tight my-2 md:my-4">{chamadaAtual.clienteNome}</p>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6 text-xl md:text-2xl">
                                 <div className="bg-muted p-3 rounded-md">
                                     <p className="text-sm font-semibold text-muted-foreground">LOCAL</p>
