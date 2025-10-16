@@ -1,7 +1,7 @@
 import { ChamadaWebSocket } from '@/types';
 import { Client, IMessage, StompSubscription } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
-
+import BackendConfig from '@/config/BackendConfig';
 // Mantém compatibilidade do tipo de callback
 type WebSocketEventCallback = (data: ChamadaWebSocket) => void;
 
@@ -22,19 +22,12 @@ class WebSocketService {
   }
 
   private getWsBaseUrl(): string {
-    // Preferir VITE_WS_URL; se ausente, derivar de VITE_API_URL + '/ws'; fallback para localhost
-    const explicit = (import.meta.env.VITE_WS_URL as string | undefined) || '';
-    if (explicit) return this.stripQuery(explicit);
-
-    const apiBase = (import.meta.env.VITE_API_URL as string | undefined) || 'http://localhost:8899';
-    return this.stripQuery(`${apiBase.replace(/\/$/, '')}/ws`);
+    // Preferir VITE_WS_URL; se ausente, derivar de VITE_API_URL + '/ws'
+    return BackendConfig.wsBaseUrl;
   }
 
   private appendTokenQuery(url: string): string {
-    // Anexa token JWT na query (necessário para SockJS /ws/info). Se não houver token, não anexa nada.
-    if (!this.token) return url;
-    const sep = url.includes('?') ? '&' : '?';
-    return `${url}${sep}token=${encodeURIComponent(this.token)}`;
+    return BackendConfig.appendTokenQuery(url, this.token || undefined);
   }
 
   private stripQuery(url: string): string {
@@ -45,10 +38,7 @@ class WebSocketService {
 
   private toWs(url: string): string {
     // Converte http(s) -> ws(s) para WebSocket nativo
-    if (url.startsWith('http://')) return 'ws://' + url.substring('http://'.length);
-    if (url.startsWith('https://')) return 'wss://' + url.substring('https://'.length);
-    // já é ws/wss
-    return url;
+    return BackendConfig.toWs(url);
   }
 
   connect(token?: string): void {

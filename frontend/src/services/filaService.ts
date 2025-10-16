@@ -1,8 +1,9 @@
 import { ApiResponse, FilaCreateDTO, FilaResponseDTO, FilaUpdateDTO } from '@/types';
 import { authService } from './authService';
 import { parsePaginationMeta, PaginationMeta } from '@/lib/pagination';
+import BackendConfig from '@/config/BackendConfig';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8899';
+const API_BASE_URL = BackendConfig.apiBaseUrl;
 
 export const filaService = {
   // Criar uma nova fila

@@ -1,10 +1,10 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
-  readonly VITE_API_BASE_URL: string
-  readonly VITE_WS_URL: string
-}
+  // URL base da API HTTP
+  readonly VITE_API_URL: string
+  // URL base do endpoint WS/SockJS (opcional; se ausente, deriva de API_URL + '/ws')
 
-interface ImportMeta {
-  readonly env: ImportMetaEnv
+  // Preferência de transporte WebSocket; 'true' força SockJS, 'false' força nativo
+  readonly VITE_WS_SOCKJS: string
 }

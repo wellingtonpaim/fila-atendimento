@@ -6,8 +6,9 @@ import {
     FluxoPacientesDTO 
 } from '@/types';
 import { authService } from './authService';
+import BackendConfig from '@/config/BackendConfig';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8899';
+const API_BASE_URL = BackendConfig.apiBaseUrl;
 
 class DashboardService {
     private static instance: DashboardService;

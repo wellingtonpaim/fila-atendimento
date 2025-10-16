@@ -1,15 +1,15 @@
 import { ApiResponse, UnidadeAtendimentoCreateDTO, UnidadeAtendimentoResponseDTO, UnidadeAtendimentoUpdateDTO, UnidadeAtendimentoPublicDTO } from '@/types';
 import { authService } from './authService';
 import { parsePaginationMeta, PaginationMeta } from '@/lib/pagination';
+import BackendConfig from '@/config/BackendConfig';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8899';
+const API_BASE_URL = BackendConfig.apiBaseUrl;
 
 export const unidadeService = {
   // Listar unidades públicas para tela de login (endpoint sem autenticação)
   async listarParaLogin(): Promise<UnidadeAtendimentoPublicDTO[]> {
     const response = await fetch(`${API_BASE_URL}/api/unidades-atendimento/public/login`, {
       method: 'GET'
-      // Não enviar Content-Type em GET para evitar preflight CORS desnecessário
     });
 
     if (!response.ok) {
