@@ -35,6 +35,26 @@ const PainelPublico = () => {
     const audioQueue = useRef<Array<() => Promise<void>>>([]);
     const processingAudio = useRef(false);
 
+    // Últimas configurações por fila vindas do backend
+    const lastSettingsByFila = useRef<Record<string, { repeticoes?: number; intervaloRepeticao?: number; tempoExibicao?: number; sinalizacaoSonora?: boolean; mensagemVocalizacao?: string }>>({});
+
+    // Deduplicação de eventos (nonce -> timestamp)
+    const seenNoncesRef = useRef<Map<string, number>>(new Map());
+    const DEDUP_TTL_MS = 60_000; // 60s
+
+    const shouldAcceptEnvelope = useCallback((nonce: unknown): boolean => {
+        if (typeof nonce !== 'string' || !nonce) return true; // sem nonce, aceita
+        const now = Date.now();
+        const map = seenNoncesRef.current;
+        // Limpa nonces expirados
+        for (const [k, ts] of map) {
+            if (now - ts > DEDUP_TTL_MS) map.delete(k);
+        }
+        if (map.has(nonce)) return false;
+        map.set(nonce, now);
+        return true;
+    }, []);
+
     const getParam = (k: string): string | null => {
         try {
             const params = new URLSearchParams(window.location.search);
@@ -243,10 +263,19 @@ const PainelPublico = () => {
         }
     }, []);
 
-    // Processamento de payload WebSocket
+    // Processamento de payload WebSocket (declarado antes de handleRechamadaLocal para evitar TS2448)
     const processPayload = useCallback((dto: PainelPublicoDTO, config: PainelPublicoConfigDTO) => {
         const filaDaChamada = config.filas.find(f => f.id === dto.filaId);
         if (!filaDaChamada) return;
+
+        // Atualiza última configuração conhecida desta fila a partir do DTO recebido
+        const current = lastSettingsByFila.current[dto.filaId] || {};
+        if (dto.repeticoes != null) current.repeticoes = dto.repeticoes;
+        if (dto.intervaloRepeticao != null) current.intervaloRepeticao = dto.intervaloRepeticao;
+        if (dto.tempoExibicao != null) current.tempoExibicao = dto.tempoExibicao;
+        if (dto.sinalizacaoSonora != null) current.sinalizacaoSonora = dto.sinalizacaoSonora;
+        if (dto.mensagemVocalizacao != null) current.mensagemVocalizacao = dto.mensagemVocalizacao;
+        lastSettingsByFila.current[dto.filaId] = current;
 
         if (dto.chamadaAtual) {
             // Enfileira uma tarefa completa (visual + áudio + destaque)
@@ -258,7 +287,7 @@ const PainelPublico = () => {
                 timestamp: dto.chamadaAtual.dataHoraChamada,
                 isNew: true,
             };
-            const tempoDestaque = Math.max(0, (dto.tempoExibicao ?? 15) * 1000);
+            const tempoDestaque = Math.max(0, (dto.tempoExibicao ?? current.tempoExibicao ?? 15) * 1000);
 
             const task = async () => {
                 const start = Date.now();
@@ -267,8 +296,15 @@ const PainelPublico = () => {
                 setUltimasChamadas(prev => [novaChamada, ...prev.filter(c => c.timestamp !== novaChamada.timestamp)].slice(0, 5));
 
                 // Executa áudio somente se habilitado e sinalização sonora ativa
-                if (audioEnabled && dto.sinalizacaoSonora) {
-                    await playAudioForDto(dto);
+                const sinal = dto.sinalizacaoSonora ?? current.sinalizacaoSonora ?? true;
+                if (audioEnabled && sinal) {
+                    // Preenche repetições/intervalo com últimos valores, se ausentes
+                    const effectiveDto: PainelPublicoDTO = {
+                        ...dto,
+                        repeticoes: dto.repeticoes ?? current.repeticoes ?? 1,
+                        intervaloRepeticao: dto.intervaloRepeticao ?? current.intervaloRepeticao ?? 5,
+                    };
+                    await playAudioForDto(effectiveDto);
                 }
 
                 // Garante tempo mínimo de destaque visual
@@ -284,12 +320,90 @@ const PainelPublico = () => {
 
             enqueueTask(task);
         } else {
-            // Se não há chamada atual enviada pelo backend, apenas limpa caso não haja execução em andamento
+            // Limpa visual apenas se não houver execução em andamento
             if (!processingAudio.current && audioQueue.current.length === 0) {
                 setChamadaAtual(null);
             }
+            // Ao receber DTO sem chamada, descartamos configurações para esta fila
+            try { delete lastSettingsByFila.current[dto.filaId]; } catch {}
         }
     }, [audioEnabled, enqueueTask, playAudioForDto]);
+
+    // Handler para mensagens de rechamada vindas do Painel Profissional (Broadcast/localStorage)
+    const handleRechamadaLocal = useCallback((data: any) => {
+        try {
+            if (!data) return;
+            // Deduplicação por nonce
+            if (!shouldAcceptEnvelope(data?.nonce)) return;
+
+            if (data.type === 'encerrar') {
+                const filaId = data?.data?.filaId;
+                if (filaId) {
+                    try { delete lastSettingsByFila.current[filaId]; } catch {}
+                }
+                return;
+            }
+            if (data.type !== 'rechamada') return;
+            const d = data.data || {};
+            // Requer pelo menos filaId, nomePaciente e guicheOuSala
+            if (!d.filaId || !d.nomePaciente || !d.guicheOuSala) return;
+            if (!painelConfig) return;
+
+            const last = lastSettingsByFila.current[d.filaId] || {};
+
+            const dto: PainelPublicoDTO = {
+                filaId: d.filaId,
+                chamadaAtual: {
+                    nomePaciente: d.nomePaciente,
+                    guicheOuSala: d.guicheOuSala,
+                    dataHoraChamada: new Date().toISOString(),
+                },
+                ultimasChamadas: [],
+                // Se veio mensagem na rechamada, usa; senão reutiliza a última mensagem conhecida; senão vazio (cai no texto padrão por nome/sala)
+                mensagemVocalizacao: d.mensagemVocalizacao ?? last.mensagemVocalizacao ?? '',
+                // Usa tempos do backend se existirem; caso contrário, defaults amigáveis para rechamada
+                tempoExibicao: d.tempoExibicao ?? last.tempoExibicao ?? 15,
+                repeticoes: d.repeticoes ?? last.repeticoes ?? 2,
+                intervaloRepeticao: d.intervaloRepeticao ?? last.intervaloRepeticao ?? 2,
+                sinalizacaoSonora: d.sinalizacaoSonora ?? last.sinalizacaoSonora ?? true,
+            };
+            // Usa o mesmo pipeline de processamento (visual+áudio em fila)
+            processPayload(dto, painelConfig);
+        } catch (e) {
+            console.error('Falha ao processar rechamada local:', e);
+        }
+    }, [painelConfig, processPayload, shouldAcceptEnvelope]);
+
+    // Inscrição BroadcastChannel OU localStorage (apenas um) para rechamadas locais
+    useEffect(() => {
+        let bc: any = null;
+        let usingBC = false;
+        try {
+            const BC = (window as any).BroadcastChannel;
+            if (typeof BC === 'function') {
+                bc = new BC('qmanager_rechamada');
+                bc.onmessage = (ev: any) => handleRechamadaLocal(ev.data);
+                usingBC = true;
+            }
+        } catch {}
+
+        const onStorage = (ev: StorageEvent) => {
+            if (ev.key === 'qmanager_rechamada' && ev.newValue) {
+                try {
+                    const payload = JSON.parse(ev.newValue);
+                    handleRechamadaLocal(payload);
+                } catch {}
+            }
+        };
+        if (!usingBC) {
+            window.addEventListener('storage', onStorage);
+        }
+
+        return () => {
+            try { if (bc) bc.close(); } catch {}
+            if (!usingBC) window.removeEventListener('storage', onStorage);
+        };
+    }, [handleRechamadaLocal]);
 
     const toggleAudio = async () => {
         // Se já está habilitado, use o clique para apenas desbloquear o áudio (primeiro gesto)

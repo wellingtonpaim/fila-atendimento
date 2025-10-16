@@ -21,7 +21,8 @@ import {
     Activity,
     Stethoscope,
     RefreshCw,
-    FileCheck
+    FileCheck,
+    Megaphone
 } from "lucide-react";
 
 // Importar serviços
@@ -246,13 +247,16 @@ const PainelProfissional = () => {
 
         try {
             setLoadingAction(true);
-            
+            const filaId = clienteAtual.fila.id;
             await entradaFilaService.cancelarAtendimento(clienteAtual.id, motivoCancelamento);
 
             setClienteAtual(null);
             setShowCancelarModal(false);
             setMotivoCancelamento('');
             await loadClientesAguardando();
+
+            // Notifica Painel Público para limpar cache
+            publicarEncerramentoLocal(filaId);
 
             toast({
                 title: 'Atendimento cancelado',
@@ -282,7 +286,7 @@ const PainelProfissional = () => {
 
         try {
             setLoadingAction(true);
-            
+            const filaId = clienteAtual.fila.id;
             const novaEntrada: EntradaFilaCreateDTO = {
                 clienteId: clienteAtual.cliente.id,
                 filaId: filaEncaminhamento,
@@ -291,7 +295,6 @@ const PainelProfissional = () => {
             };
 
             await entradaFilaService.encaminharParaFila(clienteAtual.id, novaEntrada);
-            
             setClienteAtual(null);
             setShowEncaminharModal(false);
             setFilaEncaminhamento('');
@@ -299,6 +302,9 @@ const PainelProfissional = () => {
             setIsRetorno(false);
             setObservacoes('');
             await loadClientesAguardando();
+
+            // Notifica Painel Público para limpar cache
+            publicarEncerramentoLocal(filaId);
 
             toast({
                 title: 'Cliente encaminhado!',
@@ -321,13 +327,16 @@ const PainelProfissional = () => {
 
         try {
             setLoadingAction(true);
-
+            const filaId = clienteAtual.fila.id;
             await entradaFilaService.finalizarAtendimento(clienteAtual.id);
 
             const nome = clienteAtual.cliente.nome;
             setClienteAtual(null);
             setShowEncaminharModal(false);
             await loadClientesAguardando();
+
+            // Notifica Painel Público para limpar cache
+            publicarEncerramentoLocal(filaId);
 
             toast({
                 title: 'Atendimento finalizado!',
@@ -371,6 +380,80 @@ const PainelProfissional = () => {
                 return <Badge variant="destructive">Cancelado</Badge>;
             default:
                 return <Badge variant="secondary">{status}</Badge>;
+        }
+    };
+
+    // Publica um evento de rechamada local para o Painel Público (sem backend)
+    const publicarRechamadaLocal = (payload: {
+        filaId: string;
+        nomePaciente: string;
+        guicheOuSala: string;
+        mensagemVocalizacao?: string;
+        repeticoes?: number;
+        intervaloRepeticao?: number; // segundos
+        tempoExibicao?: number; // segundos
+        sinalizacaoSonora?: boolean;
+    }) => {
+        const envelope = {
+            type: 'rechamada',
+            data: payload,
+            nonce: `${Date.now()}-${Math.random().toString(36).slice(2)}`
+        };
+        try {
+            const BC = (window as any).BroadcastChannel;
+            if (typeof BC === 'function') {
+                const bc = new BC('qmanager_rechamada');
+                bc.postMessage(envelope);
+                try { bc.close(); } catch {}
+            } else {
+                localStorage.setItem('qmanager_rechamada', JSON.stringify(envelope));
+            }
+        } catch {
+            try { localStorage.setItem('qmanager_rechamada', JSON.stringify(envelope)); } catch {}
+        }
+    };
+
+    // Publica um evento para informar que o atendimento terminou (limpa cache no Painel Público)
+    const publicarEncerramentoLocal = (filaId: string) => {
+        const envelope = {
+            type: 'encerrar',
+            data: { filaId },
+            nonce: `${Date.now()}-${Math.random().toString(36).slice(2)}`
+        };
+        try {
+            const BC = (window as any).BroadcastChannel;
+            if (typeof BC === 'function') {
+                const bc = new BC('qmanager_rechamada');
+                bc.postMessage(envelope);
+                try { bc.close(); } catch {}
+            } else {
+                localStorage.setItem('qmanager_rechamada', JSON.stringify(envelope));
+            }
+        } catch {
+            try { localStorage.setItem('qmanager_rechamada', JSON.stringify(envelope)); } catch {}
+        }
+    };
+
+    const handleRechamar = async () => {
+        if (!clienteAtual) return;
+        try {
+            publicarRechamadaLocal({
+                filaId: clienteAtual.fila.id,
+                nomePaciente: clienteAtual.cliente.nome,
+                guicheOuSala: guiche.trim() || clienteAtual.guicheOuSalaAtendimento || 'Guichê/Sala',
+                // Não define tempos aqui: o Painel Público usará os últimos tempos/mensagem do backend (cacheados)
+            });
+            toast({
+                title: 'Rechamada enviada',
+                description: `Cliente ${clienteAtual.cliente.nome} foi rechamado no painel público.`
+            });
+        } catch (error: any) {
+            console.error('❌ Erro ao rechamar cliente:', error);
+            toast({
+                title: 'Erro ao rechamar',
+                description: error?.message || 'Falha ao enviar rechamada.',
+                variant: 'destructive',
+            });
         }
     };
 
@@ -690,6 +773,18 @@ const PainelProfissional = () => {
                                                 </div>
                                             </DialogContent>
                                         </Dialog>
+
+                                        {/* Botão Rechamar (frontend-only) */}
+                                        <Button
+                                            onClick={handleRechamar}
+                                            disabled={loadingAction}
+                                            variant="default"
+                                            size="sm"
+                                            className="w-full"
+                                        >
+                                            <Megaphone className="mr-1 h-4 w-4" />
+                                            Rechamar
+                                        </Button>
 
                                         <Button
                                             onClick={handleDarAlta}
