@@ -296,7 +296,7 @@ Endpoints com paginação (amostra): `GET /api/usuarios`, `GET /api/clientes`, `
 - `POST /api/entrada-fila` – Adicionar cliente à fila
 - `POST /api/entrada-fila/chamar-proximo` – Chamar próximo (`filaId`, `usuarioId`, `guiche`)
 - `POST /api/entrada-fila/finalizar/{entradaFilaId}` – Finalizar atendimento
-- `POST /api/entrada-fila/cancelar/{entradaFilaId}` – Cancelar atendimento
+- `POST /api/entrada-fila/cancelar/{entradaFilaId}` – Cancelar atendimento (mantém o registro marcado como `CANCELADO` e define `dataHoraSaida`). Body opcional: `{ "motivoCancelamento": "string (máx. 500)" }`.
 - `POST /api/entrada-fila/encaminhar/{entradaFilaIdOrigem}` – Encaminhar para outra fila
 - `GET /api/entrada-fila/aguardando/{filaId}` – Aguardando (paginação opcional)
 

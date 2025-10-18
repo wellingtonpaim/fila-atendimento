@@ -3,10 +3,12 @@ package com.wjbc.fila_atendimento.controller;
 import com.wjbc.fila_atendimento.domain.dto.ApiResponse;
 import com.wjbc.fila_atendimento.domain.dto.EntradaFilaResponseDTO;
 import com.wjbc.fila_atendimento.domain.dto.EntradaFilaCreateDTO;
+import com.wjbc.fila_atendimento.domain.dto.EntradaFilaCancelamentoDTO;
 import com.wjbc.fila_atendimento.domain.service.EntradaFilaService;
 import com.wjbc.fila_atendimento.controller.util.PaginationUtil;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
 
@@ -38,8 +40,11 @@ public class EntradaFilaController {
     }
 
     @PostMapping("/cancelar/{entradaFilaId}")
-    public ResponseEntity<ApiResponse<EntradaFilaResponseDTO>> cancelarAtendimento(@PathVariable UUID entradaFilaId) {
-        EntradaFilaResponseDTO response = entradaFilaService.cancelarAtendimento(entradaFilaId);
+    public ResponseEntity<ApiResponse<EntradaFilaResponseDTO>> cancelarAtendimento(
+            @PathVariable UUID entradaFilaId,
+            @Valid @RequestBody(required = false) EntradaFilaCancelamentoDTO dto
+    ) {
+        EntradaFilaResponseDTO response = entradaFilaService.cancelarAtendimento(entradaFilaId, dto);
         return ResponseEntity.ok(new ApiResponse<>(true, "Atendimento cancelado com sucesso", response));
     }
 

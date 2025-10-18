@@ -86,8 +86,8 @@ public class EntradaFilaServiceImpl implements EntradaFilaService {
 
         EntradaFila entradaSalva = entradaFilaRepository.save(novaEntrada);
 
-        // Notifica painéis sobre a atualização na fila (sem vocalização)
-        notificarPaineis(fila, false);
+        // Notifica SOMENTE o painel profissional sobre a atualização na fila
+        notificarSomentePainelProfissional(fila);
 
         return entradaFilaMapper.toResponseDTO(findEntradaFilaById(entradaSalva.getId()));
     }
@@ -109,7 +109,7 @@ public class EntradaFilaServiceImpl implements EntradaFilaService {
 
         EntradaFila entradaSalva = entradaFilaRepository.save(entradaASerChamada);
 
-        // Notifica painéis sobre a nova chamada (com vocalização)
+        // Notifica painéis sobre a nova chamada (painel público e profissional)
         notificarPaineis(fila, true);
 
         return entradaFilaMapper.toResponseDTO(entradaSalva);
@@ -127,25 +127,31 @@ public class EntradaFilaServiceImpl implements EntradaFilaService {
 
         EntradaFila entradaSalva = entradaFilaRepository.save(entrada);
 
-        // Notifica painéis que a chamada atual foi finalizada (sem vocalização)
-        notificarPaineis(entrada.getFila(), false);
+        // Notifica SOMENTE o painel profissional que a fila foi atualizada
+        notificarSomentePainelProfissional(entrada.getFila());
 
         return entradaFilaMapper.toResponseDTO(entradaSalva);
     }
 
     @Override
     @Transactional
-    public EntradaFilaResponseDTO cancelarAtendimento(UUID entradaFilaId) {
+    public EntradaFilaResponseDTO cancelarAtendimento(UUID entradaFilaId, com.wjbc.fila_atendimento.domain.dto.EntradaFilaCancelamentoDTO cancelamentoDTO) {
         EntradaFila entrada = findEntradaFilaById(entradaFilaId);
         if (entrada.getStatus() == StatusFila.ATENDIDO) {
             throw new BusinessException("Não é possível cancelar um atendimento que já foi finalizado.");
         }
-        Fila fila = entrada.getFila(); // guarda a fila antes do soft delete
-        entradaFilaRepository.delete(entrada);
-        EntradaFila entradaCancelada = entradaFilaRepository.findById(entradaFilaId)
-                .orElseThrow(() -> new ResourceNotFoundException("Entrada na fila não encontrada com o ID: " + entradaFilaId));
-        // Notifica painéis para remover o item cancelado da visualização (sem som)
-        notificarPaineis(fila, false);
+        // Valida tamanho se vier direto por serviço (sem @Valid do controller)
+        if (cancelamentoDTO != null && cancelamentoDTO.motivoCancelamento() != null && cancelamentoDTO.motivoCancelamento().length() > 500) {
+            throw new BusinessException("motivoCancelamento deve ter no máximo 500 caracteres");
+        }
+        entrada.setStatus(StatusFila.CANCELADO);
+        entrada.setDataHoraSaida(LocalDateTime.now());
+        if (cancelamentoDTO != null) {
+            entrada.setMotivoCancelamento(cancelamentoDTO.motivoCancelamento());
+        }
+        EntradaFila entradaCancelada = entradaFilaRepository.save(entrada);
+        // Notifica SOMENTE o painel profissional para remover o item cancelado da visualização
+        notificarSomentePainelProfissional(entrada.getFila());
         return entradaFilaMapper.toResponseDTO(entradaCancelada);
     }
 
@@ -158,10 +164,7 @@ public class EntradaFilaServiceImpl implements EntradaFilaService {
         // Em seguida, adiciona o cliente à nova fila
         EntradaFilaResponseDTO novaEntrada = adicionarClienteAFila(dtoDestino);
 
-        // A notificação para a fila de destino já é feita dentro de adicionarClienteAFila.
-        // A notificação para a fila de origem já é feita dentro de finalizarAtendimento.
-        // Nenhuma notificação adicional é necessária aqui.
-
+        // As notificações já são tratadas nos métodos chamados acima
         return novaEntrada;
     }
 
@@ -197,36 +200,53 @@ public class EntradaFilaServiceImpl implements EntradaFilaService {
     }
 
     private void notificarPaineis(Fila fila, boolean isNovaChamada) {
-        // 1. Notificar os painéis públicos associados a esta fila
-        List<Painel> paineisAfetados = painelRepository.findPaineisByFilaId(fila.getId());
+        if (fila == null) {
+            return;
+        }
+        // 1. Notificar os painéis públicos associados a esta fila APENAS quando houver nova chamada
+        if (isNovaChamada) {
+            List<Painel> paineisAfetados = painelRepository.findPaineisByFilaId(fila.getId());
 
-        for (Painel painel : paineisAfetados) {
-            ChamadaDTO chamadaAtual = getChamadaAtual(fila);
-            List<ChamadaDTO> ultimasChamadas = getUltimasChamadas(fila);
+            for (Painel painel : paineisAfetados) {
+                ChamadaDTO chamadaAtual = getChamadaAtual(fila);
+                List<ChamadaDTO> ultimasChamadas = getUltimasChamadas(fila);
 
-            String mensagemVocalizacao = "";
-            if (isNovaChamada && chamadaAtual != null && chamadaAtual.nomePaciente() != null && !chamadaAtual.nomePaciente().isBlank()
-                    && chamadaAtual.guicheOuSala() != null && !chamadaAtual.guicheOuSala().isBlank()) {
-                mensagemVocalizacao = chamadaAtual.nomePaciente() + ", compareça a " + chamadaAtual.guicheOuSala() + "!";
+                String mensagemVocalizacao = "";
+                if (chamadaAtual != null && chamadaAtual.nomePaciente() != null && !chamadaAtual.nomePaciente().isBlank()
+                        && chamadaAtual.guicheOuSala() != null && !chamadaAtual.guicheOuSala().isBlank()) {
+                    mensagemVocalizacao = chamadaAtual.nomePaciente() + ", compareça a " + chamadaAtual.guicheOuSala() + "!";
+                }
+                boolean habilitarSom = !mensagemVocalizacao.isBlank();
+
+                PainelPublicoDTO painelPublicoPayload = new PainelPublicoDTO(
+                        fila.getId(),
+                        chamadaAtual,
+                        ultimasChamadas,
+                        mensagemVocalizacao,
+                        painelTempoExibicaoSegundos,
+                        painelRepeticoes,
+                        painelIntervaloSegundos,
+                        habilitarSom
+                );
+
+                filaBroadcastService.broadcastPainelPublicoUpdate(painel.getId(), painelPublicoPayload);
             }
-            boolean habilitarSom = !mensagemVocalizacao.isBlank();
-
-            PainelPublicoDTO painelPublicoPayload = new PainelPublicoDTO(
-                    fila.getId(), // Enviamos o ID da fila que foi atualizada
-                    chamadaAtual,
-                    ultimasChamadas,
-                    mensagemVocalizacao,
-                    painelTempoExibicaoSegundos,
-                    painelRepeticoes,
-                    painelIntervaloSegundos,
-                    habilitarSom
-            );
-
-            // Envia para o tópico do PAINEL específico
-            filaBroadcastService.broadcastPainelPublicoUpdate(painel.getId(), painelPublicoPayload);
         }
 
-        // 2. Notificar o painel profissional (sem alteração na lógica)
+        // 2. Notificar SEMPRE o painel profissional (lista de aguardando), se setor disponível
+        if (fila.getSetor() != null) {
+            PainelProfissionalDTO painelProfissionalPayload = new PainelProfissionalDTO(
+                    fila.getSetor().getId(),
+                    getFilaAtual(fila.getSetor().getId())
+            );
+            filaBroadcastService.broadcastFilaProfissionalUpdate(fila.getSetor().getId(), painelProfissionalPayload);
+        }
+    }
+
+    private void notificarSomentePainelProfissional(Fila fila) {
+        if (fila == null || fila.getSetor() == null) {
+            return;
+        }
         PainelProfissionalDTO painelProfissionalPayload = new PainelProfissionalDTO(
                 fila.getSetor().getId(),
                 getFilaAtual(fila.getSetor().getId())

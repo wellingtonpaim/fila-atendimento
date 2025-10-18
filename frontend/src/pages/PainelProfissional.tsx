@@ -21,7 +21,8 @@ import {
     Activity,
     Stethoscope,
     RefreshCw,
-    FileCheck
+    FileCheck,
+    Megaphone
 } from "lucide-react";
 
 // Importar serviços
@@ -96,6 +97,9 @@ const PainelProfissional = () => {
     const [observacoes, setObservacoes] = useState('');
     const [tempoAtendimento, setTempoAtendimento] = useState(0);
     const [intervalId, setIntervalId] = useState<NodeJS.Timeout | null>(null);
+    // Novo estado para cancelamento
+    const [showCancelarModal, setShowCancelarModal] = useState(false);
+    const [motivoCancelamento, setMotivoCancelamento] = useState('');
 
     const { toast } = useToast();
     const { user, selectedUnitId } = useAuth();
@@ -178,21 +182,12 @@ const PainelProfissional = () => {
             // A API já retorna os dados completos! Não preciso buscar individualmente
             setClientesAguardando(clientes as EntradaFilaComClienteDTO[]);
 
-            // Verificar cliente em atendimento - expandir critérios de busca
-            const clienteEmAtendimento = clientes.find((c: any) => {
-                const isEmAtendimento = c.status === 'CHAMADO' ||
-                                       c.status === 'EM_ATENDIMENTO' ||
-                                       c.dataHoraChamada !== null ||
-                                       c.usuarioResponsavelId !== null;
-
-                console.log(`🔍 Cliente ${c.cliente?.nome}: status=${c.status}, chamada=${c.dataHoraChamada}, responsavel=${c.usuarioResponsavelId}, isEmAtendimento=${isEmAtendimento}`);
-
-                return isEmAtendimento;
-            });
-
-            console.log('🔍 Debug - Cliente em atendimento encontrado:', clienteEmAtendimento);
-            setClienteAtual(clienteEmAtendimento as EntradaFilaComClienteDTO || null);
-
+            // Tenta identificar um cliente em atendimento (status CHAMADO)
+            const clienteEmAtendimento = clientes.find((c: any) => c.status === 'CHAMADO');
+            if (clienteEmAtendimento) {
+                setClienteAtual(clienteEmAtendimento as EntradaFilaComClienteDTO);
+            }
+            // Caso contrário, mantém o estado atual (não sobrescreve para null aqui)
         } catch (error: any) {
             console.error('❌ Erro ao carregar clientes aguardando:', error);
             toast({
@@ -217,22 +212,18 @@ const PainelProfissional = () => {
             setLoadingAction(true);
             
             console.log('🔍 Debug - Chamando próximo cliente...', { filaSelecionada, userId: user.id, guiche });
-            await entradaFilaService.chamarProximo(
+            const chamado = await entradaFilaService.chamarProximo(
                 filaSelecionada,
                 user.id,
                 guiche.trim()
             );
 
-            // Aguardar um momento para o backend processar
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            // Define o cliente atual imediatamente com base no retorno da API
+            setClienteAtual(chamado as unknown as EntradaFilaComClienteDTO);
 
-            // Forçar múltiplas atualizações para garantir que a mudança seja capturada
+            // Aguardar um momento para o backend processar e atualizar a fila
+            await new Promise(resolve => setTimeout(resolve, 500));
             await loadClientesAguardando();
-
-            // Segunda tentativa após mais um momento
-            setTimeout(async () => {
-                await loadClientesAguardando();
-            }, 2000);
 
             toast({
                 title: 'Cliente chamado!',
@@ -256,16 +247,20 @@ const PainelProfissional = () => {
 
         try {
             setLoadingAction(true);
-            
-            await entradaFilaService.cancelarAtendimento(clienteAtual.id);
-            
+            const filaId = clienteAtual.fila.id;
+            await entradaFilaService.cancelarAtendimento(clienteAtual.id, motivoCancelamento);
+
             setClienteAtual(null);
+            setShowCancelarModal(false);
+            setMotivoCancelamento('');
             await loadClientesAguardando();
+
+            // Notifica Painel Público para limpar cache
+            publicarEncerramentoLocal(filaId);
 
             toast({
                 title: 'Atendimento cancelado',
-                description: 'O atendimento foi cancelado.',
-                variant: 'destructive',
+                description: 'O atendimento foi cancelado com sucesso.',
             });
         } catch (error: any) {
             console.error('❌ Erro ao cancelar atendimento:', error);
@@ -291,7 +286,7 @@ const PainelProfissional = () => {
 
         try {
             setLoadingAction(true);
-            
+            const filaId = clienteAtual.fila.id;
             const novaEntrada: EntradaFilaCreateDTO = {
                 clienteId: clienteAtual.cliente.id,
                 filaId: filaEncaminhamento,
@@ -300,7 +295,6 @@ const PainelProfissional = () => {
             };
 
             await entradaFilaService.encaminharParaFila(clienteAtual.id, novaEntrada);
-            
             setClienteAtual(null);
             setShowEncaminharModal(false);
             setFilaEncaminhamento('');
@@ -308,6 +302,9 @@ const PainelProfissional = () => {
             setIsRetorno(false);
             setObservacoes('');
             await loadClientesAguardando();
+
+            // Notifica Painel Público para limpar cache
+            publicarEncerramentoLocal(filaId);
 
             toast({
                 title: 'Cliente encaminhado!',
@@ -330,21 +327,25 @@ const PainelProfissional = () => {
 
         try {
             setLoadingAction(true);
-
+            const filaId = clienteAtual.fila.id;
             await entradaFilaService.finalizarAtendimento(clienteAtual.id);
 
+            const nome = clienteAtual.cliente.nome;
             setClienteAtual(null);
             setShowEncaminharModal(false);
             await loadClientesAguardando();
 
+            // Notifica Painel Público para limpar cache
+            publicarEncerramentoLocal(filaId);
+
             toast({
-                title: 'Alta médica concedida!',
-                description: `${clienteAtual.cliente.nome} recebeu alta e saiu do sistema.`,
+                title: 'Atendimento finalizado!',
+                description: `Atendimento finalizado! ${nome} já foi atendido e saiu do sistema.`,
             });
         } catch (error: any) {
-            console.error('❌ Erro ao dar alta:', error);
+            console.error('❌ Erro ao finalizar atendimento:', error);
             toast({
-                title: 'Erro ao dar alta',
+                title: 'Erro ao finalizar atendimento',
                 description: error.message,
                 variant: 'destructive',
             });
@@ -355,7 +356,8 @@ const PainelProfissional = () => {
 
     const resetModalEncaminhamento = () => {
         setFilaEncaminhamento('');
-        setIsPrioridade(false);
+        // Carrega prioridade com a mesma opção utilizada na entrada atual
+        setIsPrioridade(!!clienteAtual?.prioridade);
         setIsRetorno(false);
         setObservacoes('');
     };
@@ -378,6 +380,80 @@ const PainelProfissional = () => {
                 return <Badge variant="destructive">Cancelado</Badge>;
             default:
                 return <Badge variant="secondary">{status}</Badge>;
+        }
+    };
+
+    // Publica um evento de rechamada local para o Painel Público (sem backend)
+    const publicarRechamadaLocal = (payload: {
+        filaId: string;
+        nomePaciente: string;
+        guicheOuSala: string;
+        mensagemVocalizacao?: string;
+        repeticoes?: number;
+        intervaloRepeticao?: number; // segundos
+        tempoExibicao?: number; // segundos
+        sinalizacaoSonora?: boolean;
+    }) => {
+        const envelope = {
+            type: 'rechamada',
+            data: payload,
+            nonce: `${Date.now()}-${Math.random().toString(36).slice(2)}`
+        };
+        try {
+            const BC = (window as any).BroadcastChannel;
+            if (typeof BC === 'function') {
+                const bc = new BC('qmanager_rechamada');
+                bc.postMessage(envelope);
+                try { bc.close(); } catch {}
+            } else {
+                localStorage.setItem('qmanager_rechamada', JSON.stringify(envelope));
+            }
+        } catch {
+            try { localStorage.setItem('qmanager_rechamada', JSON.stringify(envelope)); } catch {}
+        }
+    };
+
+    // Publica um evento para informar que o atendimento terminou (limpa cache no Painel Público)
+    const publicarEncerramentoLocal = (filaId: string) => {
+        const envelope = {
+            type: 'encerrar',
+            data: { filaId },
+            nonce: `${Date.now()}-${Math.random().toString(36).slice(2)}`
+        };
+        try {
+            const BC = (window as any).BroadcastChannel;
+            if (typeof BC === 'function') {
+                const bc = new BC('qmanager_rechamada');
+                bc.postMessage(envelope);
+                try { bc.close(); } catch {}
+            } else {
+                localStorage.setItem('qmanager_rechamada', JSON.stringify(envelope));
+            }
+        } catch {
+            try { localStorage.setItem('qmanager_rechamada', JSON.stringify(envelope)); } catch {}
+        }
+    };
+
+    const handleRechamar = async () => {
+        if (!clienteAtual) return;
+        try {
+            publicarRechamadaLocal({
+                filaId: clienteAtual.fila.id,
+                nomePaciente: clienteAtual.cliente.nome,
+                guicheOuSala: guiche.trim() || clienteAtual.guicheOuSalaAtendimento || 'Guichê/Sala',
+                // Não define tempos aqui: o Painel Público usará os últimos tempos/mensagem do backend (cacheados)
+            });
+            toast({
+                title: 'Rechamada enviada',
+                description: `Cliente ${clienteAtual.cliente.nome} foi rechamado no painel público.`
+            });
+        } catch (error: any) {
+            console.error('❌ Erro ao rechamar cliente:', error);
+            toast({
+                title: 'Erro ao rechamar',
+                description: error?.message || 'Falha ao enviar rechamada.',
+                variant: 'destructive',
+            });
         }
     };
 
@@ -447,6 +523,7 @@ const PainelProfissional = () => {
                                 placeholder="Ex: Guichê 01, Sala 3"
                                 value={guiche}
                                 onChange={(e) => setGuiche(e.target.value)}
+                                className="bg-background"
                             />
                         </div>
                     </CardContent>
@@ -529,16 +606,67 @@ const PainelProfissional = () => {
 
                                     {/* Ações do Atendimento */}
                                     <div className="space-y-3">
-                                        <Button
-                                            onClick={handleCancelarAtendimento}
-                                            disabled={loadingAction}
-                                            variant="destructive"
-                                            size="sm"
-                                            className="w-full"
-                                        >
-                                            <XCircle className="mr-1 h-4 w-4" />
-                                            Cancelar Atendimento
-                                        </Button>
+                                        {/* Botão cancelar atendimento abre modal para motivo */}
+                                        <Dialog open={showCancelarModal} onOpenChange={setShowCancelarModal}>
+                                            <DialogTrigger asChild>
+                                                <Button
+                                                    onClick={() => setShowCancelarModal(true)}
+                                                    disabled={loadingAction}
+                                                    variant="destructive"
+                                                    size="sm"
+                                                    className="w-full"
+                                                >
+                                                    <XCircle className="mr-1 h-4 w-4" />
+                                                    Cancelar Atendimento
+                                                </Button>
+                                            </DialogTrigger>
+                                            <DialogContent className="max-w-md">
+
+                                                <DialogHeader>
+                                                    <DialogTitle>Cancelar Atendimento</DialogTitle>
+                                                    <DialogDescription>
+                                                        Informe o motivo do cancelamento (máximo de 500 caracteres). Este campo é opcional.
+                                                    </DialogDescription>
+                                                </DialogHeader>
+                                                <div className="space-y-2">
+                                                    <Label htmlFor="motivoCancelamento">Motivo do cancelamento</Label>
+                                                    <textarea
+                                                        id="motivoCancelamento"
+                                                        placeholder="Descreva o motivo do cancelamento"
+                                                        value={motivoCancelamento}
+                                                        onChange={(e) => {
+                                                            const texto = e.target.value.slice(0, 500);
+                                                            setMotivoCancelamento(texto);
+                                                        }}
+                                                        maxLength={500}
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded-md resize-none h-28 text-sm"
+                                                    />
+                                                    <div className="text-xs text-muted-foreground text-right">{motivoCancelamento.length}/500</div>
+                                                </div>
+                                                <div className="flex justify-between gap-2 pt-4">
+                                                    <Button
+                                                        variant="outline"
+                                                        onClick={() => setShowCancelarModal(false)}
+                                                        size="sm"
+                                                    >
+                                                        Voltar
+                                                    </Button>
+                                                    <Button
+                                                        onClick={handleCancelarAtendimento}
+                                                        disabled={loadingAction}
+                                                        variant="destructive"
+                                                        size="sm"
+                                                    >
+                                                        {loadingAction ? (
+                                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                        ) : (
+                                                            <XCircle className="mr-2 h-4 w-4" />
+                                                        )}
+                                                        Confirmar cancelamento
+                                                    </Button>
+                                                </div>
+                                            </DialogContent>
+                                        </Dialog>
 
                                         {/* Botão direto para encaminhar cliente */}
                                         <Dialog open={showEncaminharModal} onOpenChange={setShowEncaminharModal}>
@@ -553,7 +681,7 @@ const PainelProfissional = () => {
                                                     size="sm"
                                                 >
                                                     <ArrowRight className="mr-1 h-4 w-4" />
-                                                    Encaminhar Cliente
+                                                    Encaminhar
                                                 </Button>
                                             </DialogTrigger>
                                             <DialogContent className="max-w-md">
@@ -646,15 +774,27 @@ const PainelProfissional = () => {
                                             </DialogContent>
                                         </Dialog>
 
+                                        {/* Botão Rechamar (frontend-only) */}
+                                        <Button
+                                            onClick={handleRechamar}
+                                            disabled={loadingAction}
+                                            variant="default"
+                                            size="sm"
+                                            className="w-full"
+                                        >
+                                            <Megaphone className="mr-1 h-4 w-4" />
+                                            Rechamar
+                                        </Button>
+
                                         <Button
                                             onClick={handleDarAlta}
                                             disabled={loadingAction}
-                                            variant="outline"
+                                            variant="default"
                                             size="sm"
                                             className="w-full"
                                         >
                                             <FileCheck className="mr-1 h-4 w-4" />
-                                            Dar Alta Médica
+                                            Finalizar Atendimento
                                         </Button>
                                     </div>
                                 </div>

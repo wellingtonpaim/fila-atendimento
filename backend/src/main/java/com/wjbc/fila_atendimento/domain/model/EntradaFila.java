@@ -56,4 +56,7 @@ public class EntradaFila {
 
     @Column(name = "guiche_ou_sala_atendimento")
     private String guicheOuSalaAtendimento;
+
+    @Column(name = "motivo_cancelamento", length = 500)
+    private String motivoCancelamento;
 }

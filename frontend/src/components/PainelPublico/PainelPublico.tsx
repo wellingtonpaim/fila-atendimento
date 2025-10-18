@@ -27,9 +27,33 @@ const PainelPublico = () => {
     const [isConnected, setIsConnected] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [showUnlockOverlay, setShowUnlockOverlay] = useState(false);
 
     const repeticaoTimers = useRef<number[]>([]);
     const unsubscribeRef = useRef<(() => void) | null>(null);
+    // Fila sequencial de anúncios (visual + áudio)
+    const audioQueue = useRef<Array<() => Promise<void>>>([]);
+    const processingAudio = useRef(false);
+
+    // Últimas configurações por fila vindas do backend
+    const lastSettingsByFila = useRef<Record<string, { repeticoes?: number; intervaloRepeticao?: number; tempoExibicao?: number; sinalizacaoSonora?: boolean; mensagemVocalizacao?: string }>>({});
+
+    // Deduplicação de eventos (nonce -> timestamp)
+    const seenNoncesRef = useRef<Map<string, number>>(new Map());
+    const DEDUP_TTL_MS = 60_000; // 60s
+
+    const shouldAcceptEnvelope = useCallback((nonce: unknown): boolean => {
+        if (typeof nonce !== 'string' || !nonce) return true; // sem nonce, aceita
+        const now = Date.now();
+        const map = seenNoncesRef.current;
+        // Limpa nonces expirados
+        for (const [k, ts] of map) {
+            if (now - ts > DEDUP_TTL_MS) map.delete(k);
+        }
+        if (map.has(nonce)) return false;
+        map.set(nonce, now);
+        return true;
+    }, []);
 
     const getParam = (k: string): string | null => {
         try {
@@ -39,6 +63,43 @@ const PainelPublico = () => {
             return null;
         }
     };
+
+    // Garantir áudio habilitado e preparado logo na montagem
+    useEffect(() => {
+        // Força o serviço a permanecer habilitado no painel público
+        audioService.setEnabled(true);
+        setAudioEnabled(true);
+        // Tenta aquecer o áudio (pré-carregar e iniciar AudioContext)
+        setShowUnlockOverlay(!audioService.isUnlocked());
+        audioService.forceEnableAndWarmup()
+            .then(() => {
+                // Após warmup, reavalia o bloqueio
+                setShowUnlockOverlay(!audioService.isUnlocked());
+            })
+            .catch(() => {});
+        // Registra desbloqueio na primeira interação do usuário
+        audioService.unlockOnUserGestureOnce();
+    }, []);
+
+    // Registrar gesto único para ocultar overlay e tentar liberar áudio
+    useEffect(() => {
+        if (!audioEnabled || !showUnlockOverlay) return;
+        const handler = async () => {
+            try { await audioService.tryResume(); } catch {}
+            setShowUnlockOverlay(false);
+            // removemos listeners após primeira interação
+            remove();
+        };
+        const remove = () => {
+            document.removeEventListener('pointerdown', handler, { capture: true } as any);
+            document.removeEventListener('touchstart', handler, { capture: true } as any);
+            document.removeEventListener('keydown', handler, { capture: true } as any);
+        };
+        document.addEventListener('pointerdown', handler, { capture: true } as any);
+        document.addEventListener('touchstart', handler, { capture: true } as any);
+        document.addEventListener('keydown', handler, { capture: true } as any);
+        return () => remove();
+    }, [audioEnabled, showUnlockOverlay]);
 
     // Efeito para carregar o painel e conectar ao WebSocket
     useEffect(() => {
@@ -128,6 +189,9 @@ const PainelPublico = () => {
             websocketService.disconnect();
             repeticaoTimers.current.forEach(clearTimeout);
             repeticaoTimers.current = [];
+            // Limpa fila pendente
+            audioQueue.current = [];
+            processingAudio.current = false;
         };
     }, []); // Executar apenas uma vez na montagem
 
@@ -148,13 +212,73 @@ const PainelPublico = () => {
         audioService.preloadAlert().catch(() => {});
     }, []);
 
-    // Processamento de payload WebSocket
+    // Utilitário de espera
+    const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
+
+    // Processamento da fila (visual + áudio)
+    const runAudioQueue = useCallback(async () => {
+        if (processingAudio.current) return;
+        processingAudio.current = true;
+        try {
+            while (audioQueue.current.length > 0) {
+                const task = audioQueue.current.shift();
+                if (!task) continue;
+                try {
+                    await task();
+                } catch (e) {
+                    console.error('Erro ao executar tarefa de chamada:', e);
+                }
+            }
+        } finally {
+            processingAudio.current = false;
+        }
+    }, []);
+
+    const enqueueTask = useCallback((task: () => Promise<void>) => {
+        audioQueue.current.push(task);
+        Promise.resolve().then(() => runAudioQueue());
+    }, [runAudioQueue]);
+
+    // Executa áudio para um DTO (sem enfileirar)
+    const playAudioForDto = useCallback(async (dto: PainelPublicoDTO) => {
+        const rep = Math.max(1, dto.repeticoes ?? 1);
+        const intervalo = Math.max(0, (dto.intervaloRepeticao ?? 5) * 1000);
+        const mensagem = (dto.mensagemVocalizacao || '').trim();
+        for (let i = 0; i < rep; i++) {
+            try {
+                if (i === 0) {
+                    await audioService.playAlert('/sounds/alerta.mp3');
+                }
+                if (mensagem) {
+                    await audioService.vocalizarTexto(mensagem);
+                } else if (dto.chamadaAtual) {
+                    await audioService.vocalizarChamada(dto.chamadaAtual.nomePaciente, dto.chamadaAtual.guicheOuSala, '');
+                }
+                if (i < rep - 1 && intervalo > 0) {
+                    await sleep(intervalo);
+                }
+            } catch (e) {
+                console.error('Erro na reprodução de áudio:', e);
+            }
+        }
+    }, []);
+
+    // Processamento de payload WebSocket (declarado antes de handleRechamadaLocal para evitar TS2448)
     const processPayload = useCallback((dto: PainelPublicoDTO, config: PainelPublicoConfigDTO) => {
         const filaDaChamada = config.filas.find(f => f.id === dto.filaId);
         if (!filaDaChamada) return;
 
-        // Atualiza a chamada atual
+        // Atualiza última configuração conhecida desta fila a partir do DTO recebido
+        const current = lastSettingsByFila.current[dto.filaId] || {};
+        if (dto.repeticoes != null) current.repeticoes = dto.repeticoes;
+        if (dto.intervaloRepeticao != null) current.intervaloRepeticao = dto.intervaloRepeticao;
+        if (dto.tempoExibicao != null) current.tempoExibicao = dto.tempoExibicao;
+        if (dto.sinalizacaoSonora != null) current.sinalizacaoSonora = dto.sinalizacaoSonora;
+        if (dto.mensagemVocalizacao != null) current.mensagemVocalizacao = dto.mensagemVocalizacao;
+        lastSettingsByFila.current[dto.filaId] = current;
+
         if (dto.chamadaAtual) {
+            // Enfileira uma tarefa completa (visual + áudio + destaque)
             const novaChamada: ChamadaExibicao = {
                 filaId: dto.filaId,
                 filaNome: filaDaChamada.nome,
@@ -163,57 +287,145 @@ const PainelPublico = () => {
                 timestamp: dto.chamadaAtual.dataHoraChamada,
                 isNew: true,
             };
-            setChamadaAtual(novaChamada);
+            const tempoDestaque = Math.max(0, (dto.tempoExibicao ?? current.tempoExibicao ?? 15) * 1000);
 
-            // Adiciona às últimas chamadas, mantendo o limite
-            setUltimasChamadas(prev => [novaChamada, ...prev.filter(c => c.timestamp !== novaChamada.timestamp)].slice(0, 5));
+            const task = async () => {
+                const start = Date.now();
+                // Atualiza visual para esta chamada
+                setChamadaAtual(novaChamada);
+                setUltimasChamadas(prev => [novaChamada, ...prev.filter(c => c.timestamp !== novaChamada.timestamp)].slice(0, 5));
 
-            // Lógica de áudio
-            if (audioEnabled && dto.sinalizacaoSonora) {
-                dispararAudio(dto);
-            }
+                // Executa áudio somente se habilitado e sinalização sonora ativa
+                const sinal = dto.sinalizacaoSonora ?? current.sinalizacaoSonora ?? true;
+                if (audioEnabled && sinal) {
+                    // Preenche repetições/intervalo com últimos valores, se ausentes
+                    const effectiveDto: PainelPublicoDTO = {
+                        ...dto,
+                        repeticoes: dto.repeticoes ?? current.repeticoes ?? 1,
+                        intervaloRepeticao: dto.intervaloRepeticao ?? current.intervaloRepeticao ?? 5,
+                    };
+                    await playAudioForDto(effectiveDto);
+                }
 
-            // Remove o destaque após o tempo
-            const tempoDestaque = (dto.tempoExibicao ?? 15) * 1000;
-            setTimeout(() => {
+                // Garante tempo mínimo de destaque visual
+                const elapsed = Date.now() - start;
+                const restante = tempoDestaque - elapsed;
+                if (restante > 0) {
+                    await sleep(restante);
+                }
+
+                // Remove o destaque (mantém a chamada exibida até chegar a próxima)
                 setChamadaAtual(prev => prev?.timestamp === novaChamada.timestamp ? { ...prev, isNew: false } : prev);
-            }, tempoDestaque);
+            };
+
+            enqueueTask(task);
         } else {
-            setChamadaAtual(null); // Limpa se não houver chamada atual
+            // Limpa visual apenas se não houver execução em andamento
+            if (!processingAudio.current && audioQueue.current.length === 0) {
+                setChamadaAtual(null);
+            }
+            // Ao receber DTO sem chamada, descartamos configurações para esta fila
+            try { delete lastSettingsByFila.current[dto.filaId]; } catch {}
         }
-    }, [audioEnabled]);
+    }, [audioEnabled, enqueueTask, playAudioForDto]);
 
-    const dispararAudio = (dto: PainelPublicoDTO) => {
-        repeticaoTimers.current.forEach(clearTimeout);
-        repeticaoTimers.current = [];
-        const rep = Math.max(1, dto.repeticoes ?? 1);
-        const intervalo = (dto.intervaloRepeticao ?? 5) * 1000;
-        const mensagem = (dto.mensagemVocalizacao || '').trim();
+    // Handler para mensagens de rechamada vindas do Painel Profissional (Broadcast/localStorage)
+    const handleRechamadaLocal = useCallback((data: any) => {
+        try {
+            if (!data) return;
+            // Deduplicação por nonce
+            if (!shouldAcceptEnvelope(data?.nonce)) return;
 
-        for (let i = 0; i < rep; i++) {
-            const timerId = window.setTimeout(async () => {
+            if (data.type === 'encerrar') {
+                const filaId = data?.data?.filaId;
+                if (filaId) {
+                    try { delete lastSettingsByFila.current[filaId]; } catch {}
+                }
+                return;
+            }
+            if (data.type !== 'rechamada') return;
+            const d = data.data || {};
+            // Requer pelo menos filaId, nomePaciente e guicheOuSala
+            if (!d.filaId || !d.nomePaciente || !d.guicheOuSala) return;
+            if (!painelConfig) return;
+
+            const last = lastSettingsByFila.current[d.filaId] || {};
+
+            const dto: PainelPublicoDTO = {
+                filaId: d.filaId,
+                chamadaAtual: {
+                    nomePaciente: d.nomePaciente,
+                    guicheOuSala: d.guicheOuSala,
+                    dataHoraChamada: new Date().toISOString(),
+                },
+                ultimasChamadas: [],
+                // Se veio mensagem na rechamada, usa; senão reutiliza a última mensagem conhecida; senão vazio (cai no texto padrão por nome/sala)
+                mensagemVocalizacao: d.mensagemVocalizacao ?? last.mensagemVocalizacao ?? '',
+                // Usa tempos do backend se existirem; caso contrário, defaults amigáveis para rechamada
+                tempoExibicao: d.tempoExibicao ?? last.tempoExibicao ?? 15,
+                repeticoes: d.repeticoes ?? last.repeticoes ?? 2,
+                intervaloRepeticao: d.intervaloRepeticao ?? last.intervaloRepeticao ?? 2,
+                sinalizacaoSonora: d.sinalizacaoSonora ?? last.sinalizacaoSonora ?? true,
+            };
+            // Usa o mesmo pipeline de processamento (visual+áudio em fila)
+            processPayload(dto, painelConfig);
+        } catch (e) {
+            console.error('Falha ao processar rechamada local:', e);
+        }
+    }, [painelConfig, processPayload, shouldAcceptEnvelope]);
+
+    // Inscrição BroadcastChannel OU localStorage (apenas um) para rechamadas locais
+    useEffect(() => {
+        let bc: any = null;
+        let usingBC = false;
+        try {
+            const BC = (window as any).BroadcastChannel;
+            if (typeof BC === 'function') {
+                bc = new BC('qmanager_rechamada');
+                bc.onmessage = (ev: any) => handleRechamadaLocal(ev.data);
+                usingBC = true;
+            }
+        } catch {}
+
+        const onStorage = (ev: StorageEvent) => {
+            if (ev.key === 'qmanager_rechamada' && ev.newValue) {
                 try {
-                    if (!audioEnabled) return;
-                    // Tocar o alerta MP3 apenas na primeira repetição
-                    if (i === 0) {
-                        await audioService.playAlert('/sounds/alerta.mp3');
-                    }
-
-                    if (mensagem) {
-                        await audioService.vocalizarTexto(mensagem);
-                    } else if (dto.chamadaAtual) {
-                        await audioService.vocalizarChamada(dto.chamadaAtual.nomePaciente, dto.chamadaAtual.guicheOuSala, '');
-                    }
-                } catch (e) { console.error('Erro na reprodução de áudio:', e); }
-            }, i * intervalo);
-            repeticaoTimers.current.push(timerId);
+                    const payload = JSON.parse(ev.newValue);
+                    handleRechamadaLocal(payload);
+                } catch {}
+            }
+        };
+        if (!usingBC) {
+            window.addEventListener('storage', onStorage);
         }
-    };
+
+        return () => {
+            try { if (bc) bc.close(); } catch {}
+            if (!usingBC) window.removeEventListener('storage', onStorage);
+        };
+    }, [handleRechamadaLocal]);
 
     const toggleAudio = async () => {
+        // Se já está habilitado, use o clique para apenas desbloquear o áudio (primeiro gesto)
+        if (audioEnabled) {
+            const wasUnlocked = audioService.isUnlocked();
+            const unlockedNow = await audioService.tryResume();
+            if (!wasUnlocked && unlockedNow) {
+                setShowUnlockOverlay(false);
+                // Desbloqueou nesta interação: mantenha habilitado e não alterne o estado
+                return;
+            }
+        }
         setAudioEnabled(prev => {
-            audioService.setEnabled(!prev);
-            return !prev;
+            const next = !prev;
+            audioService.setEnabled(next);
+            // Se habilitar novamente e continuar bloqueado, exibe overlay
+            if (next && !audioService.isUnlocked()) {
+                setShowUnlockOverlay(true);
+            } else if (!next) {
+                setShowUnlockOverlay(false);
+            }
+            return next;
         });
     };
 
@@ -238,6 +450,20 @@ const PainelPublico = () => {
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5 p-4 md:p-6 lg:p-8 grid grid-rows-[auto_1fr_auto] gap-4" role="main">
+            {/* Overlay de desbloqueio do áudio */}
+            {audioEnabled && showUnlockOverlay && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/90">
+                    <div className="text-center">
+                        <div className="animate-pulse text-3xl md:text-5xl font-extrabold text-primary drop-shadow">
+                            Áudio bloqueado — clique em qualquer lugar para habilitar
+                        </div>
+                        <div className="mt-4 text-muted-foreground text-sm md:text-base">
+                            Dica: após liberar, os anúncios tocarão automaticamente.
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Header */}
             <header className="flex items-start justify-between gap-4">
                 <div>
@@ -265,7 +491,8 @@ const PainelPublico = () => {
                     {chamadaAtual ? (
                         <div className="text-center w-full">
                             <p className="text-lg md:text-2xl text-muted-foreground">Senha</p>
-                            <p className="text-6xl md:text-8xl lg:text-9xl font-bold tracking-tight my-2 md:my-4">{chamadaAtual.clienteNome.split(' ')[0]}</p>
+                            {/* Exibir nome completo em vez de apenas o primeiro nome */}
+                            <p className="text-6xl md:text-8xl lg:text-9xl font-bold tracking-tight my-2 md:my-4">{chamadaAtual.clienteNome}</p>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6 text-xl md:text-2xl">
                                 <div className="bg-muted p-3 rounded-md">
                                     <p className="text-sm font-semibold text-muted-foreground">LOCAL</p>

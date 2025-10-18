@@ -7,9 +7,8 @@ import {
     FilaResponseDTO
 } from '@/types';
 import { authService } from './authService';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8899';
-
+import BackendConfig from '@/config/BackendConfig';
+const API_BASE_URL = BackendConfig.apiBaseUrl;
 class PainelService {
 
     /**

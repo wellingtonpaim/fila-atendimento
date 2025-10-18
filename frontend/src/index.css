@@ -164,10 +164,27 @@
     }
 
     /* Alto contraste para usuários com baixa visão */
-    @media (prefers-contrast: high) {
+    @media (prefers-contrast: more) {
         :root {
             --border: 213 50% 50%;
             --ring: 213 100% 60%;
         }
+    }
+
+    /* Corrige cor de preenchimento (autofill) para seguir o tema - Chrome/Safari */
+    input:-webkit-autofill,
+    input:-webkit-autofill:hover,
+    input:-webkit-autofill:focus,
+    textarea:-webkit-autofill,
+    textarea:-webkit-autofill:hover,
+    textarea:-webkit-autofill:focus,
+    select:-webkit-autofill,
+    select:-webkit-autofill:hover,
+    select:-webkit-autofill:focus {
+        -webkit-text-fill-color: hsl(var(--foreground)) !important;
+        caret-color: hsl(var(--foreground));
+        -webkit-box-shadow: 0 0 0 1000px hsl(var(--background)) inset !important;
+        box-shadow: 0 0 0 1000px hsl(var(--background)) inset !important;
+        transition: background-color 9999s ease-out 0s;
     }
 }

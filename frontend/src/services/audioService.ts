@@ -51,6 +51,29 @@ class AudioService {
     isAudioEnabled(): boolean {
         return this.isEnabled;
     }
+
+    /** Retorna true se o AudioContext estiver em execução (desbloqueado pelo navegador) */
+    isUnlocked(): boolean {
+        try {
+            return !!this.audioCtx && this.audioCtx.state === 'running';
+        } catch {
+            return false;
+        }
+    }
+
+    /** Tenta retomar o AudioContext; deve ser chamado em um gesto do usuário. */
+    async tryResume(): Promise<boolean> {
+        try {
+            const ctx = await this.ensureAudioContext();
+            if (ctx.state === 'suspended') {
+                try { await ctx.resume(); } catch {}
+            }
+            return ctx.state === 'running';
+        } catch {
+            return false;
+        }
+    }
+
     setVolume(v: number): void {
         // clamp [0,1]
         this.volume = Math.max(0, Math.min(1, v));
@@ -97,10 +120,11 @@ class AudioService {
                 const decayEnd = peakTime + decay;
                 const releaseStart = now + Math.max(0.01, total - release);
 
+                const finalVol = vol;
                 gain.gain.setValueAtTime(0, now);
-                gain.gain.linearRampToValueAtTime(vol, peakTime);
-                gain.gain.linearRampToValueAtTime(vol * sustain, decayEnd);
-                gain.gain.setValueAtTime(vol * sustain, releaseStart);
+                gain.gain.linearRampToValueAtTime(finalVol, peakTime);
+                gain.gain.linearRampToValueAtTime(finalVol * sustain, decayEnd);
+                gain.gain.setValueAtTime(finalVol * sustain, releaseStart);
                 gain.gain.linearRampToValueAtTime(0, releaseStart + release);
 
                 osc.connect(gain);
@@ -139,6 +163,38 @@ class AudioService {
                 // NOTE: some browsers require play() to decode, we avoid auto-play to respect policies.
             });
         } catch {}
+    }
+
+    /**
+     * Registra listeners para desbloquear o AudioContext na primeira interação do usuário.
+     * Não altera o estado visual, apenas tenta garantir que o contexto possa reproduzir sons.
+     */
+    unlockOnUserGestureOnce(): void {
+        const tryUnlock = async () => {
+            try {
+                const ctx = await this.ensureAudioContext();
+                if (ctx.state === 'suspended') {
+                    await ctx.resume();
+                }
+            } catch {}
+            remove();
+        };
+        const events: (keyof DocumentEventMap)[] = ['pointerdown', 'touchstart', 'keydown'];
+        const handler = () => { tryUnlock(); };
+        const remove = () => {
+            events.forEach(ev => document.removeEventListener(ev, handler, { capture: true } as any));
+        };
+        events.forEach(ev => document.addEventListener(ev, handler, { once: true, capture: true } as any));
+    }
+
+    /**
+     * Tenta habilitar e aquecer o áudio imediatamente.
+     * Observação: alguns navegadores ainda exigem gesto do usuário; use unlockOnUserGestureOnce() junto.
+     */
+    async forceEnableAndWarmup(): Promise<void> {
+        this.setEnabled(true);
+        try { await this.preloadAlert(); } catch {}
+        try { await this.ensureAudioContext(); } catch {}
     }
 
     /**
