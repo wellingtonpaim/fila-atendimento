@@ -1212,8 +1212,8 @@ const Gestao = () => {
                             <Label>Nome *</Label>
                             <Input value={formData.nome || ''} onChange={(e) => setFormData({ ...formData, nome: e.target.value })} />
                         </div>
-                        <AddressFields baseKey="endereco" />
-                        <PhonesFields baseKey="telefones" />
+                        {AddressFields({ baseKey: 'endereco' })}
+                        {PhonesFields({ baseKey: 'telefones' })}
                     </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setModalOpen(null)}>Cancelar</Button>
@@ -1314,8 +1314,8 @@ const Gestao = () => {
                             <Label>Email</Label>
                             <Input type="email" value={formData.email || ''} onChange={(e) => setFormData({ ...formData, email: e.target.value })} />
                         </div>
-                        <PhonesFields baseKey="telefones" />
-                        <AddressFields baseKey="endereco" />
+                        {PhonesFields({ baseKey: 'telefones' })}
+                        {AddressFields({ baseKey: 'endereco' })}
                     </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setModalOpen(null)}>Cancelar</Button>
