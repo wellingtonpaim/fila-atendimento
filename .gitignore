@@ -1,0 +1,22 @@
+# Configuração local com dados sensíveis
+.env
+.env.local
+
+# Certificados SSL gerados localmente (mantém o diretório via .gitkeep)
+nginx/ssl/*
+!nginx/ssl/.gitkeep
+
+# Build do frontend
+frontend/dist/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude
+.claude/

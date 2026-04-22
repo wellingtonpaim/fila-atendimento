@@ -9,6 +9,8 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.NoHandlerFoundException;
 
 import java.util.Date;
 import java.util.List;
@@ -85,6 +87,31 @@ public class GlobalExceptionHandler {
             return "Verifique os dados do produto e certifique-se de que todos os relacionamentos estão corretos.";
         }
         return "Verifique os dados fornecidos e tente novamente.";
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMethodArgumentTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        String mensagem = "Parâmetro '" + ex.getName() + "' com valor '" + ex.getValue() + "' é inválido.";
+        ApiResponse<Void> resposta = new ApiResponse<>(
+                false,
+                mensagem,
+                null,
+                List.of(mensagem),
+                new Date()
+        );
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(resposta);
+    }
+
+    @ExceptionHandler(NoHandlerFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleNoHandlerFound(NoHandlerFoundException ex) {
+        ApiResponse<Void> resposta = new ApiResponse<>(
+                false,
+                "Recurso não encontrado: " + ex.getRequestURL(),
+                null,
+                List.of("Nenhum endpoint encontrado para a requisição informada."),
+                new Date()
+        );
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(resposta);
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
