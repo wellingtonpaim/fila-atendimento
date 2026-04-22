@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Edit, Trash2, UserPlus } from 'lucide-react';
+import { Plus, Edit, Trash2, UserPlus, Search, Loader2 } from 'lucide-react';
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import SearchBar from '@/components/SearchBar';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -21,6 +21,7 @@ import { setorService } from '@/services/setorService';
 import { unidadeService } from '@/services/unidadeService';
 import { usuarioService } from '@/services/usuarioService';
 import { clienteService } from '@/services/clienteService';
+import { viaCepService } from '@/services/viaCepService';
 import { painelService } from '@/services/painelService'; // Importado
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -55,6 +56,7 @@ const Gestao = () => {
     const [paineis, setPaineis] = useState<PainelResponseDTO[]>([]); // Novo
 
     const [loading, setLoading] = useState(false);
+    const [cepLoading, setCepLoading] = useState(false);
 
     // ===== Modais e Edição =====
     const [modalOpen, setModalOpen] = useState<string | null>(null);
@@ -354,12 +356,58 @@ const Gestao = () => {
         );
     };
 
+    const buscarCep = async (cep: string, baseKey: string) => {
+        const cepLimpo = cep.replace(/\D/g, '');
+        if (cepLimpo.length !== 8) {
+            toast({ title: 'CEP inválido', description: 'Digite um CEP com 8 dígitos.', variant: 'destructive' });
+            return;
+        }
+        setCepLoading(true);
+        try {
+            const endereco = await viaCepService.buscarPorCep(cepLimpo);
+            setFormData((prev: any) => ({
+                ...prev,
+                [baseKey]: {
+                    ...prev[baseKey],
+                    cep: endereco.cep,
+                    logradouro: endereco.logradouro || prev[baseKey]?.logradouro || '',
+                    complemento: endereco.complemento || prev[baseKey]?.complemento || '',
+                    bairro: endereco.bairro || prev[baseKey]?.bairro || '',
+                    cidade: endereco.cidade || prev[baseKey]?.cidade || '',
+                    uf: endereco.uf || prev[baseKey]?.uf || '',
+                },
+            }));
+            toast({ title: 'CEP encontrado', description: `${endereco.logradouro}, ${endereco.bairro} — ${endereco.cidade}/${endereco.uf}` });
+        } catch {
+            toast({ title: 'CEP não encontrado', description: 'Verifique o CEP digitado e tente novamente.', variant: 'destructive' });
+        } finally {
+            setCepLoading(false);
+        }
+    };
+
     const AddressFields = ({ baseKey = 'endereco' }: { baseKey?: string }) => (
         <div className="grid gap-4">
             <div className="grid md:grid-cols-3 gap-4">
                 <div className="grid gap-2">
                     <Label>CEP</Label>
-                    <Input value={formData[baseKey]?.cep || ''} onChange={(e) => setFormData({ ...formData, [baseKey]: { ...formData[baseKey], cep: e.target.value } })} />
+                    <div className="flex gap-2">
+                        <Input
+                            value={formData[baseKey]?.cep || ''}
+                            onChange={(e) => setFormData({ ...formData, [baseKey]: { ...formData[baseKey], cep: e.target.value } })}
+                            placeholder="00000-000"
+                            maxLength={9}
+                        />
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            onClick={() => buscarCep(formData[baseKey]?.cep || '', baseKey)}
+                            disabled={cepLoading}
+                            title="Buscar endereço pelo CEP"
+                        >
+                            {cepLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                        </Button>
+                    </div>
                 </div>
                 <div className="grid gap-2">
                     <Label>Logradouro</Label>
