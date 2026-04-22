@@ -522,11 +522,14 @@ const Gestao = () => {
                     ? { cpf: item.cpf, nome: item.nome, email: item.email || '', telefones: item.telefones || [], endereco: item.endereco || { cep: '', logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', uf: '', enderecoFormatado: '' } }
                     : { cpf: '', nome: '', email: '', telefones: [], endereco: { cep: '', logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', uf: '', enderecoFormatado: '' } };
                 break;
-            case 'painel':
+            case 'painel': {
+                const painelUnidadeId = item?.unidadeAtendimentoId || defaultUnitId;
                 initialData = item
-                    ? { descricao: item.descricao, filasIds: item.filasIds || [] }
-                    : { descricao: '', unidadeAtendimentoId: defaultUnitId, filasIds: [] };
+                    ? { descricao: item.descricao, unidadeAtendimentoId: painelUnidadeId, filasIds: item.filasIds || [] }
+                    : { descricao: '', unidadeAtendimentoId: painelUnidadeId, filasIds: [] };
+                loadPainelFilas(painelUnidadeId);
                 break;
+            }
         }
         setFormData(initialData);
         setModalOpen(type);
@@ -563,9 +566,8 @@ const Gestao = () => {
                     break;
                 }
                 case 'painel': {
-                    const payload = { ...formData, unidadeAtendimentoId: selectedUnitId };
-                    if (editingItem) await painelService.atualizar(editingItem.id, payload);
-                    else await painelService.criar(payload);
+                    if (editingItem) await painelService.atualizar(editingItem.id, formData);
+                    else await painelService.criar(formData);
                     break;
                 }
             }
@@ -609,6 +611,21 @@ const Gestao = () => {
         } finally {
             setLoading(false);
         }
+    };
+
+    const loadPainelFilas = async (unidadeId: string) => {
+        if (!unidadeId) { setFilaOptions([]); return; }
+        try {
+            const res = await filaService.listarPorUnidade(unidadeId);
+            setFilaOptions(res?.data || []);
+        } catch {
+            setFilaOptions([]);
+        }
+    };
+
+    const handlePainelUnidadeChange = (unidadeId: string) => {
+        setFormData((prev: any) => ({ ...prev, unidadeAtendimentoId: unidadeId, filasIds: [] }));
+        loadPainelFilas(unidadeId);
     };
 
     const renderFilaNames = (filaIds: string[]) => {
@@ -1065,7 +1082,8 @@ const Gestao = () => {
                             <Table>
                                 <TableHeader className="[&_th]:bg-muted/50 [&_th]:text-foreground [&_th]:font-semibold">
                                     <TableRow>
-                                        <TableHead className="min-w-[280px]">Descrição</TableHead>
+                                        <TableHead className="min-w-[200px]">Descrição</TableHead>
+                                        <TableHead className="min-w-[160px]">Unidade</TableHead>
                                         <TableHead className="min-w-[280px]">Filas Vinculadas</TableHead>
                                         <TableHead className="sticky right-0 z-20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shadow-[inset_1px_0_0_theme(colors.border)] text-right w-[112px] min-w-[112px] whitespace-nowrap px-2">Ações</TableHead>
                                     </TableRow>
@@ -1073,12 +1091,13 @@ const Gestao = () => {
                                 <TableBody className="[&_td]:text-sm [&_td]:font-semibold [&_td]:text-foreground">
                                     {paineis.length === 0 && (
                                         <TableRow>
-                                            <TableCell colSpan={3} className="text-center text-muted-foreground py-6">Nenhum painel cadastrado.</TableCell>
+                                            <TableCell colSpan={4} className="text-center text-muted-foreground py-6">Nenhum painel cadastrado.</TableCell>
                                         </TableRow>
                                     )}
                                     {paineis.map(painel => (
                                         <TableRow key={painel.id}>
                                             <TableCell className="font-semibold">{painel.descricao}</TableCell>
+                                            <TableCell>{unidadeOptions.find(u => u.id === painel.unidadeAtendimentoId)?.nome || '—'}</TableCell>
                                             <TableCell>{renderFilaNames(painel.filasIds)}</TableCell>
                                             <TableCell className="sticky right-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shadow-[inset_1px_0_0_theme(colors.border)] text-right w-[112px] min-w-[112px] px-2">
                                                 <div className="flex gap-2 justify-end">
@@ -1113,6 +1132,18 @@ const Gestao = () => {
                                 onChange={(e) => setFormData({ ...formData, descricao: e.target.value })}
                                 placeholder="Ex: Painel da Recepção Principal"
                             />
+                        </div>
+                        <div className="grid gap-2">
+                            <Label>Unidade *</Label>
+                            <Select
+                                value={formData.unidadeAtendimentoId || ''}
+                                onValueChange={handlePainelUnidadeChange}
+                            >
+                                <SelectTrigger><SelectValue placeholder="Selecione a unidade" /></SelectTrigger>
+                                <SelectContent>
+                                    {unidadeOptions.map(u => <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
                         </div>
                         <div className="grid gap-2">
                             <Label>Filas a Exibir neste Painel</Label>
