@@ -135,6 +135,7 @@ class PainelServiceImplTest {
 
     @Test
     void testListarPorUnidadeSuccess() {
+        when(unidadeAtendimentoRepository.findById(unidadeId)).thenReturn(Optional.of(unidade));
         when(painelRepository.findByUnidadeAtendimentoId(unidadeId)).thenReturn(Collections.singletonList(painel));
         List<PainelResponseDTO> lista = painelService.listarPorUnidade(unidadeId);
         assertEquals(1, lista.size());

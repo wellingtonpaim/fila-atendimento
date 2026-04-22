@@ -1,6 +1,7 @@
 package com.wjbc.fila_atendimento.security;
 
 import com.wjbc.fila_atendimento.security.service.CustomUserDetailsService;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
@@ -28,6 +29,14 @@ import java.util.List;
 public class WebSecurityConfig {
 
     private final CustomUserDetailsService customUserDetailsService;
+
+    /**
+     * Origens CORS permitidas. Configure via variável de ambiente CORS_ALLOWED_ORIGINS.
+     * Padrão: permite todas as origens (adequado para estudo com nginx como proxy único).
+     * Exemplo de valor: "https://203.0.113.1,http://localhost:8080"
+     */
+    @Value("${CORS_ALLOWED_ORIGINS:*}")
+    private String corsAllowedOrigins;
 
     public WebSecurityConfig(@Lazy CustomUserDetailsService customUserDetailsService) {
         this.customUserDetailsService = customUserDetailsService;
@@ -88,8 +97,10 @@ public class WebSecurityConfig {
     @Bean
     CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        // Origens de desenvolvimento comuns; ajuste para produção conforme necessário
-        config.setAllowedOriginPatterns(List.of("http://localhost:*", "http://127.0.0.1:*", "http://192.168.1.*:*"));
+        // Origens lidas da variável de ambiente CORS_ALLOWED_ORIGINS (separadas por vírgula).
+        // Em produção com nginx, frontend e backend compartilham mesma origem — CORS não se aplica.
+        List<String> origins = List.of(corsAllowedOrigins.split(","));
+        config.setAllowedOriginPatterns(origins);
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         // Permitir todos os headers em desenvolvimento para evitar bloqueios por CORS (ex.: x-unidade-id)
         config.setAllowedHeaders(List.of("*"));

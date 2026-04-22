@@ -56,9 +56,9 @@ class SetorControllerTest {
 
         mockMvc.perform(get("/api/setores"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray())
-                .andExpect(jsonPath("$[0].id").value(id.toString()))
-                .andExpect(jsonPath("$[0].nome").value("Setor Teste"));
+                .andExpect(jsonPath("$.data").isArray())
+                .andExpect(jsonPath("$.data[0].id").value(id.toString()))
+                .andExpect(jsonPath("$.data[0].nome").value("Setor Teste"));
     }
 
     @Test
@@ -67,8 +67,8 @@ class SetorControllerTest {
 
         mockMvc.perform(get("/api/setores"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray())
-                .andExpect(jsonPath("$").isEmpty());
+                .andExpect(jsonPath("$.data").isArray())
+                .andExpect(jsonPath("$.data").isEmpty());
     }
 
     @Test
@@ -77,8 +77,8 @@ class SetorControllerTest {
 
         mockMvc.perform(get("/api/setores/{id}", id))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(id.toString()))
-                .andExpect(jsonPath("$.nome").value("Setor Teste"));
+                .andExpect(jsonPath("$.data.id").value(id.toString()))
+                .andExpect(jsonPath("$.data.nome").value("Setor Teste"));
     }
 
     @Test
@@ -100,8 +100,8 @@ class SetorControllerTest {
 
         mockMvc.perform(get("/api/setores/nome/{nome}", nome))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray())
-                .andExpect(jsonPath("$[0].nome").value("Setor Teste"));
+                .andExpect(jsonPath("$.data").isArray())
+                .andExpect(jsonPath("$.data[0].nome").value("Setor Teste"));
     }
 
     @Test
@@ -111,8 +111,8 @@ class SetorControllerTest {
 
         mockMvc.perform(get("/api/setores/nome/{nome}", nome))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray())
-                .andExpect(jsonPath("$").isEmpty());
+                .andExpect(jsonPath("$.data").isArray())
+                .andExpect(jsonPath("$.data").isEmpty());
     }
 
     @Test
@@ -123,8 +123,8 @@ class SetorControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(setorCreateDTO)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(id.toString()))
-                .andExpect(jsonPath("$.nome").value("Setor Teste"));
+                .andExpect(jsonPath("$.data.id").value(id.toString()))
+                .andExpect(jsonPath("$.data.nome").value("Setor Teste"));
     }
 
     @Test
@@ -159,8 +159,8 @@ class SetorControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(dto)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(id.toString()))
-                .andExpect(jsonPath("$.nome").value("Novo Nome"));
+                .andExpect(jsonPath("$.data.id").value(id.toString()))
+                .andExpect(jsonPath("$.data.nome").value("Novo Nome"));
     }
 
     @Test
@@ -186,8 +186,8 @@ class SetorControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(setorUpdateDTO)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(id.toString()))
-                .andExpect(jsonPath("$.nome").value("Setor Atualizado"));
+                .andExpect(jsonPath("$.data.id").value(id.toString()))
+                .andExpect(jsonPath("$.data.nome").value("Setor Atualizado"));
     }
 
     @Test
@@ -220,7 +220,7 @@ class SetorControllerTest {
         Mockito.doNothing().when(setorService).desativar(id);
 
         mockMvc.perform(delete("/api/setores/{id}", id))
-                .andExpect(status().isNoContent());
+                .andExpect(status().isOk());
     }
 
     @Test
@@ -253,7 +253,7 @@ class SetorControllerTest {
 
         mockMvc.perform(get("/api/setores/nome/{nome}", nomeComCaracteresEspeciais))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].nome").value(nomeComCaracteresEspeciais));
+                .andExpect(jsonPath("$.data[0].nome").value(nomeComCaracteresEspeciais));
     }
 
     @Test
@@ -328,11 +328,11 @@ class SetorControllerTest {
 
         mockMvc.perform(get("/api/setores"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray())
-                .andExpect(jsonPath("$.length()").value(3))
-                .andExpect(jsonPath("$[0].nome").value("Setor 1"))
-                .andExpect(jsonPath("$[1].nome").value("Setor 2"))
-                .andExpect(jsonPath("$[2].nome").value("Setor 3"));
+                .andExpect(jsonPath("$.data").isArray())
+                .andExpect(jsonPath("$.data.length()").value(3))
+                .andExpect(jsonPath("$.data[0].nome").value("Setor 1"))
+                .andExpect(jsonPath("$.data[1].nome").value("Setor 2"))
+                .andExpect(jsonPath("$.data[2].nome").value("Setor 3"));
     }
 
     @Test

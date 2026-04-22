@@ -1,5 +1,7 @@
 # Q-Manager – Backend (API REST)
 
+![Java CI with Maven](https://github.com/wellingtonpaim/fila-atendimento/actions/workflows/ci.yml/badge.svg)
+
 [![Java](https://img.shields.io/badge/Java-21-blue.svg)](https://www.java.com)
 [![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.x-brightgreen.svg)](https://spring.io/projects/spring-boot)
 [![PostgreSQL](https://img.shields.io/badge/Database-PostgreSQL-blue.svg)](https://www.postgresql.org/)
