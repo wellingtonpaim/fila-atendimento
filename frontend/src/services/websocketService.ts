@@ -54,7 +54,8 @@ class WebSocketService {
 
     const webSocketFactory = () => {
       if (useSockJS) {
-        const sockUrl = this.appendTokenQuery(base);
+        const sockBase = base.replace(/^wss:\/\//, 'https://').replace(/^ws:\/\//, 'http://');
+        const sockUrl = this.appendTokenQuery(sockBase);
         if (import.meta.env.DEV) console.debug('[WS] SockJS ->', sockUrl);
         return new SockJS(sockUrl, undefined, {
           transportOptions: {
