@@ -69,6 +69,21 @@ services:
     networks:
       - qmanager-net
 
+  # ── Cloudflare Tunnel (opcional) ────────────────────────────
+  # Ativa com: docker compose --profile tunnel up -d
+  # Obtenha a URL pública em: docker logs qmanager-cloudflared
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: qmanager-cloudflared
+    command: tunnel --no-autoupdate --url http://nginx:8080
+    profiles:
+      - tunnel
+    depends_on:
+      - nginx
+    networks:
+      - qmanager-net
+    restart: unless-stopped
+
 volumes:
   postgres_data:
 
