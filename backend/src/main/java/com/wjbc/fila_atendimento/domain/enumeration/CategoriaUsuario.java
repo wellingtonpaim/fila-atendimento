@@ -5,7 +5,8 @@ import lombok.Getter;
 @Getter
 public enum CategoriaUsuario {
     ADMINISTRADOR("ROLE_ADMINISTRADOR"),
-    USUARIO("ROLE_USUARIO");
+    USUARIO("ROLE_USUARIO"),
+    PARCEIRO("ROLE_PARCEIRO");
 
     private final String role;
 
