@@ -1131,6 +1131,54 @@ Erros tratados:
 - CEP não encontrado (campo `erro: true` na resposta do ViaCEP) → `404 Not Found`
 - Falha de conectividade com o ViaCEP → `404 Not Found` com mensagem descritiva
 
+### Fornecimento de API de Análise de Dados para Terceiros
+
+O Q-Manager disponibiliza acesso controlado aos dados de analytics para sistemas e parceiros externos por meio de um novo perfil de usuário: **PARCEIRO**.
+
+#### Perfil de acesso
+
+| Perfil | Escopo |
+|---|---|
+| `ADMINISTRADOR` | Acesso total |
+| `USUARIO` | Acesso operacional |
+| `PARCEIRO` | Somente leitura em `GET /api/dashboard/**` |
+
+Qualquer outra rota retorna `403 Forbidden` para o perfil `PARCEIRO`.
+
+#### Criação de usuário parceiro
+
+Realizada pelo administrador via endpoint já existente:
+
+```http
+POST /api/usuarios
+Authorization: Bearer <token_admin>
+Content-Type: application/json
+
+{
+  "nomeUsuario": "Sistema Parceiro X",
+  "email": "parceiro@empresa.com",
+  "senha": "senha_segura",
+  "categoria": "PARCEIRO"
+}
+```
+
+#### Autenticação e consumo
+
+O parceiro autentica-se normalmente com `POST /auth/login` (campo `unidadeAtendimentoId` pode ser `null`) e recebe um JWT. Com ele, acessa os quatro endpoints de analytics:
+
+| Endpoint | Descrição |
+|---|---|
+| `GET /api/dashboard/tempo-medio-espera` | Tempo médio de espera por fila |
+| `GET /api/dashboard/produtividade` | Atendimentos por profissional |
+| `GET /api/dashboard/horarios-pico` | Intervalos de maior demanda |
+| `GET /api/dashboard/fluxo-pacientes` | Volume de entradas, saídas e cancelamentos |
+
+Parâmetros obrigatórios em todos: `unidadeId` (UUID), `inicio` e `fim` (ISO-8601).
+
+#### Collection Postman
+
+`qmanager-parceiros.postman_collection.json` na raiz do repositório contém as requisições pré-configuradas com variáveis de ambiente, captura automática de token e testes de validação de acesso.
+
 ### Ajuste de WebSocket para Ambiente Containerizado
 
 Após a containerização, o proxy nginx precisou de dois ajustes para que o SockJS funcionasse corretamente atrás do reverse proxy:

@@ -1,0 +1,242 @@
+{
+  "info": {
+    "name": "Q-Manager — API Parceiros (Analytics)",
+    "description": "Collection para testes dos endpoints de analytics disponibilizados a parceiros externos. Autentique-se primeiro para obter o token JWT; as demais requisições o utilizam automaticamente.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://SEU_HOST",
+      "description": "URL base da API (ex.: https://203.0.113.1 ou https://api.qmanager.example.com)"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "description": "Preenchido automaticamente após executar a requisição de login"
+    },
+    {
+      "key": "unidadeId",
+      "value": "00000000-0000-0000-0000-000000000000",
+      "description": "UUID da unidade de atendimento a ser consultada"
+    },
+    {
+      "key": "inicio",
+      "value": "2025-01-01T00:00:00",
+      "description": "Início do período de análise (ISO-8601)"
+    },
+    {
+      "key": "fim",
+      "value": "2025-12-31T23:59:59",
+      "description": "Fim do período de análise (ISO-8601)"
+    }
+  ],
+  "item": [
+    {
+      "name": "Autenticação",
+      "item": [
+        {
+          "name": "Login (obter token JWT)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json && json.data && json.data.token) {",
+                  "    pm.collectionVariables.set('token', json.data.token);",
+                  "    pm.test('Token capturado com sucesso', () => pm.expect(json.data.token).to.be.a('string'));",
+                  "} else {",
+                  "    pm.test('Login falhou — verifique credenciais', () => pm.expect.fail(JSON.stringify(json)));",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"email_do_parceiro@exemplo.com\",\n  \"password\": \"senha_do_parceiro\",\n  \"unidadeAtendimentoId\": null\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "Realiza autenticação com credenciais de usuário PARCEIRO. O token retornado é salvo automaticamente na variável `token` da collection e utilizado nas demais requisições."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Analytics",
+      "item": [
+        {
+          "name": "Tempo Médio de Espera",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/dashboard/tempo-medio-espera?unidadeId={{unidadeId}}&inicio={{inicio}}&fim={{fim}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "dashboard", "tempo-medio-espera"],
+              "query": [
+                { "key": "unidadeId", "value": "{{unidadeId}}", "description": "UUID da unidade de atendimento" },
+                { "key": "inicio",    "value": "{{inicio}}",    "description": "Início do período (ISO-8601)" },
+                { "key": "fim",       "value": "{{fim}}",       "description": "Fim do período (ISO-8601)" }
+              ]
+            },
+            "description": "Retorna o tempo médio de espera por fila no período informado. Útil para identificar gargalos e dimensionar equipes."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('success = true', () => pm.expect(pm.response.json().success).to.be.true);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Produtividade por Profissional",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/dashboard/produtividade?unidadeId={{unidadeId}}&inicio={{inicio}}&fim={{fim}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "dashboard", "produtividade"],
+              "query": [
+                { "key": "unidadeId", "value": "{{unidadeId}}", "description": "UUID da unidade de atendimento" },
+                { "key": "inicio",    "value": "{{inicio}}",    "description": "Início do período (ISO-8601)" },
+                { "key": "fim",       "value": "{{fim}}",       "description": "Fim do período (ISO-8601)" }
+              ]
+            },
+            "description": "Retorna o volume de atendimentos finalizados por profissional no período, permitindo análise comparativa de desempenho."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('success = true', () => pm.expect(pm.response.json().success).to.be.true);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Horários de Pico",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/dashboard/horarios-pico?unidadeId={{unidadeId}}&inicio={{inicio}}&fim={{fim}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "dashboard", "horarios-pico"],
+              "query": [
+                { "key": "unidadeId", "value": "{{unidadeId}}", "description": "UUID da unidade de atendimento" },
+                { "key": "inicio",    "value": "{{inicio}}",    "description": "Início do período (ISO-8601)" },
+                { "key": "fim",       "value": "{{fim}}",       "description": "Fim do período (ISO-8601)" }
+              ]
+            },
+            "description": "Identifica os intervalos horários com maior concentração de chegadas, apoiando o planejamento de escala."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('success = true', () => pm.expect(pm.response.json().success).to.be.true);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Fluxo de Pacientes",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/dashboard/fluxo-pacientes?unidadeId={{unidadeId}}&inicio={{inicio}}&fim={{fim}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "dashboard", "fluxo-pacientes"],
+              "query": [
+                { "key": "unidadeId", "value": "{{unidadeId}}", "description": "UUID da unidade de atendimento" },
+                { "key": "inicio",    "value": "{{inicio}}",    "description": "Início do período (ISO-8601)" },
+                { "key": "fim",       "value": "{{fim}}",       "description": "Fim do período (ISO-8601)" }
+              ]
+            },
+            "description": "Retorna a série temporal de volume de atendimentos, com entradas, saídas e cancelamentos distribuídos ao longo do período."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('success = true', () => pm.expect(pm.response.json().success).to.be.true);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Controle de Acesso",
+      "item": [
+        {
+          "name": "403 — Endpoint restrito (esperado)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/clientes",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "clientes"]
+            },
+            "description": "Confirma que o token PARCEIRO não tem acesso a endpoints fora do escopo de analytics. Resposta esperada: 403 Forbidden."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Acesso negado corretamente (403)', () => pm.response.to.have.status(403));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

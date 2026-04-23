@@ -483,6 +483,14 @@ O job `test-frontend` valida o build (`npm run build`) e o lint (`npm run lint`)
 
 O frontend é servido como SPA estática pelo nginx dentro de um container Docker, junto ao backend Spring Boot e ao banco PostgreSQL, orquestrados via Docker Compose. O nginx realiza terminação TLS (HTTPS), redireciona HTTP→HTTPS e faz proxy das rotas de API e WebSocket para o backend.
 
+### Fornecimento de API de Análise de Dados para Terceiros
+
+O Q-Manager expõe um subconjunto somente leitura da API para parceiros externos. Do ponto de vista do frontend, o fluxo é idêntico ao de qualquer usuário: login via `POST /auth/login` seguido de requisições autenticadas com o token JWT retornado.
+
+Os endpoints disponibilizados pertencem ao módulo de dashboard e são acessados da mesma forma que o `dashboardService` interno já faz — a diferença está na `categoria` do usuário (`PARCEIRO`), que o Spring Security restringe automaticamente ao escopo de analytics.
+
+Uma collection Postman (`qmanager-parceiros.postman_collection.json`) está disponível na raiz do repositório para testes imediatos por parte dos parceiros.
+
 ### WebSocket Estável em Ambiente Containerizado
 
 Após a containerização, dois ajustes foram necessários para que o Painel Público se conectasse corretamente via WebSocket:
