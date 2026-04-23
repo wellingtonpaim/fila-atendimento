@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Edit, Trash2, UserPlus } from 'lucide-react';
+import { Plus, Edit, Trash2, UserPlus, Search, Loader2 } from 'lucide-react';
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import SearchBar from '@/components/SearchBar';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -21,6 +21,7 @@ import { setorService } from '@/services/setorService';
 import { unidadeService } from '@/services/unidadeService';
 import { usuarioService } from '@/services/usuarioService';
 import { clienteService } from '@/services/clienteService';
+import { viaCepService } from '@/services/viaCepService';
 import { painelService } from '@/services/painelService'; // Importado
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -55,6 +56,7 @@ const Gestao = () => {
     const [paineis, setPaineis] = useState<PainelResponseDTO[]>([]); // Novo
 
     const [loading, setLoading] = useState(false);
+    const [cepLoading, setCepLoading] = useState(false);
 
     // ===== Modais e Edição =====
     const [modalOpen, setModalOpen] = useState<string | null>(null);
@@ -354,12 +356,58 @@ const Gestao = () => {
         );
     };
 
+    const buscarCep = async (cep: string, baseKey: string) => {
+        const cepLimpo = cep.replace(/\D/g, '');
+        if (cepLimpo.length !== 8) {
+            toast({ title: 'CEP inválido', description: 'Digite um CEP com 8 dígitos.', variant: 'destructive' });
+            return;
+        }
+        setCepLoading(true);
+        try {
+            const endereco = await viaCepService.buscarPorCep(cepLimpo);
+            setFormData((prev: any) => ({
+                ...prev,
+                [baseKey]: {
+                    ...prev[baseKey],
+                    cep: endereco.cep,
+                    logradouro: endereco.logradouro || prev[baseKey]?.logradouro || '',
+                    complemento: endereco.complemento || prev[baseKey]?.complemento || '',
+                    bairro: endereco.bairro || prev[baseKey]?.bairro || '',
+                    cidade: endereco.cidade || prev[baseKey]?.cidade || '',
+                    uf: endereco.uf || prev[baseKey]?.uf || '',
+                },
+            }));
+            toast({ title: 'CEP encontrado', description: `${endereco.logradouro}, ${endereco.bairro} — ${endereco.cidade}/${endereco.uf}` });
+        } catch {
+            toast({ title: 'CEP não encontrado', description: 'Verifique o CEP digitado e tente novamente.', variant: 'destructive' });
+        } finally {
+            setCepLoading(false);
+        }
+    };
+
     const AddressFields = ({ baseKey = 'endereco' }: { baseKey?: string }) => (
         <div className="grid gap-4">
             <div className="grid md:grid-cols-3 gap-4">
                 <div className="grid gap-2">
                     <Label>CEP</Label>
-                    <Input value={formData[baseKey]?.cep || ''} onChange={(e) => setFormData({ ...formData, [baseKey]: { ...formData[baseKey], cep: e.target.value } })} />
+                    <div className="flex gap-2">
+                        <Input
+                            value={formData[baseKey]?.cep || ''}
+                            onChange={(e) => setFormData({ ...formData, [baseKey]: { ...formData[baseKey], cep: e.target.value } })}
+                            placeholder="00000-000"
+                            maxLength={9}
+                        />
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            onClick={() => buscarCep(formData[baseKey]?.cep || '', baseKey)}
+                            disabled={cepLoading}
+                            title="Buscar endereço pelo CEP"
+                        >
+                            {cepLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                        </Button>
+                    </div>
                 </div>
                 <div className="grid gap-2">
                     <Label>Logradouro</Label>
@@ -474,11 +522,14 @@ const Gestao = () => {
                     ? { cpf: item.cpf, nome: item.nome, email: item.email || '', telefones: item.telefones || [], endereco: item.endereco || { cep: '', logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', uf: '', enderecoFormatado: '' } }
                     : { cpf: '', nome: '', email: '', telefones: [], endereco: { cep: '', logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', uf: '', enderecoFormatado: '' } };
                 break;
-            case 'painel':
+            case 'painel': {
+                const painelUnidadeId = item?.unidadeAtendimentoId || defaultUnitId;
                 initialData = item
-                    ? { descricao: item.descricao, filasIds: item.filasIds || [] }
-                    : { descricao: '', unidadeAtendimentoId: defaultUnitId, filasIds: [] };
+                    ? { descricao: item.descricao, unidadeAtendimentoId: painelUnidadeId, filasIds: item.filasIds || [] }
+                    : { descricao: '', unidadeAtendimentoId: painelUnidadeId, filasIds: [] };
+                loadPainelFilas(painelUnidadeId);
                 break;
+            }
         }
         setFormData(initialData);
         setModalOpen(type);
@@ -515,9 +566,8 @@ const Gestao = () => {
                     break;
                 }
                 case 'painel': {
-                    const payload = { ...formData, unidadeAtendimentoId: selectedUnitId };
-                    if (editingItem) await painelService.atualizar(editingItem.id, payload);
-                    else await painelService.criar(payload);
+                    if (editingItem) await painelService.atualizar(editingItem.id, formData);
+                    else await painelService.criar(formData);
                     break;
                 }
             }
@@ -561,6 +611,21 @@ const Gestao = () => {
         } finally {
             setLoading(false);
         }
+    };
+
+    const loadPainelFilas = async (unidadeId: string) => {
+        if (!unidadeId) { setFilaOptions([]); return; }
+        try {
+            const res = await filaService.listarPorUnidade(unidadeId);
+            setFilaOptions(res?.data || []);
+        } catch {
+            setFilaOptions([]);
+        }
+    };
+
+    const handlePainelUnidadeChange = (unidadeId: string) => {
+        setFormData((prev: any) => ({ ...prev, unidadeAtendimentoId: unidadeId, filasIds: [] }));
+        loadPainelFilas(unidadeId);
     };
 
     const renderFilaNames = (filaIds: string[]) => {
@@ -1017,7 +1082,8 @@ const Gestao = () => {
                             <Table>
                                 <TableHeader className="[&_th]:bg-muted/50 [&_th]:text-foreground [&_th]:font-semibold">
                                     <TableRow>
-                                        <TableHead className="min-w-[280px]">Descrição</TableHead>
+                                        <TableHead className="min-w-[200px]">Descrição</TableHead>
+                                        <TableHead className="min-w-[160px]">Unidade</TableHead>
                                         <TableHead className="min-w-[280px]">Filas Vinculadas</TableHead>
                                         <TableHead className="sticky right-0 z-20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shadow-[inset_1px_0_0_theme(colors.border)] text-right w-[112px] min-w-[112px] whitespace-nowrap px-2">Ações</TableHead>
                                     </TableRow>
@@ -1025,12 +1091,13 @@ const Gestao = () => {
                                 <TableBody className="[&_td]:text-sm [&_td]:font-semibold [&_td]:text-foreground">
                                     {paineis.length === 0 && (
                                         <TableRow>
-                                            <TableCell colSpan={3} className="text-center text-muted-foreground py-6">Nenhum painel cadastrado.</TableCell>
+                                            <TableCell colSpan={4} className="text-center text-muted-foreground py-6">Nenhum painel cadastrado.</TableCell>
                                         </TableRow>
                                     )}
                                     {paineis.map(painel => (
                                         <TableRow key={painel.id}>
                                             <TableCell className="font-semibold">{painel.descricao}</TableCell>
+                                            <TableCell>{unidadeOptions.find(u => u.id === painel.unidadeAtendimentoId)?.nome || '—'}</TableCell>
                                             <TableCell>{renderFilaNames(painel.filasIds)}</TableCell>
                                             <TableCell className="sticky right-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shadow-[inset_1px_0_0_theme(colors.border)] text-right w-[112px] min-w-[112px] px-2">
                                                 <div className="flex gap-2 justify-end">
@@ -1065,6 +1132,18 @@ const Gestao = () => {
                                 onChange={(e) => setFormData({ ...formData, descricao: e.target.value })}
                                 placeholder="Ex: Painel da Recepção Principal"
                             />
+                        </div>
+                        <div className="grid gap-2">
+                            <Label>Unidade *</Label>
+                            <Select
+                                value={formData.unidadeAtendimentoId || ''}
+                                onValueChange={handlePainelUnidadeChange}
+                            >
+                                <SelectTrigger><SelectValue placeholder="Selecione a unidade" /></SelectTrigger>
+                                <SelectContent>
+                                    {unidadeOptions.map(u => <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
                         </div>
                         <div className="grid gap-2">
                             <Label>Filas a Exibir neste Painel</Label>
@@ -1164,8 +1243,8 @@ const Gestao = () => {
                             <Label>Nome *</Label>
                             <Input value={formData.nome || ''} onChange={(e) => setFormData({ ...formData, nome: e.target.value })} />
                         </div>
-                        <AddressFields baseKey="endereco" />
-                        <PhonesFields baseKey="telefones" />
+                        {AddressFields({ baseKey: 'endereco' })}
+                        {PhonesFields({ baseKey: 'telefones' })}
                     </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setModalOpen(null)}>Cancelar</Button>
@@ -1266,8 +1345,8 @@ const Gestao = () => {
                             <Label>Email</Label>
                             <Input type="email" value={formData.email || ''} onChange={(e) => setFormData({ ...formData, email: e.target.value })} />
                         </div>
-                        <PhonesFields baseKey="telefones" />
-                        <AddressFields baseKey="endereco" />
+                        {PhonesFields({ baseKey: 'telefones' })}
+                        {AddressFields({ baseKey: 'endereco' })}
                     </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setModalOpen(null)}>Cancelar</Button>

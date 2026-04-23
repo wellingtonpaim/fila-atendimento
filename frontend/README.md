@@ -6,6 +6,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-5.x-646CFF.svg)](https://vitejs.dev/)
 [![TailwindCSS](https://img.shields.io/badge/TailwindCSS-3.x-38B2AC.svg)](https://tailwindcss.com/)
+[![PWA](https://img.shields.io/badge/PWA-Instalável-purple.svg)](https://web.dev/progressive-web-apps/)
 [![Accessibility](https://img.shields.io/badge/Accessibility-WCAG%202.1-green.svg)](https://www.w3.org/WAI/WCAG21/quickref/)
 
 Este é o frontend moderno e acessível do **Q-Manager**, uma plataforma web robusta para gerenciamento e otimização de filas de atendimento. Desenvolvido com React, TypeScript e totalmente integrado com a API Java Spring Boot.
@@ -401,9 +402,11 @@ Utilizamos [Conventional Commits](https://www.conventionalcommits.org/):
 - [x] Sistema de notificações
 - [x] Acessibilidade WCAG 2.1
 - [x] Integração completa com API Java
+- [x] PWA — instalável em dispositivos móveis
+- [x] Auto-preenchimento de endereço via ViaCEP
+- [x] CI/CD com GitHub Actions (build, test, deploy)
 
 ### 🚧 Em Desenvolvimento
-- [ ] PWA (Progressive Web App)
 - [ ] Modo offline
 - [ ] Notificações push
 - [ ] Temas personalizáveis
@@ -447,6 +450,53 @@ Este projeto está licenciado sob a [MIT License](LICENSE) - veja o arquivo LICE
 [![Coverage](https://img.shields.io/badge/coverage-95%25-brightgreen.svg)](link)
 [![Quality Gate](https://img.shields.io/badge/quality%20gate-passed-brightgreen.svg)](link)
 [![Security](https://img.shields.io/badge/security-A-brightgreen.svg)](link)
+
+---
+
+---
+
+## Evolução da Plataforma
+
+Esta seção registra os avanços mais recentes que elevaram o projeto a um novo patamar de maturidade operacional.
+
+### PWA — Instalável em Dispositivos Móveis
+
+O frontend foi configurado como **Progressive Web App** via `vite-plugin-pwa`. A aplicação pode ser instalada diretamente do navegador móvel, sem necessidade de loja de aplicativos, com ícones adaptáveis (192×192 e 512×512), manifest completo e comportamento standalone.
+
+Para instalar: acesse a URL da aplicação no navegador e utilize a opção **"Adicionar à tela inicial"**.
+
+### Auto-preenchimento de Endereço via ViaCEP
+
+No cadastro de clientes, ao digitar o CEP o sistema consulta automaticamente a [API pública ViaCEP](https://viacep.com.br) através do backend e preenche logradouro, bairro, cidade e UF sem intervenção manual. O serviço `viaCepService.ts` abstrai a chamada ao endpoint `/api/cep/{cep}` com autenticação JWT.
+
+### CI/CD com GitHub Actions
+
+O pipeline de entrega contínua (`ci.yml`) executa automaticamente a cada push nas branches `main` e `homologacao`:
+
+```
+test-frontend → test-backend → build-push → deploy
+```
+
+O job `test-frontend` valida o build (`npm run build`) e o lint (`npm run lint`). Em caso de sucesso, a imagem Docker é construída com o frontend embutido e publicada no GHCR, seguida de deploy automático via SSH.
+
+### Implantação Containerizada
+
+O frontend é servido como SPA estática pelo nginx dentro de um container Docker, junto ao backend Spring Boot e ao banco PostgreSQL, orquestrados via Docker Compose. O nginx realiza terminação TLS (HTTPS), redireciona HTTP→HTTPS e faz proxy das rotas de API e WebSocket para o backend.
+
+### Fornecimento de API de Análise de Dados para Terceiros
+
+O Q-Manager expõe um subconjunto somente leitura da API para parceiros externos. Do ponto de vista do frontend, o fluxo é idêntico ao de qualquer usuário: login via `POST /auth/login` seguido de requisições autenticadas com o token JWT retornado.
+
+Os endpoints disponibilizados pertencem ao módulo de dashboard e são acessados da mesma forma que o `dashboardService` interno já faz — a diferença está na `categoria` do usuário (`PARCEIRO`), que o Spring Security restringe automaticamente ao escopo de analytics.
+
+Uma collection Postman (`qmanager-parceiros.postman_collection.json`) está disponível na raiz do repositório para testes imediatos por parte dos parceiros.
+
+### WebSocket Estável em Ambiente Containerizado
+
+Após a containerização, dois ajustes foram necessários para que o Painel Público se conectasse corretamente via WebSocket:
+
+- O `websocketService.ts` converte `wss://` para `https://` antes de passar a URL ao SockJS, que requer protocolo HTTP para negociar o transporte internamente
+- O nginx passou a usar header `Connection` dinâmico (via `map`), enviando `upgrade` apenas em conexões WebSocket reais e `close` nas requisições HTTP de polling do SockJS
 
 ---
 

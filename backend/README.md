@@ -1066,3 +1066,125 @@ describe('useWebSocket', () => {
 - [Web Speech API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Speech_API)
 
 ---
+
+## Evolução da Plataforma
+
+Esta seção registra os avanços mais recentes da plataforma, que elevaram o projeto a um novo patamar de maturidade operacional.
+
+### Implantação Containerizada (Docker Compose)
+
+O backend passou a ser distribuído como imagem Docker, orquestrado junto ao banco de dados e ao servidor nginx via Docker Compose. O pipeline de CI/CD constrói e publica a imagem automaticamente no **GitHub Container Registry (GHCR)** a cada push na branch de produção.
+
+Serviços na stack:
+
+| Serviço   | Imagem                              | Função                             |
+|-----------|-------------------------------------|------------------------------------|
+| `db`      | `postgres`                          | Banco de dados PostgreSQL          |
+| `backend` | `ghcr.io/wellingtonpaim/qmanager-backend` | API REST + WebSocket (STOMP/SockJS) |
+| `nginx`   | `ghcr.io/wellingtonpaim/qmanager-nginx`   | Reverse proxy com terminação TLS   |
+
+### CI/CD com GitHub Actions
+
+O pipeline (`ci.yml`) é composto por quatro jobs sequenciais acionados a cada push ou pull request nas branches `main` e `homologacao`:
+
+```
+test-frontend → test-backend → build-push → deploy
+```
+
+- **test-backend**: executa `./mvnw verify` com Checkstyle e JUnit; falha bloqueia o pipeline
+- **build-push**: constrói a imagem Docker e a publica no GHCR
+- **deploy**: conecta via SSH ao servidor e executa `docker compose pull && docker compose up -d`
+
+O job `deploy` só é acionado em push direto (não em pull requests).
+
+### Integração com ViaCEP
+
+Novo endpoint que consulta a [API pública ViaCEP](https://viacep.com.br) para auto-preenchimento de endereços no cadastro de clientes.
+
+```
+GET /api/cep/{cep}
+```
+
+- Validação de formato (exatamente 8 dígitos numéricos)
+- Consulta ao serviço externo via `RestClient` do Spring
+- Resposta padronizada no envelope `ApiResponse<CepResponseDTO>`
+
+Exemplo de resposta:
+
+```json
+{
+  "success": true,
+  "message": "Endereço encontrado",
+  "data": {
+    "cep": "01001-000",
+    "logradouro": "Praça da Sé",
+    "complemento": "lado ímpar",
+    "bairro": "Sé",
+    "cidade": "São Paulo",
+    "uf": "SP"
+  }
+}
+```
+
+Erros tratados:
+- CEP com formato inválido → `400 Bad Request`
+- CEP não encontrado (campo `erro: true` na resposta do ViaCEP) → `404 Not Found`
+- Falha de conectividade com o ViaCEP → `404 Not Found` com mensagem descritiva
+
+### Fornecimento de API de Análise de Dados para Terceiros
+
+O Q-Manager disponibiliza acesso controlado aos dados de analytics para sistemas e parceiros externos por meio de um novo perfil de usuário: **PARCEIRO**.
+
+#### Perfil de acesso
+
+| Perfil | Escopo |
+|---|---|
+| `ADMINISTRADOR` | Acesso total |
+| `USUARIO` | Acesso operacional |
+| `PARCEIRO` | Somente leitura em `GET /api/dashboard/**` |
+
+Qualquer outra rota retorna `403 Forbidden` para o perfil `PARCEIRO`.
+
+#### Criação de usuário parceiro
+
+Realizada pelo administrador via endpoint já existente:
+
+```http
+POST /api/usuarios
+Authorization: Bearer <token_admin>
+Content-Type: application/json
+
+{
+  "nomeUsuario": "Sistema Parceiro X",
+  "email": "parceiro@empresa.com",
+  "senha": "senha_segura",
+  "categoria": "PARCEIRO"
+}
+```
+
+#### Autenticação e consumo
+
+O parceiro autentica-se normalmente com `POST /auth/login` (campo `unidadeAtendimentoId` pode ser `null`) e recebe um JWT. Com ele, acessa os quatro endpoints de analytics:
+
+| Endpoint | Descrição |
+|---|---|
+| `GET /api/dashboard/tempo-medio-espera` | Tempo médio de espera por fila |
+| `GET /api/dashboard/produtividade` | Atendimentos por profissional |
+| `GET /api/dashboard/horarios-pico` | Intervalos de maior demanda |
+| `GET /api/dashboard/fluxo-pacientes` | Volume de entradas, saídas e cancelamentos |
+
+Parâmetros obrigatórios em todos: `unidadeId` (UUID), `inicio` e `fim` (ISO-8601).
+
+#### Collection Postman
+
+`qmanager-parceiros.postman_collection.json` na raiz do repositório contém as requisições pré-configuradas com variáveis de ambiente, captura automática de token e testes de validação de acesso.
+
+### Ajuste de WebSocket para Ambiente Containerizado
+
+Após a containerização, o proxy nginx precisou de dois ajustes para que o SockJS funcionasse corretamente atrás do reverse proxy:
+
+1. **Header `Connection` dinâmico**: configurado via diretiva `map` do nginx, enviando `upgrade` apenas em conexões WebSocket reais e `close` nas requisições HTTP normais do SockJS (polling, `/ws/info`). Sem esse ajuste, o SockJS não conseguia completar a negociação de transporte.
+
+2. **Configuração de origens**: `setAllowedOriginPatterns("*")` mantida para o ambiente containerizado (ajustar para domínios reais em produção pública).
+
+---

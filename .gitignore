@@ -20,3 +20,6 @@ Thumbs.db
 
 # Claude
 .claude/
+
+# Documentação local
+NOVIDADES.md

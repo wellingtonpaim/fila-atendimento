@@ -75,7 +75,9 @@ public class WebSecurityConfig {
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         // Handshake WebSocket/SockJS precisa ser público; autenticação real acontece no frame CONNECT via header Authorization (interceptor)
                         .requestMatchers("/ws/**").permitAll()
-                        // Regras autenticadas
+                        // Acesso de parceiros: somente leitura nos endpoints de analytics
+                        .requestMatchers(HttpMethod.GET, "/api/dashboard/**").hasAnyRole("USUARIO", "ADMINISTRADOR", "PARCEIRO")
+                        // Regras autenticadas (PARCEIRO não incluído — bloqueado no resto da API)
                         .requestMatchers(HttpMethod.GET, "/**").hasAnyRole("USUARIO", "ADMINISTRADOR")
                         .requestMatchers(HttpMethod.POST, "/**").hasAnyRole("USUARIO", "ADMINISTRADOR")
                         .requestMatchers(HttpMethod.PUT, "/**").hasRole("ADMINISTRADOR")
